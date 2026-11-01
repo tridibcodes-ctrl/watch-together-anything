@@ -297,7 +297,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if($('mode').value === 'api' && location.protocol === 'file:') throw new Error('Serve this file using your editor’s local server before using API mode.');
       mode = $('mode').value; base = nextBase; await connect();
     });
-    room-select.onchange=() => { if(me) me.roomId=room-select.value || null; const selected=me?.rooms?.find(room=>room.roomId===me.roomId); if(selected) room-invite.textContent=Selected . Invite code: ; };
+    $('room-select').onchange = () => {
+      if (!me) return;
+      me.roomId = $('room-select').value || null;
+      const selected = me.rooms?.find(item => item.roomId === me.roomId);
+      room = null; joined = false; unload(); controls();
+      $('messages').replaceChildren();
+      $('room-invite').textContent = selected ? 'Selected ' + selected.name + '. Invite code: ' + selected.inviteCode : 'No room selected.';
+      $('room-status').textContent = selected ? selected.name + ' · not watching yet' : 'No room selected.';
+    };
     form('create-room-form',async () => {
       if(!me) throw new Error('Connect and sign in first.');
       if(mode !== 'api') throw new Error('Switch to Backend API mode to create a room.');
