@@ -58,6 +58,13 @@
       <label>Season <input id="season" type="number" min="0" value="1"></label>
       <label>Episode <input id="episode" type="number" min="1" value="1"></label>
       <div id="catalog"></div>
+      <p id="catalog-status" role="status" aria-live="polite">Search or browse popular titles.</p>
+      <nav aria-label="Catalog pages">
+        <button id="catalog-previous" type="button" disabled>Previous</button>
+        <span id="catalog-page">No page loaded</span>
+        <button id="catalog-next" type="button" disabled>Next</button>
+      </nav>
+      <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
     </section>
 
     <section id="list" aria-labelledby="list-heading">
@@ -168,7 +175,7 @@ Serialize playback commands and deduplicate UUIDs on the backend.
 Completion must verify both users' confirmations; one request is not proof.
 TV completion applies to an episode, not automatically the entire series.</pre>
       <p>This page uses manual refresh for room state and chat. Add authenticated realtime subscriptions when your
-        backend is ready. External playback, readiness, drift correction, automatic completion, pagination, and call
+        backend is ready. External playback, readiness, drift correction, automatic completion, and call
         integration require further work.</p>
     </details>
   </main>
@@ -184,6 +191,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     const savedConnection = preference('multiplay.connection');
     let mode = savedConnection?.mode === 'api' ? 'api' : 'demo', base = savedConnection?.base || '', me, room, joined = false, frame, loadedKey;
+    let catalogState = null, catalogLoading = false, catalogVersion = 0;
     $('mode').value = mode; $('backend').value = base;
     const samples = [
       { tmdbId: 155, mediaType: 'movie', title: 'The Dark Knight', year: '2008', overview: 'A new threat arrives in Gotham.' },
@@ -259,6 +267,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         $('auth-status').textContent = 'Not signed in.';
         stopLiveChat();
         if (mode === 'api') {
+          resetCatalog();
           me = null; room = null; joined = false; unload(); controls();
           $('messages').replaceChildren();
           $('chat-status').textContent = 'Sign in to use live chat.';
@@ -287,6 +296,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function button(text, fn) { const b = node('button', text); b.type = 'button'; b.onclick = () => act(fn, b); return b; }
     async function act(fn, b) { if (b) b.disabled = true; try { await fn(); } catch (e) { say(e.message); } finally { if (b) b.disabled = false; controls(); } }
     function controls() {
+      $('catalog-previous').disabled = catalogLoading || !catalogState || catalogState.page <= 1;
+      $('catalog-next').disabled = catalogLoading || !catalogState?.hasMore;
       const active = !!(joined && room?.sessionId);
       for (const id of ['load-player', 'switch-provider', 'complete', 'undo']) $(id).disabled = !active;
       for (const id of ['play', 'pause', 'seek']) $(id).disabled = !active || room.provider !== 'cinemaos';
@@ -332,11 +343,37 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (changed && joined) sync();
       controls();
     }
-    async function catalog() {
-      const type = $('media-type').value, q = $('query').value.trim();
-      const data = await request(`/api/${q ? 'search' : 'catalog'}?type=${type}&page=1${q ? '&q=' + encodeURIComponent(q) : ''}`);
-      $('catalog').replaceChildren(...data.items.map(t => card(t)));
-      if (!data.items.length) $('catalog').append(node('p', 'No results.'));
+    function resetCatalog() {
+      catalogVersion++; catalogState = null; catalogLoading = false;
+      $('catalog').replaceChildren();
+      $('catalog-page').textContent = 'No page loaded';
+      $('catalog-status').textContent = 'Search or browse popular titles.';
+      $('catalog').setAttribute('aria-busy', 'false');
+    }
+    async function catalog(page = 1, selection = null) {
+      const type = selection?.type || $('media-type').value;
+      const q = selection?.q ?? $('query').value.trim();
+      const version = ++catalogVersion;
+      catalogLoading = true; controls();
+      $('catalog').setAttribute('aria-busy', 'true');
+      $('catalog-status').textContent = 'Loading titles…';
+      try {
+        const data = await request(`/api/${q ? 'search' : 'catalog'}?type=${type}&page=${page}${q ? '&q=' + encodeURIComponent(q) : ''}`);
+        if (version !== catalogVersion) return;
+        $('catalog').replaceChildren(...data.items.map(t => card(t)));
+        catalogState = { type, q, page: data.page, hasMore: data.hasMore };
+        $('catalog-page').textContent = `Page ${data.page}`;
+        $('catalog-status').textContent = data.items.length ? `${data.items.length} ${type === 'tv' ? 'TV shows' : 'movies'}${q ? ' matching “' + q + '”' : ' · popular titles'}.` : 'No results. Try another search.';
+      } catch (error) {
+        if (version !== catalogVersion) return;
+        $('catalog-status').textContent = `Could not load titles: ${error.message}${catalogState ? ' Previous results are still shown.' : ''}`;
+      } finally {
+        if (version === catalogVersion) {
+          catalogLoading = false;
+          $('catalog').setAttribute('aria-busy', 'false');
+          controls();
+        }
+      }
     }
     async function list() {
       if (!me) return;
@@ -347,6 +384,16 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     async function add(title) { if (!me) throw new Error('Connect and sign in first.'); await request(`/api/groups/${me.groupId}/list`, 'POST', { mediaType: title.mediaType, tmdbId: title.tmdbId }); await list(); }
     function card(title, item) {
       const article = document.createElement('article'); article.append(node('h3', title.title), node('p', `${title.year || ''} · ${title.mediaType}${item ? ' · ' + item.status : ''}`), node('p', title.overview || ''));
+      const poster = node('p', 'Poster unavailable.');
+      if (typeof title.posterPath === 'string' && /^\/[a-zA-Z0-9._-]+$/.test(title.posterPath)) {
+        const image = document.createElement('img');
+        image.alt = `Poster for ${title.title}`;
+        image.width = 185; image.loading = 'lazy'; image.decoding = 'async';
+        image.onerror = () => image.replaceWith(node('p', 'Poster unavailable.'));
+        image.src = 'https://image.tmdb.org/t/p/w185' + title.posterPath;
+        poster.replaceChildren(image);
+      }
+      article.prepend(poster);
       if (!item) article.append(button('Add to our list', () => add(title)));
       article.append(button('Watch together', async () => {
         if (!me) throw new Error('Connect and sign in first.');
@@ -368,6 +415,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     async function connect() {
       stopLiveChat();
+      resetCatalog();
       me = null; room = null; joined = false; unload(); controls();
       $('catalog').replaceChildren(); $('list-items').replaceChildren(); $('messages').replaceChildren();
       me = await request('/api/me'); $('display-name').value = me.profile.displayName; $('avatar').value = me.profile.avatarKey;
@@ -433,7 +481,9 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('room-status').textContent = `${result.name} · not watching yet`;
       say('Joined your partner’s room.');
     });
-    form('search-form', catalog); bind('refresh-list', list);
+    form('search-form', () => catalog()); bind('refresh-list', list);
+    bind('catalog-previous', () => catalog(catalogState.page - 1, catalogState));
+    bind('catalog-next', () => catalog(catalogState.page + 1, catalogState));
     bind('join', async () => { const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); await chat(); });
     bind('leave', async () => { await request(`/api/rooms/${me.roomId}/leave`, 'POST', {}); joined = false; unload(); apply(await request(`/api/rooms/${me.roomId}/state`)); });
     bind('refresh-room', async () => { if (!me) throw new Error('Connect first.'); apply(await request(`/api/rooms/${me.roomId}/state`)); });
