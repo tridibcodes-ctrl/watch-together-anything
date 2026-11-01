@@ -151,7 +151,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
   <script>
     // Frontend logic only. Restyle or rearrange the HTML; retain IDs used below.
     const $ = id => document.getElementById(id);
-    let mode = 'demo', base = '', me, room, joined = false, frame, loadedKey;
+    function preference(key, value) {
+      try {
+        if (value === undefined) return JSON.parse(localStorage.getItem(key) || 'null');
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch { return null; }
+    }
+    const savedConnection = preference('multiplay.connection');
+    let mode = savedConnection?.mode === 'api' ? 'api' : 'demo', base = savedConnection?.base || '', me, room, joined = false, frame, loadedKey;
+    $('mode').value = mode; $('backend').value = base;
     const samples = [
       {tmdbId:155,mediaType:'movie',title:'The Dark Knight',year:'2008',overview:'A new threat arrives in Gotham.'},
       {tmdbId:27205,mediaType:'movie',title:'Inception',year:'2010',overview:'An unusual assignment inside dreams.'},
@@ -280,9 +288,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         select.replaceChildren(new Option('Choose a room',''));
         for(const item of roomData.items) select.add(new Option(item.name,item.roomId));
         me.rooms=roomData.items;
-        me.roomId=roomData.items[0]?.roomId || null;
+        const rememberedRoom = preference('multiplay.room.' + me.userId);
+        me.roomId = roomData.items.find(item => item.roomId === rememberedRoom)?.roomId || roomData.items[0]?.roomId || null;
         select.value=me.roomId || '';
-        if(me.roomId) $('room-invite').textContent=`Selected ${roomData.items[0].name}. Invite code: ${roomData.items[0].inviteCode}`;
+        const selected = roomData.items.find(item => item.roomId === me.roomId);
+        $('room-invite').textContent = selected ? 'Selected ' + selected.name + '. Invite code: ' + selected.inviteCode : 'No room selected.';
         say(`Backend connected. Profile loaded. ${roomData.items.length} room(s) available.`);
         return;
       }
@@ -295,11 +305,14 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const nextBase = $('backend').value.trim().replace(/\/$/,'');
       if(nextBase) { const u = new URL(nextBase); if(!['http:','https:'].includes(u.protocol)||u.username||u.password||u.pathname!=='/'||u.search||u.hash) throw new Error('Enter only the backend origin, without /api.'); }
       if($('mode').value === 'api' && location.protocol === 'file:') throw new Error('Serve this file using your editor’s local server before using API mode.');
-      mode = $('mode').value; base = nextBase; await connect();
+      mode = $('mode').value; base = nextBase;
+      preference('multiplay.connection', {mode, base});
+      await connect();
     });
     $('room-select').onchange = () => {
       if (!me) return;
       me.roomId = $('room-select').value || null;
+      preference('multiplay.room.' + me.userId, me.roomId);
       const selected = me.rooms?.find(item => item.roomId === me.roomId);
       room = null; joined = false; unload(); controls();
       $('messages').replaceChildren();
@@ -383,14 +396,20 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('sign-out').disabled = true;
       $('auth-status').textContent = 'Signed out.';
     });
-    authClient.auth.getSession().then(async ({data, error}) => {
-      if (error) throw error;
+    async function initialize() {
+      $('auth-status').textContent = 'Restoring sign-in…';
+      const { data, error } = await authClient.auth.getSession();
+      if (error) throw new Error(error.message);
       authSession = data.session;
       if (authSession) await checkBackendIdentity(authSession);
-    }).catch(error => {
-      $('auth-status').textContent = `Session check failed: ${error.message}`;
-    });
-    act(connect);
+      else $('auth-status').textContent = 'Not signed in.';
+      if (mode === 'api' && !authSession) {
+        say('Sign in to reconnect to the backend.');
+        return;
+      }
+      await connect();
+    }
+    act(initialize);
   </script>
 </body>
 </html>
