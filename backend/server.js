@@ -209,6 +209,40 @@ const server = http.createServer(async (request, response) => {
     }
     return;
   }
+  if (request.method === "GET" && request.url === "/api/rooms") {
+    try {
+      const { verifyAuth } = await import("@supabase/server/core");
+      const authHeaders = new Headers();
+      if (request.headers.authorization) authHeaders.set("authorization", request.headers.authorization);
+      if (request.headers.apikey) authHeaders.set("apikey", request.headers.apikey);
+      const authRequest = new Request(new URL(request.url, "http://localhost:3000"), { headers: authHeaders });
+      const { error } = await verifyAuth(authRequest, { auth: "user" });
+      if (error) {
+        sendJson(response, error.status || 401, { error: "Sign-in required or token invalid" });
+        return;
+      }
+      const supabaseUrl = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+      const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+      if (!supabaseUrl || !publishableKey) {
+        sendJson(response, 500, { error: "Supabase configuration is incomplete" });
+        return;
+      }
+      const roomsResponse = await fetch(`${supabaseUrl}/rest/v1/watch_rooms?select=id,name,invite_code,created_at&order=created_at.desc`, {
+        headers: { apikey: publishableKey, Authorization: request.headers.authorization },
+      });
+      const rooms = await roomsResponse.json().catch(() => ({}));
+      if (!roomsResponse.ok) {
+        console.error("Room list failed with HTTP", roomsResponse.status);
+        sendJson(response, 502, { error: "Could not load your rooms" });
+        return;
+      }
+      sendJson(response, 200, { items: rooms.map((room) => ({ roomId: room.id, name: room.name, inviteCode: room.invite_code })) });
+    } catch (error) {
+      console.error("Room list failed:", error.message);
+      sendJson(response, 500, { error: "Could not load your rooms" });
+    }
+    return;
+  }
   if (request.method === "POST" && ["/api/rooms", "/api/rooms/join"].includes(request.url)) {
     try {
       const { verifyAuth } = await import("@supabase/server/core");

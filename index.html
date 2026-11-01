@@ -59,6 +59,7 @@
     <section id="room" aria-labelledby="room-heading">
       <h2 id="room-heading">Room</h2>
       <p>Create a private room or join your partner using their invite code. Each room supports two people.</p>
+      <label>Your rooms <select id="room-select"><option value="">No room selected</option></select></label>
       <form id="create-room-form">
         <label>Room name <input id="room-name" maxlength="60" value="Our room" required></label>
         <button>Create room</button>
@@ -274,7 +275,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('catalog').replaceChildren(); $('list-items').replaceChildren(); $('messages').replaceChildren();
       me = await request('/api/me'); $('display-name').value = me.profile.displayName; $('avatar').value = me.profile.avatarKey;
       if (mode === 'api') {
-        say('Backend connected. Profile loaded. Movie lists and rooms are still being built.');
+        const roomData=await request('/api/rooms');
+        const select=$('room-select');
+        select.replaceChildren(new Option('Choose a room',''));
+        for(const item of roomData.items) select.add(new Option(item.name,item.roomId));
+        me.rooms=roomData.items;
+        me.roomId=roomData.items[0]?.roomId || null;
+        select.value=me.roomId || '';
+        if(me.roomId) $('room-invite').textContent=`Selected ${roomData.items[0].name}. Invite code: ${roomData.items[0].inviteCode}`;
+        say(`Backend connected. Profile loaded. ${roomData.items.length} room(s) available.`);
         return;
       }
       await catalog(); await list(); apply(await request(`/api/rooms/${me.roomId}/state`));
@@ -288,6 +297,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if($('mode').value === 'api' && location.protocol === 'file:') throw new Error('Serve this file using your editor’s local server before using API mode.');
       mode = $('mode').value; base = nextBase; await connect();
     });
+    room-select.onchange=() => { if(me) me.roomId=room-select.value || null; const selected=me?.rooms?.find(room=>room.roomId===me.roomId); if(selected) room-invite.textContent=Selected . Invite code: ; };
     form('create-room-form',async () => {
       if(!me) throw new Error('Connect and sign in first.');
       if(mode !== 'api') throw new Error('Switch to Backend API mode to create a room.');
