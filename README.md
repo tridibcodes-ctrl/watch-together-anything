@@ -4,6 +4,8 @@ A watch-together app for couples. Many couples can use the system; each private 
 
 This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved chat, and live chat work. Movie discovery, shared lists, playback synchronization, watched tracking, and calls are still being built.
 
+Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target design](#complete-target-design--planned-features) · [Local setup](#setup-from-a-fresh-clone) · [Implemented APIs](#implemented-http-api) · [Remaining work](#remaining-work-and-suggested-order)
+
 ## Requirements and implementation status
 
 The intended experience lets both partners control playback, maintain a shared movie/show list, chat or call, and move titles to Watched after finishing together. Episode progress must be distinguished from completing a series. Development aims to use free services; production cost and capacity are not established.
@@ -53,6 +55,179 @@ flowchart LR
 3. **Join room:** join_watch_room finds the code and locks the room row before inserting membership. A trigger uses a transaction lock and count to enforce the two-member limit.
 4. **Send chat:** Node checks membership, derives sender ID from verified claims, reads their name, validates text, and inserts it. The combination of room ID, sender ID, and client message ID prevents duplicate inserts on retry.
 5. **Receive chat:** A Realtime event triggers an API fetch. Room changes/sign-out remove the old subscription. Generation/request checks prevent stale responses from replacing another room's chat.
+
+## Why TMDB is part of this project
+
+Think of the app as three connected pieces: **a catalog to choose something, a player to watch it, and a private room to experience it together**.
+
+| Responsibility | Service/component | Example |
+| --- | --- | --- |
+| Find and describe a title | TMDB, through our Node API — planned | Search for a movie, show its poster/year, choose a TV season and episode |
+| Save the couple's choices and activity | Supabase PostgreSQL | Shared list, chat, membership, playback session, completion confirmations |
+| Show the video | A supported external player — integration unverified | Embed the selected movie/episode in each partner's browser |
+| Keep both partners coordinated | Our backend, database, Realtime, and player adapter — planned | Accept Pause, update room state, tell both controllable players to pause |
+| Carry a voice/video call | Browser WebRTC — planned | Camera/microphone between the two partners |
+
+### What TMDB gives the frontend
+
+TMDB supplies catalog metadata and images. Our planned integration will use its search and details APIs for movie/show names, posters, summaries, dates, identifiers, and season/episode information. It lets the frontend build a real Browse page instead of depending on the handful of hard-coded demo titles. See [TMDB's introduction](https://developer.themoviedb.org/docs/getting-started) and [search-to-details workflow](https://developer.themoviedb.org/docs/search-and-query-for-details).
+
+A shared-list item should refer to a title using `(mediaType, tmdbId)`, such as `('movie', 155)`, instead of treating a typed title as its identity. Movie and TV IDs are separate namespaces, so store the type too. For an episode, also store season and episode numbers. This avoids ambiguity between remakes, translations, and titles that share a name.
+
+TMDB is our chosen catalog source, not a requirement of Node, Supabase, or synchronized playback. A minimal manually entered video-link app could work without it. We want browsing, search, posters, TV episode selection, and consistent identities across saved lists, so a catalog service avoids building and maintaining those records ourselves. Another catalog source could replace it behind our backend's normalized API.
+
+### What TMDB does not give us
+
+TMDB is not our movie streaming server. Its catalog does not make a full movie playable, establish streaming rights, guarantee an external provider has a matching video, or synchronize two players. Video-related metadata and trailers must not be mistaken for full-film hosting. The goal of broad movie coverage means searching the available catalog; we cannot promise literally every title or playable availability for every result.
+
+Cinemaos is the intended primary embed provider; VidLink is the fallback. They belong to the player layer, not the catalog or shared-state database. Whether an embed accepts a TMDB ID, permits embedding, and supports our desired controls must be checked against the provider's actual supported interface. Existing iframe URLs and postMessage commands in the starter are experiments, not a verified provider contract.
+
+### Planned TMDB request flow
+
+1. Browser requests `/api/search?type=movie&q=...&page=1`, or `/api/catalog?type=tv&page=1` for browsing.
+2. Node validates parameters and calls TMDB with `TMDB_READ_ACCESS_TOKEN` from its environment. The token is never sent to browser code.
+3. Node normalizes TMDB's movie/TV response fields to our title shape: ID, type, title, year, overview, poster reference, and pagination information.
+4. The frontend renders cards and details. Adding a title saves its identity in the selected room's list; it does not copy the full TMDB catalog into Supabase.
+5. Selecting Watch creates/updates the room's playback session. A separate provider adapter attempts to load the matching title/episode.
+
+Planned implementation details: bound pagination/query lengths, use request timeouts, handle upstream failures and rate limiting, and cache frequently requested public metadata briefly. Do not expose arbitrary upstream URLs through this endpoint. Cache metadata, not video files or expiring playback URLs.
+
+TMDB's developer API is free for noncommercial use with attribution; commercial use needs separate arrangements. Before publishing, include an approved TMDB logo and the required notice: “This product uses the TMDB API but is not endorsed or certified by TMDB.” Review current terms if the app starts generating revenue. [TMDB FAQ and attribution requirements](https://developer.themoviedb.org/docs/faq)
+
+## Complete target design — planned features
+
+This section explains the intended end-to-end system. The implementation table above remains the source of truth for what currently works. Details introduced here are proposals for the remaining work, not promises that corresponding tables or routes already exist.
+
+### Technology choices and responsibilities
+
+| Layer | Choice | Why it fits |
+| --- | --- | --- |
+| Frontend | Plain HTML/JavaScript starter now; final styling owned by the frontend developer | Easy to inspect and use API endpoints without a build pipeline. No CSS has been supplied intentionally. |
+| HTTP API | Node.js native HTTP server | Small backend, already running; validates requests and coordinates authenticated database/provider calls. |
+| Identity | Supabase Auth | Account/session lifecycle; each person has their own identity. |
+| Durable state | Supabase PostgreSQL with RLS | Transactions, room membership, saved lists, messages, progress, and authoritative playback snapshots. |
+| Change delivery | Supabase Realtime | Notify the selected room's clients about committed state changes. It does not replace persistent state. |
+| Catalog | TMDB through Node — planned | Browsing, search, posters, details, and consistent title IDs. |
+| Playback | Controllable external-player adapter — planned/unverified | Each browser plays its own stream; our backend coordinates controls instead of relaying the film. |
+| Calls | Native WebRTC and authenticated signaling — planned | A two-person room can use one peer connection; add STUN/TURN connectivity as needed. |
+| Source collaboration | GitHub/GitHub Desktop | Share code and documentation. Git synchronization does not migrate a Supabase database or copy local environment files. |
+
+No Redis, Kafka, separate signaling framework, or group-call media server is needed for the initial two-person-per-room design. Reassess only when measured requirements justify more infrastructure. Specific hosting providers and production resource sizes have not been chosen.
+
+```mermaid
+flowchart TB
+  A[Partner A browser] -->|Authenticated commands and metadata requests| API[Node API]
+  B[Partner B browser] -->|Authenticated commands and metadata requests| API
+  API -->|Catalog requests: planned| TMDB[TMDB metadata API]
+  API --> DB[(Supabase PostgreSQL)]
+  DB --> RT[Supabase Realtime]
+  RT -->|Committed room changes| A
+  RT -->|Committed room changes| B
+  A --> PA[External player in browser A]
+  B --> PB[External player in browser B]
+  A <-->|WebRTC call media: direct or through TURN| B
+```
+
+### Accounts, invitations, membership, and presence
+
+People can sign into the app with valid accounts. Room access additionally requires membership: being signed in must not grant access to every couple's chat, list, or playback session. Room creation inserts the creator's membership; an invited partner joins the same room. Each room is independent of other couples' rooms.
+
+The capacity rule means two distinct member accounts, not two WebSocket connections. A partner opening a second tab must not consume a third membership slot. Joining an already joined room should be idempotent; the known trigger/ON CONFLICT issue below needs correcting. Invite lookup, membership insertion, and capacity enforcement must remain transactional.
+
+Membership and presence are different. Membership is the durable permission to access the couple's room. Presence means currently watching/connected/ready and expires when a connection disappears. Leaving a watch session should not silently delete room membership, shared lists, or chat. Permanent room departure, deletion, invite rotation, and account recovery need explicit product flows.
+
+For a public couples app, add frontend signup, email confirmation/recovery, invitation abuse controls, and production URLs. The existing manual account-creation setup is a development shortcut. Do not add a global hard-coded allowlist of our two personal user IDs.
+
+### Shared list and TV progress
+
+Use room-scoped data, rather than a global list or the current null groupId placeholder. A proposed list item has room ID, media type, TMDB ID, added-by user, timestamps, and a status such as Planned/Watching/Watched. Uniqueness on room + media type + TMDB ID prevents duplicates. Store small metadata snapshots only where useful; TMDB remains the catalog source.
+
+Both partners can add/remove items. Every mutation checks room membership, commits to PostgreSQL, and notifies the room so both views update. Reconnecting fetches the saved list again. Private lists from different rooms must never mix.
+
+For a TV show, store per-episode progress separately using show ID, season, and episode. Completing one episode does not complete the series. Agree how to handle new seasons and newly released episodes before declaring a whole show Watched.
+
+### Shared playback state and command flow
+
+Both partners have equal play/pause/seek/provider control. The backend/database is the authority for room state. Realtime messages notify clients of accepted state; clients must not treat an unauthenticated browser message as authority.
+
+A proposed playback snapshot contains room ID, session ID, media identity, season/episode if applicable, provider, playing/paused status, position at an anchor time, server anchor timestamp, and an increasing revision. Presence/readiness and connection state should be modeled separately from the saved list and membership.
+
+1. A partner chooses a title/episode or presses a shared control.
+2. Browser sends a command ID, session ID, expected revision where appropriate, action, and validated arguments.
+3. Backend authenticates the sender, checks room membership/current session, validates the action, and applies it in a database transaction.
+4. A unique command ID makes retries safe. Locking or revision checks serialize simultaneous commands; stale commands are rejected and return the current state rather than changing a newer session.
+5. Committed state gets a new revision and server timestamp. Realtime notifies both clients; each applies newer revisions and ignores older snapshots.
+6. A newly connected client fetches current state instead of expecting to receive every historical event.
+
+For playing media, compute the intended position as anchor position plus elapsed server time. For paused media, keep the anchor position. For example, a playing snapshot anchored at 100 seconds five seconds ago implies approximately 105 seconds now. Correct for client/server clock offset and network delay rather than trusting each browser's wall clock equally.
+
+A provider adapter should expose load, ready, play, pause, seek, position/status reporting, error, and ended capabilities. Apply state after the player is ready, handle browser autoplay restrictions with an explicit user action, and prevent remote changes from being echoed back as new commands. Measure drift and tune correction thresholds during two-device testing; no synchronization latency guarantee exists yet.
+
+If one partner buffers, the app needs an explicit policy (proposed initial behavior: pause together until both are ready). Presence loss should show disconnected/reconnecting and preserve the session. Reconnects load the latest snapshot, not an old locally cached position.
+
+### Critical external-player limitation
+
+A cross-origin iframe cannot be controlled simply by inspecting its internal video element. postMessage communication only helps if the embedded player supports the commands/events we send. Outgoing messages need an exact target origin; incoming messages must validate origin, source window, and payload. [Browser cross-origin communication](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage)
+
+Before claiming watch synchronization works, verify both the primary and fallback provider on real browsers for play, pause, seek, readiness, timing feedback, and native-control events. If a provider has no supported control API, a synchronized state database alone cannot control its video. Disable unsupported shared controls and explain the limitation; do not label that playback as synchronized.
+
+Provider switching should pause the shared session, preserve title/episode and intended position, load the replacement on both sides, wait for readiness, and then resume by an agreed action. Confirm providers use compatible media/episode identifiers and timelines. Playback availability and external provider behavior remain dependencies outside our application's control.
+
+### Finished together and Watched
+
+The selected requirement is finishing together, not “one person clicked play” or “one player emitted ended.” Store completion confirmations scoped to the exact playback session, media version, member user ID, and episode if applicable. Repeated confirmation from one user must not count as two people.
+
+When both current room members confirm the same session, commit watched/progress records and the list transition in one transaction. Show a waiting-for-partner state after the first confirmation. An ended event may prompt confirmation but should not unconditionally mark a title Watched. Changing title/episode or creating a new session must not reuse confirmations from an earlier one. Undo should make an explicit correction that both clients see.
+
+### Text, voice, and video communication
+
+Saved text chat is already implemented. PostgreSQL stores messages, the API checks membership and sender identity, and Realtime prompts the current room to reload. Future additions include older-message pagination, visible delivery/reconnect state, and message retention/deletion choices.
+
+Voice/video calls are planned with browser WebRTC. Each participant grants camera/microphone permission. The peers exchange offer/answer descriptions and ICE connectivity candidates over an authenticated, room-scoped signaling channel, which could use Supabase Realtime. Call signaling is not the same as durable chat or the film's playback stream. [WebRTC peer connections and signaling](https://webrtc.org/getting-started/peer-connections)
+
+WebRTC does not charge an API license fee. STUN helps discover network connectivity; when a direct connection cannot be established, TURN relays call traffic. A TURN server may be self-hosted (for example with coturn) or purchased as a service, but its compute and bandwidth still need funding. Two people allow direct peer calls without adding a group-call SFU, but do not eliminate TURN requirements. Do not promise reliable calls on every network with zero relay capacity. [WebRTC TURN guidance](https://webrtc.org/getting-started/turn-server)
+
+Signaling must be restricted to the room members and a specific call ID, expire after the call, and handle simultaneous offers, denial of permissions, reconnection, mute/camera controls, and hangup. Camera/microphone tracks must stop on hangup or leaving the call. The proposed app does not record calls or forward movie video through WebRTC.
+
+### Proposed remaining data and API boundaries
+
+These are design proposals, not installed schema or implemented routes. Keep authoritative operations transactional and apply RLS on every room-owned table.
+
+| Proposed data | Responsibility |
+| --- | --- |
+| Room list items | Planned/Watching/Watched title identity and room ownership |
+| Episode progress | Watched episodes and progress independently of whole-show status |
+| Playback sessions / current state | Shared title, episode, provider, position anchor, status and revision |
+| Applied commands | Retry deduplication and ordering of accepted playback mutations |
+| Session completion confirmations | One confirmation per member for the current session/media |
+| Call/presence state | Short-lived room readiness, call IDs, participants and signaling |
+
+The planned catalog endpoints are GET /api/catalog and GET /api/search plus details/season/episode endpoints. New shared-list APIs should be room-scoped. Playback needs snapshot, media selection, control, and presence endpoints; completion needs confirm/undo operations. Call signaling may use authenticated Realtime rather than a REST route per ICE candidate. Define exact response shapes and update the starter's contract before implementing each feature; the old group-based mock routes are not a finalized backend contract.
+
+### Nonfunctional requirements and tradeoffs
+
+| Area | Target/design rule |
+| --- | --- |
+| Isolation | Every couple's rooms, lists, chat, progress, playback and signaling are accessible only to their members. |
+| Consistency | Enforce capacity, command ordering, and shared completion in transactions. Use deduplication IDs and revisions for retries/reconnects. |
+| Durability | Store user-owned history and current snapshots in PostgreSQL; do not rely on a single Node process's memory or WebSocket events. |
+| Responsiveness | Deliver chat/control changes promptly; measure two-device latency and playback drift before setting numerical targets. |
+| Recovery | Refresh/reconnect restores the last committed state. Show meaningful offline/provider errors and preserve user intent safely. |
+| Security | Verify tokens, enforce RLS/membership, validate inputs, use HTTPS/WSS in deployment, keep server tokens out of the browser, and add rate limits before public release. |
+| Privacy | Treat room messages and lists as private data. Stored chat is not end-to-end encrypted; do not claim it is. Plan retention, deletion, and backup access. |
+| Compatibility | Test mobile/desktop browsers, autoplay restrictions, iframe capabilities, and call permissions/network conditions. |
+| Maintainability | Keep provider adapters replaceable, document APIs, add migrations/tests, and preserve Local demo for independent frontend development. |
+| Cost | Bound requests, metadata caching, chat history, and live connections. Track database, Realtime, hosting and TURN usage. Free-tier availability is not an unlimited-service guarantee. |
+
+There are no production availability, user-count, or latency commitments yet. Two participants per room is a product limit; it is not a claim that total application traffic is limited to two people. Scale estimates need an expected number of simultaneous rooms and measured provider/service quotas.
+
+### Deployment and developer collaboration
+
+For remote couples, serve the app over HTTPS and deploy the API to a reachable host; the current loopback-only server is local development. Use same-origin frontend/API routing where possible. If splitting them, implement an explicit CORS allowlist and configure auth URLs/session handling. Set production environment variables securely, apply reviewed migrations, and verify Realtime publication/RLS after deployment.
+
+GitHub Desktop synchronizes source files. It does not transfer .env credentials, install npm dependencies, apply database changes, or make a local server accessible to a partner. Each checkout follows the setup instructions below. Avoid running both old and new checkouts on port 3000 and then editing a different copy of the source.
+
+The frontend developer can design in Local demo without the API running. Backend work should expose stable, documented JSON contracts. The frontend should display clear states for loading, no room, waiting for partner, disconnected, player unavailable, and call permission errors. Agree on completed feature acceptance using two separate authenticated browser profiles before adding more features.
 
 ## Repository map
 
