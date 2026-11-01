@@ -65,7 +65,7 @@ function createPlaybackHandler({ authenticateUser = authenticate, fetchImpl = fe
             args.p_position_ms = input.targetPositionMs;
           }
           if (input.action === 'provider') {
-            if (!['cinemaos', 'vidlink'].includes(input.provider)) return fail(400, 'Unknown provider');
+            if (!['cinesrc', 'cinemaos', 'vidlink'].includes(input.provider)) return fail(400, 'Unknown provider');
             args.p_provider = input.provider;
           }
         }

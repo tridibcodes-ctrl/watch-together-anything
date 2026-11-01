@@ -46,7 +46,7 @@ function harness() {
 
 test('new selection starts primary; explicit or reported load failure falls back once', () => {
   const app = harness();
-  app.player.load(tv);
+  app.player.load(tv, 'cinemaos');
   assert.equal(app.states.at(-1).provider, 'cinemaos');
   app.frames[0].onerror();
   assert.equal(app.states.at(-1).provider, 'vidlink');
@@ -54,7 +54,7 @@ test('new selection starts primary; explicit or reported load failure falls back
   app.frames[1].onerror();
   assert.equal(app.frames.length, 2);
   assert.equal(app.states.at(-1).status, 'error');
-  app.player.load(movie);
+  app.player.load(movie, 'cinemaos');
   assert.equal(app.states.at(-1).provider, 'cinemaos');
   app.player.switchProvider('vidlink');
   assert.equal(new URL(app.frames.at(-1).src).pathname, '/movie/155');
@@ -62,7 +62,7 @@ test('new selection starts primary; explicit or reported load failure falls back
 });
 
 test('iframe load does not imply a working video; confirmation timer continues without video status', () => {
-  const app = harness(); app.player.load(movie);
+  const app = harness(); app.player.load(movie, 'cinemaos');
   [...app.timers.values()][0]();
   assert.equal(app.states.at(-1).status, 'unconfirmed');
   assert.equal(app.frames.length, 1);
@@ -74,7 +74,7 @@ test('iframe load does not imply a working video; confirmation timer continues w
 });
 
 test('CinemaOS controls wait for status and always target the exact provider origin', () => {
-  const app = harness(); app.player.load(movie);
+  const app = harness(); app.player.load(movie, 'cinemaos');
   assert.equal(app.player.command('play'), false);
   app.frames[0].onload();
   app.listeners.get('message')({ origin: 'https://cinemaos.tech', source: app.frames[0].contentWindow,
@@ -91,7 +91,7 @@ test('CinemaOS controls wait for status and always target the exact provider ori
 });
 
 test('verified VidLink progress resumes on retry; old frames and late load events are ignored', () => {
-  const app = harness(); app.player.load(tv);
+  const app = harness(); app.player.load(tv, 'cinemaos');
   const staleLoad = app.frames[0].onload;
   app.player.switchProvider('vidlink');
   const receive = app.listeners.get('message');
@@ -107,4 +107,48 @@ test('verified VidLink progress resumes on retry; old frames and late load event
   assert.equal(app.timers.size, 0);
   assert.equal(app.states.at(-1).media, null);
   app.player.destroy(); assert.equal(app.listeners.size, 0);
+});
+
+test('CineSrc primary uses TV query parameters and prevents automatic episode changes', () => {
+  const url = new URL(embedUrl(tv, 'cinesrc', 75.9));
+  assert.equal(url.origin, 'https://cinesrc.st'); assert.equal(url.pathname, '/embed/tv/1396');
+  assert.equal(url.searchParams.get('s'), '0'); assert.equal(url.searchParams.get('e'), '1');
+  for (const key of ['autoplay','autonext','autoskip','continueprompt']) assert.equal(url.searchParams.get(key), 'false');
+  assert.equal(url.searchParams.get('t'), '75');
+  const app = harness(); app.player.load(movie);
+  assert.equal(new URL(app.frames[0].src).origin, 'https://cinesrc.st');
+});
+
+test('CineSrc waits for video metadata, then sends documented play/pause/seek commands', () => {
+  const app = harness(); app.player.load(tv, 'cinesrc');
+  const frame = app.frames[0]; const receive = data => app.listeners.get('message')({ origin:'https://cinesrc.st', source:frame.contentWindow, data });
+  frame.onload(); assert.equal(app.player.getStatus().ready, false); assert.equal(app.player.command('play'), false);
+  assert.deepEqual(frame.commands.slice(-3).map(c => c.message.command), ['getCurrentTime','getDuration','getPaused']);
+  receive({type:'cinesrc:ready'}); assert.equal(app.player.getStatus().ready, false);
+  receive({type:'cinesrc:loadedmetadata',duration:1200}); assert.equal(app.player.getStatus().ready,true);
+  app.player.command('seek',{time:120}); app.player.command('play'); app.player.command('pause');
+  assert.deepEqual(frame.commands.slice(-3).map(c => c.message), [
+    {type:'cinesrc:command',command:'seek',args:[120]}, {type:'cinesrc:command',command:'play',args:[]}, {type:'cinesrc:command',command:'pause',args:[]}
+  ]);
+  assert.ok(frame.commands.every(c => c.origin === 'https://cinesrc.st'));
+  receive({type:'cinesrc:timeupdate',currentTime:120,duration:1200});
+  receive({type:'cinesrc:response',command:'getPaused',result:false}); assert.equal(app.player.getStatus().playing,true);
+  receive({type:'cinesrc:pause'}); assert.equal(app.player.getStatus().playing,false);
+  receive({type:'cinesrc:error',error:'source unavailable'}); assert.equal(app.player.getStatus().ready,false); assert.equal(app.player.command('play'),false);
+});
+
+test('CineSrc rejects spoofed frames/origins and malformed timing responses', () => {
+  const frame={contentWindow:{}};const event={origin:'https://cinesrc.st',source:frame.contentWindow,data:{type:'cinesrc:timeupdate',currentTime:12,duration:100}};
+  assert.equal(playbackEvent(event,frame,movie,'cinesrc').seconds,12);
+  for(const changed of [{origin:'https://cinesrc.st.evil.test'},{source:{}},{data:{type:'cinesrc:timeupdate',currentTime:-1}},{data:{type:'cinesrc:response',command:'getCurrentTime',result:'12'}},{data:{type:'cinesrc:response',command:'getPaused',result:'false'}}]) assert.equal(playbackEvent({...event,...changed},frame,movie,'cinesrc'),null);
+});
+
+test('CineSrc local episode navigation cannot silently synchronize the wrong episode', () => {
+  const app = harness();app.player.load(tv,'cinesrc');const frame=app.frames[0];
+  const receive = data => app.listeners.get('message')({origin:'https://cinesrc.st',source:frame.contentWindow,data});
+  receive({type:'cinesrc:loadedmetadata',duration:1200});assert.equal(app.player.getStatus().ready,true);
+  receive({type:'cinesrc:nextepisode',season:0,episode:2,internalNavigation:true});
+  assert.equal(app.player.getStatus().ready,false);
+  receive({type:'cinesrc:timeupdate',currentTime:10,duration:1200});assert.equal(app.player.getStatus().ready,false);
+  app.player.retry();assert.equal(app.player.getStatus().ready,false);assert.equal(new URL(app.frames.at(-1).src).searchParams.get('e'),'1');
 });

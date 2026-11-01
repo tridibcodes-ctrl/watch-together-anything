@@ -110,7 +110,7 @@
       <p id="sync-status" role="status" aria-live="polite">Select a room to share playback.</p>
       <button id="retry-command" type="button">Retry last playback command</button>
       <h3 id="player-title">Player</h3>
-      <p id="player-status" role="status" aria-live="polite">Choose Watch on a movie or TV episode to open CinemaOS.</p>
+      <p id="player-status" role="status" aria-live="polite">Choose Watch on a movie or TV episode to open CineSrc.</p>
       <div id="player"></div>
       <button id="load-player" type="button" disabled>Reload player</button>
       <button id="fallback-player" type="button" disabled>Try VidLink fallback</button>
@@ -121,13 +121,14 @@
       <button id="seek" type="button">Seek together</button>
       <p>
         <label>Provider <select id="provider">
-            <option value="cinemaos">CinemaOS (primary)</option>
+            <option value="cinesrc">CineSrc (primary)</option>
+            <option value="cinemaos">CinemaOS</option>
             <option value="vidlink">VidLink</option>
           </select></label>
         <button id="switch-provider" type="button" disabled>Switch provider</button>
       </p>
       <p>In Backend API mode, Watch selects the room's title. Both partners join playback, then use Play/Pause/Seek
-        together once CinemaOS reports video status. Use the native Play button once if your browser requires it.
+        together once CineSrc or CinemaOS reports video status. Use the native Play button once if your browser requires it.
         Native controls are local and are corrected to the room state. VidLink cannot receive shared controls;
         its fallback playback is manual. Provider changes apply to the room.</p>
       <button id="complete" type="button">We finished together</button>
@@ -244,7 +245,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (mode !== 'api') return;
         room = view.state; joined = view.joined;
         $('room-status').textContent = room?.media ? `${room.media.title} · ${room.provider} · ${room.status} · revision ${room.revision}` : 'No shared title selected.';
-        $('sync-status').textContent = !view.roomId ? 'Select a room to share playback.' : !view.online ? 'Connecting to room playback…' : !room?.media ? 'Choose Watch on a title to share it with this room.' : !joined ? 'A room title is selected. Click Join playback to load it.' : room.provider === 'vidlink' ? 'VidLink fallback: title/provider shared; play, pause and seek are manual.' : view.canControl ? 'CinemaOS shared controls ready. Both partners can control the room.' : 'Waiting for CinemaOS video status. Press its native Play button if needed, or try VidLink.';
+        $('sync-status').textContent = !view.roomId ? 'Select a room to share playback.' : !view.online ? 'Connecting to room playback…' : !room?.media ? 'Choose Watch on a title to share it with this room.' : !joined ? 'A room title is selected. Click Join playback to load it.' : room.provider === 'vidlink' ? 'VidLink fallback: title/provider shared; play, pause and seek are manual.' : view.canControl ? 'Shared controls ready for ' + MultiplayPlayer.PROVIDERS[room.provider].name + '. Both partners can control the room.' : 'Waiting for ' + MultiplayPlayer.PROVIDERS[room.provider].name + ' video status. Press its native Play button if needed. VidLink fallback is manual.';
         controls();
       },
       onError(message) { $('sync-status').textContent = message; }
@@ -582,7 +583,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (mode === 'api') await sharedPlayback.watch(media);
         else embeddedPlayer.load(media);
         location.hash = 'room';
-        say(mode === 'api' ? 'Room title selected. Your partner can click Join playback. Use shared controls when CinemaOS is ready.' : 'CinemaOS opened. Use Try VidLink fallback if it cannot play this title.');
+        say(mode === 'api' ? 'Room title selected. Your partner can click Join playback. Use shared controls when the selected player is ready.' : 'CineSrc opened. Use Try VidLink fallback if it cannot play this title.');
       }));
       if (item && item.status !== 'watched') article.append(button('Remove', () => removeListItem(item.id)));
       return article;

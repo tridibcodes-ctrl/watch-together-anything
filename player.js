@@ -1,34 +1,36 @@
 (function (root) {
   'use strict';
   const PROVIDERS = Object.freeze({
-    cinemaos: { name: 'CinemaOS', origin: 'https://cinemaos.tech' },
-    vidlink: { name: 'VidLink', origin: 'https://vidlink.pro' }
+    cinesrc: { name: 'CineSrc', origin: 'https://cinesrc.st', controls: true },
+    cinemaos: { name: 'CinemaOS', origin: 'https://cinemaos.tech', controls: true },
+    vidlink: { name: 'VidLink', origin: 'https://vidlink.pro', controls: false }
   });
-
+  const position = n => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 604800;
   function validateMedia(media) {
     if (!media || !['movie', 'tv'].includes(media.mediaType) || !Number.isSafeInteger(media.tmdbId) || media.tmdbId < 1) throw new Error('Choose a valid movie or TV show.');
     if (media.mediaType === 'tv' && (!Number.isInteger(media.season) || media.season < 0 || !Number.isInteger(media.episode) || media.episode < 1)) throw new Error('Choose a TV season and episode.');
   }
-
   function embedUrl(media, provider, seconds = 0) {
     validateMedia(media);
     if (!Object.hasOwn(PROVIDERS, provider)) throw new Error('Unknown player provider.');
+    const start = position(seconds) ? Math.floor(seconds) : 0;
+    if (provider === 'cinesrc') {
+      const url = new URL(`/embed/${media.mediaType}/${media.tmdbId}`, PROVIDERS.cinesrc.origin);
+      if (media.mediaType === 'tv') { url.searchParams.set('s', media.season); url.searchParams.set('e', media.episode); }
+      for (const key of ['autoplay', 'autonext', 'autoskip', 'continueprompt']) url.searchParams.set(key, 'false');
+      url.searchParams.set('t', String(start));
+      return url.href;
+    }
     const suffix = media.mediaType === 'tv' ? `/${media.season}/${media.episode}` : '';
     const path = provider === 'cinemaos' ? `/player/${media.tmdbId}${suffix}` : `/${media.mediaType}/${media.tmdbId}${suffix}`;
     const url = new URL(path, PROVIDERS[provider].origin);
     if (provider === 'cinemaos') {
-      url.searchParams.set('autoPlay', 'false');
-      url.searchParams.set('autoNext', 'false');
+      url.searchParams.set('autoPlay', 'false'); url.searchParams.set('autoNext', 'false');
     } else {
-      url.searchParams.set('autoplay', 'false');
-      url.searchParams.set('nextbutton', 'false');
-      url.searchParams.set('startAt', String(Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0));
+      url.searchParams.set('autoplay', 'false'); url.searchParams.set('nextbutton', 'false'); url.searchParams.set('startAt', String(start));
     }
     return url.href;
   }
-
-  // CinemaOS command/event names were supplied from its embed documentation.
-  // VidLink exposes notifications only; never send speculative commands to it.
   function playbackEvent(event, frame, media, provider) {
     if (!Object.hasOwn(PROVIDERS, provider) || event.origin !== PROVIDERS[provider].origin || event.source !== frame?.contentWindow) return null;
     let payload = event.data;
@@ -36,98 +38,110 @@
       if (payload.length > 10000) return null;
       try { payload = JSON.parse(payload); } catch { return null; }
     }
+    if (provider === 'cinesrc') {
+      if (!payload || typeof payload !== 'object') return null;
+      const type = payload.type;
+      if (type === 'cinesrc:ready') return { event: 'playerstatus', requestStatus: true };
+      if (type === 'cinesrc:nextepisode') return media.mediaType !== 'tv' || Number(payload.season) !== media.season || Number(payload.episode) !== media.episode ? { event: 'mismatch' } : null;
+      if (type === 'cinesrc:error') return { event: 'error' };
+      if (type === 'cinesrc:response') {
+        if (payload.command === 'getCurrentTime' && position(payload.result)) return { event: 'playerstatus', seconds: payload.result };
+        if (payload.command === 'getDuration' && position(payload.result) && payload.result > 0) return { event: 'playerstatus', duration: payload.result };
+        if (payload.command === 'getPaused' && typeof payload.result === 'boolean') return { event: 'playerstatus', playing: !payload.result };
+        return null;
+      }
+      if (type === 'cinesrc:loadedmetadata') return position(payload.duration) && payload.duration > 0 ? { event: 'playerstatus', duration: payload.duration, requestStatus: true } : null;
+      const kind = typeof type === 'string' ? type.replace(/^cinesrc:/, '') : '';
+      if (type !== 'cinesrc:' + kind || !['play','pause','seeked','timeupdate','ended'].includes(kind)) return null;
+      if (['timeupdate','seeked'].includes(kind) && !position(payload.currentTime)) return null;
+      return { event: kind, ...(position(payload.currentTime) ? { seconds: payload.currentTime } : {}),
+        ...(position(payload.duration) ? { duration: payload.duration } : {}),
+        ...(['play','pause','ended'].includes(kind) ? { playing: kind === 'play' } : {}) };
+    }
     const data = payload?.data;
     if (payload?.type !== 'PLAYER_EVENT' || !data || !['play', 'pause', 'seeked', 'ended', 'timeupdate', 'playerstatus'].includes(data.event)) return null;
     const id = data.mtmdbId ?? data.tmdbId;
     if ((provider === 'vidlink' || id !== undefined) && Number(id) !== media.tmdbId) return null;
     if ((provider === 'vidlink' || data.mediaType !== undefined) && data.mediaType !== media.mediaType) return null;
     if (media.mediaType === 'tv' && ((provider === 'vidlink' || data.season !== undefined) && Number(data.season) !== media.season || (provider === 'vidlink' || data.episode !== undefined) && Number(data.episode) !== media.episode)) return null;
-    if (typeof data.currentTime !== 'number' || !Number.isFinite(data.currentTime) || data.currentTime < 0 || data.currentTime > 604800) return null;
+    if (!position(data.currentTime)) return null;
     return { event: data.event, seconds: data.currentTime,
       duration: typeof data.duration === 'number' && Number.isFinite(data.duration) ? data.duration : 0,
       playing: typeof data.paused === 'boolean' ? !data.paused : typeof data.playing === 'boolean' ? data.playing : typeof data.isPlaying === 'boolean' ? data.isPlaying : undefined };
   }
-
   function createPlayer({ container, onState = () => {}, onFallback, windowImpl = window, documentImpl = document, setTimer = setTimeout, clearTimer = clearTimeout, now = Date.now }) {
-    let frame = null, media = null, provider = 'cinemaos', seconds = 0, timer = null, generation = 0, ready = false, playing = false, measuredAt = now();
+    let frame = null, media = null, provider = 'cinesrc', seconds = 0, timer = null, generation = 0, ready = false, playing = false, measuredAt = now(), mediaMismatch = false;
     const emit = (status, message) => onState({ media, provider, seconds, ready, playing, status, message });
     function sendCommand(command, params = {}) {
-      if (!frame || provider !== 'cinemaos' || (command !== 'getStatus' && !ready)) return false;
+      if (!frame || !PROVIDERS[provider].controls || (command !== 'getStatus' && !ready)) return false;
       if (!['play','pause','seek','getStatus'].includes(command)) return false;
-      if (command === 'seek' && (!Number.isFinite(params.time) || params.time < 0 || params.time > 604800)) return false;
-      frame.contentWindow.postMessage({ command, ...(command === 'seek' ? { time: params.time } : {}) }, PROVIDERS.cinemaos.origin);
+      if (command === 'seek' && !position(params.time)) return false;
+      if (provider === 'cinesrc') {
+        const send = (name, args = []) => frame.contentWindow.postMessage({ type: 'cinesrc:command', command: name, args }, PROVIDERS.cinesrc.origin);
+        if (command === 'getStatus') for (const getter of ['getCurrentTime','getDuration','getPaused']) send(getter);
+        else send(command, command === 'seek' ? [params.time] : []);
+      } else {
+        frame.contentWindow.postMessage({ command, ...(command === 'seek' ? { time: params.time } : {}) }, PROVIDERS.cinemaos.origin);
+      }
       return true;
     }
     function removeFrame() {
-      generation++;
-      clearTimer(timer); timer = null;
+      generation++; clearTimer(timer); timer = null;
       if (frame) { frame.onload = null; frame.onerror = null; }
-      frame = null;
-      container.replaceChildren();
+      frame = null; container.replaceChildren();
     }
-    function load(nextMedia, nextProvider = 'cinemaos', startSeconds = 0) {
+    function load(nextMedia, nextProvider = 'cinesrc', startSeconds = 0) {
       const src = embedUrl(nextMedia, nextProvider, startSeconds);
-      removeFrame();
-      media = { ...nextMedia }; provider = nextProvider;
-      ready = false; playing = false;
-      measuredAt = now();
-      seconds = provider === 'vidlink' && Number.isFinite(startSeconds) && startSeconds >= 0 ? startSeconds : 0;
+      removeFrame(); media = { ...nextMedia }; provider = nextProvider;
+      ready = false; playing = false; mediaMismatch = false; measuredAt = now();
+      seconds = provider !== 'cinemaos' && position(startSeconds) ? startSeconds : 0;
       const version = generation;
       frame = documentImpl.createElement('iframe');
       frame.title = `${media.title || 'Selected title'} — ${PROVIDERS[provider].name}`;
-      frame.width = '100%'; frame.height = '360';
-      frame.allow = 'autoplay; fullscreen; picture-in-picture; encrypted-media';
-      frame.allowFullscreen = true;
-      frame.referrerPolicy = 'strict-origin-when-cross-origin';
-      // VidLink refuses sandboxed embeds. Use the providers' documented iframe
-      // setup; the cross-origin boundary still prevents access to our page DOM.
+      frame.width = '100%'; frame.height = '360'; frame.allow = 'autoplay; fullscreen; picture-in-picture; encrypted-media';
+      frame.allowFullscreen = true; frame.referrerPolicy = 'strict-origin-when-cross-origin';
       frame.onload = () => {
         if (version !== generation) return;
-        emit('loaded', `${PROVIDERS[provider].name} frame navigation finished; video playback is not confirmed. Press Play inside the player. If it cannot play, ${provider === 'cinemaos' ? 'try VidLink below' : 'retry or choose another title'}.`);
+        emit('loaded', `${PROVIDERS[provider].name} frame loaded; video playback is not confirmed. Press Play inside the player if needed.`);
         sendCommand('getStatus');
       };
       frame.onerror = () => {
         if (version !== generation) return;
-        if (provider === 'cinemaos') {
+        if (provider !== 'vidlink') {
           if (onFallback) { clearTimer(timer); timer = null; onFallback(); return; }
-          load(media, 'vidlink', seconds);
-          emit('loading', 'CinemaOS could not load. Trying VidLink.');
-        } else {
-          clearTimer(timer); timer = null;
-          emit('error', 'VidLink could not load. Retry or choose another title.');
-        }
+          load(media, 'vidlink', seconds); emit('loading', 'Player could not load. Trying VidLink with manual controls.');
+        } else { clearTimer(timer); timer = null; emit('error', 'VidLink could not load. Retry or choose another title.'); }
       };
-      frame.src = src;
-      emit('loading', `Loading ${PROVIDERS[provider].name}…`);
+      frame.src = src; emit('loading', `Loading ${PROVIDERS[provider].name}…`);
       timer = setTimer(() => {
-        if (version === generation && !ready) emit('unconfirmed', `Video playback has not been confirmed by ${PROVIDERS[provider].name}. ${provider === 'cinemaos' ? 'Try VidLink if the player is not working.' : 'Press Play or retry if the player is not working.'}`);
+        if (version === generation && !ready) emit('unconfirmed', `No video status from ${PROVIDERS[provider].name}. Press native Play, reload, or choose another provider. VidLink fallback is manual.`);
       }, 20000);
       container.append(frame);
     }
     const receive = event => {
-      if (!media || !frame) return;
+      if (!media || !frame || mediaMismatch) return;
       const update = playbackEvent(event, frame, media, provider);
       if (!update) return;
-      seconds = update.seconds;
-      measuredAt = now();
+      if (update.event === 'mismatch') { mediaMismatch = true; ready = false; emit('error', 'Player changed episode locally. Reload the player to return to the room episode.'); return; }
+      if (update.event === 'error') { ready = false; emit('error', `${PROVIDERS[provider].name} reported a playback error. Reload or choose another provider.`); return; }
+      seconds = update.seconds ?? (seconds + (playing ? Math.max(0, now() - measuredAt) / 1000 : 0)); measuredAt = now();
       if (update.playing !== undefined) playing = update.playing;
       if (update.event === 'play') playing = true;
       if (['pause','ended'].includes(update.event)) playing = false;
       if (!ready && (update.duration > 0 || update.seconds > 0)) {
-        ready = true; clearTimer(timer); timer = null;
-        emit('ready', `${PROVIDERS[provider].name} is responding with video status.`);
+        ready = true; clearTimer(timer); timer = null; emit('ready', `${PROVIDERS[provider].name} is responding with video status.`);
       }
+      if (update.requestStatus) sendCommand('getStatus');
       emit(update.event, `${PROVIDERS[provider].name}: ${update.event} at ${Math.floor(seconds)} seconds.`);
     };
     windowImpl.addEventListener('message', receive);
     return {
-      load,
-      command: sendCommand,
+      load, command: sendCommand,
       requestStatus() { return sendCommand('getStatus'); },
       getStatus() { return { ready, playing, seconds: seconds + (playing ? Math.max(0, now() - measuredAt) / 1000 : 0), provider }; },
       switchProvider(next) { if (!media) throw new Error('Choose a title first.'); load(media, next, seconds); },
       retry() { if (media) load(media, provider, seconds); },
-      clear() { removeFrame(); media = null; seconds = 0; ready = false; playing = false; provider = 'cinemaos'; emit('idle', 'Choose Watch on a movie or TV episode to open CinemaOS.'); },
+      clear() { removeFrame(); media = null; seconds = 0; ready = false; playing = false; provider = 'cinesrc'; emit('idle', 'Choose Watch on a movie or TV episode to open CineSrc.'); },
       destroy() { this.clear(); windowImpl.removeEventListener('message', receive); }
     };
   }

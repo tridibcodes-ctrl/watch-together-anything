@@ -4,12 +4,16 @@ create table if not exists public.watch_room_playback (
   room_id uuid primary key references public.watch_rooms(id) on delete cascade,
   session_id uuid not null,
   media jsonb not null,
-  provider text not null check (provider in ('cinemaos', 'vidlink')),
+  provider text not null check (provider in ('cinesrc', 'cinemaos', 'vidlink')),
   status text not null check (status in ('playing', 'paused')),
   position_ms bigint not null check (position_ms between 0 and 604800000),
   anchor_at timestamptz not null,
   revision bigint not null check (revision > 0)
 );
+-- Upgrade existing rooms without deleting state or changing their selected provider.
+alter table public.watch_room_playback drop constraint if exists watch_room_playback_provider_check;
+alter table public.watch_room_playback add constraint watch_room_playback_provider_check
+  check (provider in ('cinesrc', 'cinemaos', 'vidlink'));
 create table if not exists public.watch_playback_commands (
   room_id uuid not null references public.watch_rooms(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -93,12 +97,12 @@ begin
           raise exception using errcode = '22023', message = 'Invalid TV episode';
         end if;
         insert into public.watch_room_playback(room_id,session_id,media,provider,status,position_ms,anchor_at,revision)
-        values(p_room_id,pg_catalog.gen_random_uuid(),p_media,'cinemaos','paused',0,stamp,coalesce(state.revision,0)+1)
+        values(p_room_id,pg_catalog.gen_random_uuid(),p_media,'cinesrc','paused',0,stamp,coalesce(state.revision,0)+1)
         on conflict (room_id) do update set session_id=excluded.session_id, media=excluded.media,
           provider=excluded.provider,status=excluded.status,position_ms=0,anchor_at=excluded.anchor_at,revision=excluded.revision
         returning * into state;
       else
-        if p_action = 'provider' and (p_provider is null or p_provider not in ('cinemaos','vidlink')) then
+        if p_action = 'provider' and (p_provider is null or p_provider not in ('cinesrc','cinemaos','vidlink')) then
           raise exception using errcode = '22023', message = 'Invalid provider';
         end if;
         if p_action = 'seek' and (p_position_ms is null or p_position_ms not between 0 and 604800000) then
@@ -118,7 +122,7 @@ begin
     end if;
   end if;
   snapshot := pg_catalog.jsonb_build_object('roomId',p_room_id,'sessionId',state.session_id,
-    'media',state.media,'provider',coalesce(state.provider,'cinemaos'),'status',coalesce(state.status,'paused'),
+    'media',state.media,'provider',coalesce(state.provider,'cinesrc'),'status',coalesce(state.status,'paused'),
     'positionMs',coalesce(state.position_ms,0),'anchorAt',coalesce(state.anchor_at,stamp),
     'revision',coalesce(state.revision,0),'serverTime',stamp);
   return pg_catalog.jsonb_build_object('outcome',outcome,'state',snapshot);

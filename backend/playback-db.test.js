@@ -35,6 +35,7 @@ test('PostgreSQL playback transactions enforce membership, revisions, sessions, 
     const media = {mediaType:'movie',tmdbId:155,title:'Movie'};
     const first = await call({action:'media',id,revision:0,media});
     assert.equal(first.state.revision,1);
+    assert.equal(first.state.provider,'cinesrc');
     assert.equal(first.state.status,'paused');
     const session = first.state.sessionId;
     assert.equal((await call({action:'media',id,revision:0,media})).outcome,'duplicate');
@@ -56,6 +57,17 @@ test('PostgreSQL playback transactions enforce membership, revisions, sessions, 
     await assert.rejects(db.query('select * from public.watch_playback_commands'),/permission denied/);
     await as(outsider); assert.equal((await db.query('select * from public.watch_room_playback')).rows.length,0);
     await as(a); assert.equal((await call()).state.revision,4);
+    const alternative = await call({action:'provider',id:randomUUID(),revision:4,session,provider:'cinesrc'});
+    assert.equal(alternative.state.provider,'cinesrc');
+    assert.equal(alternative.state.status,'paused');
+    const legacy = await call({action:'provider',id:randomUUID(),revision:5,session,provider:'cinemaos'});
+    assert.equal(legacy.state.provider,'cinemaos');
+    await db.exec('reset role');
+    await db.exec("alter table public.watch_room_playback drop constraint watch_room_playback_provider_check; alter table public.watch_room_playback add constraint watch_room_playback_provider_check check (provider in ('cinemaos','vidlink'))");
+    await db.exec(migration); await db.exec('set role authenticated'); await as(a);
+    assert.equal((await call()).state.provider,'cinemaos');
+    assert.equal((await call()).state.revision,6);
+    assert.equal((await call({action:'provider',id:randomUUID(),revision:6,session,provider:'cinesrc'})).state.provider,'cinesrc');
     await db.exec('set role anon');
     await assert.rejects(call(),/permission denied/);
   } finally { await db.close(); }

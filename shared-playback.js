@@ -1,6 +1,7 @@
 (function (root) {
   'use strict';
   const MAX_POSITION = 604800000;
+  const controllable = provider => ['cinesrc', 'cinemaos'].includes(provider);
   function intendedPosition(state, now = Date.now()) {
     return Math.min(MAX_POSITION, Math.max(0, state.positionMs + (state.status === 'playing' ? Math.max(0, now + (state.offset || 0) - Date.parse(state.anchorAt)) : 0)));
   }
@@ -8,7 +9,7 @@
     let roomId = null, state = null, joined = false, generation = 0, fetching = false, refreshQueued = false;
     let stopSubscription = () => {}, poll = null, correction = null, loadedKey = null, busy = false, online = false, lastCommandAt = 0;
     let commandTarget = null, pendingCommand = null;
-    const emit = () => onChange({ roomId, state, joined, busy, online, canControl: joined && online && !busy && state?.provider === 'cinemaos' && player.getStatus().ready });
+    const emit = () => onChange({ roomId, state, joined, busy, online, canControl: joined && online && !busy && controllable(state?.provider) && player.getStatus().ready });
     function reconcile(force = false) {
       if (!joined || !state?.media) { emit(); return; }
       const key = `${state.sessionId}:${state.provider}`;
@@ -17,7 +18,7 @@
         player.load(state.media, state.provider, intendedPosition(state, now()) / 1000);
       }
       const actual = player.getStatus();
-      if (online && actual.ready && state.provider === 'cinemaos' && (force || now() - lastCommandAt > 1500)) {
+      if (online && actual.ready && controllable(state.provider) && (force || now() - lastCommandAt > 1500)) {
         const seconds = intendedPosition(state, now()) / 1000;
         const expectedPlaying = state.status === 'playing';
         const drift = Math.abs((actual.seconds || 0) - seconds);
@@ -47,7 +48,7 @@
         if (version === generation) accept(next, started);
       } catch (error) {
         if (version === generation) {
-          if (online && joined && state?.provider === 'cinemaos') player.command('pause');
+          if (online && joined && controllable(state?.provider)) player.command('pause');
           online = false; emit(); onError(error.message);
         }
       } finally {
@@ -93,7 +94,7 @@
     const commandId = () => root.crypto.randomUUID();
     async function command(action, extra = {}) {
       if (!joined || !state?.sessionId) throw new Error('Join this playback session first.');
-      if (action !== 'provider' && (state.provider !== 'cinemaos' || !player.getStatus().ready)) throw new Error('Shared controls require a responsive CinemaOS player.');
+      if (action !== 'provider' && (!controllable(state.provider) || !player.getStatus().ready)) throw new Error('Shared controls require a responsive controllable player (CineSrc or CinemaOS).');
       return send('commands', { commandId: commandId(), expectedRevision: state.revision, sessionId: state.sessionId, action, ...extra });
     }
     return {
@@ -113,7 +114,7 @@
         emit();
         // Native controls stay local. Polling reconciles them to committed state;
         // remote acknowledgement events are never re-broadcast as new commands.
-        if (event.provider === 'cinemaos' && ['play','pause','seeked'].includes(event.status)) {
+        if (controllable(event.provider) && ['play','pause','seeked'].includes(event.status)) {
           if (!commandTarget || now() > commandTarget.until) reconcile();
         }
       },
