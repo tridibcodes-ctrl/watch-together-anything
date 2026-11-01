@@ -4,6 +4,7 @@ const path = require("node:path");
 const { handleChat } = require("./chat");
 const { handleTmdb } = require("./tmdb");
 const { handleWatchlist } = require("./watchlist");
+const { handlePlayback } = require("./playback");
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -17,6 +18,15 @@ const server = http.createServer(async (request, response) => {
   if (await handleTmdb(request, response, sendJson)) return;
   if (await handleChat(request, response, sendJson)) return;
   if (await handleWatchlist(request, response, sendJson)) return;
+  if (await handlePlayback(request, response, sendJson)) return;
+  if (request.method === "GET" && request.url === "/player.js") {
+    fs.readFile(path.join(__dirname, "..", "player.js"), (error, script) => {
+      if (error) { sendJson(response, 500, { error: "Could not load player integration" }); return; }
+      response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store" });
+      response.end(script);
+    });
+    return;
+  }
   if (request.method === "GET" && request.url === "/") {
     fs.readFile(path.join(__dirname, "..", "index.html"), (error, html) => {
       if (error) {

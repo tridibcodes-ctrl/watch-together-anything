@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Multiplay</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./player.js"></script>
 </head>
 
 <body>
@@ -105,21 +106,25 @@
       <button id="leave" type="button">Leave</button>
       <button id="refresh-room" type="button">Refresh room</button>
       <p id="room-status">No title selected.</p>
+      <h3 id="player-title">Player</h3>
+      <p id="player-status" role="status" aria-live="polite">Choose Watch on a movie or TV episode to open CinemaOS.</p>
       <div id="player"></div>
-      <button id="load-player" type="button">Load player</button>
+      <button id="load-player" type="button" disabled>Reload player</button>
+      <button id="fallback-player" type="button" disabled>Try VidLink fallback</button>
+      <button id="stop-player" type="button" disabled>Close player</button>
       <button id="play" type="button">Play together</button>
       <button id="pause" type="button">Pause together</button>
       <label>Position in seconds <input id="position" type="number" min="0" value="0"></label>
       <button id="seek" type="button">Seek together</button>
       <p>
         <label>Provider <select id="provider">
-            <option value="cinemaos">Cinemaos</option>
+            <option value="cinemaos">CinemaOS (primary)</option>
             <option value="vidlink">VidLink</option>
           </select></label>
-        <button id="switch-provider" type="button">Switch for both</button>
+        <button id="switch-provider" type="button" disabled>Switch player</button>
       </p>
-      <p>VidLink synchronization is unverified; shared controls are disabled for it. Use the app's shared buttons for
-        Cinemaos. Native iframe controls remain local.</p>
+      <p>Use the controls inside the player. Provider changes and playback currently affect this browser only;
+        shared playback controls will be enabled when room synchronization is implemented.</p>
       <button id="complete" type="button">We finished together</button>
       <button id="undo" type="button">Undo completion</button>
       <p>Voice/video needs WebRTC signaling from the backend; it is not implemented in this HTML starter.</p>
@@ -206,7 +211,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       } catch { return null; }
     }
     const savedConnection = preference('multiplay.connection');
-    let mode = savedConnection?.mode === 'api' ? 'api' : 'demo', base = savedConnection?.base || '', me, room, joined = false, frame, loadedKey;
+    let mode = savedConnection?.mode === 'api' ? 'api' : 'demo', base = savedConnection?.base || '', me, room, joined = false;
+    let localPlayback = null;
+    const embeddedPlayer = MultiplayPlayer.createPlayer({ container: $('player'), onState(state) {
+      localPlayback = state.media ? state : null;
+      $('player-title').textContent = state.media ? `${state.media.title}${state.media.mediaType === 'tv' ? ' · S' + state.media.season + ' E' + state.media.episode : ''}` : 'Player';
+      $('player-status').textContent = state.message;
+      $('provider').value = state.provider;
+      controls();
+    } });
     let catalogState = null, catalogLoading = false, catalogVersion = 0;
     let selectedTitle = null, selectedEpisodes = [], detailsVersion = 0, seasonVersion = 0;
     $('mode').value = mode; $('backend').value = base;
@@ -329,9 +342,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('catalog-previous').disabled = catalogLoading || !catalogState || catalogState.page <= 1;
       $('catalog-next').disabled = catalogLoading || !catalogState?.hasMore;
       const active = !!(joined && room?.sessionId);
-      for (const id of ['load-player', 'switch-provider', 'complete', 'undo']) $(id).disabled = !active;
-      for (const id of ['play', 'pause', 'seek']) $(id).disabled = !active || room.provider !== 'cinemaos';
-      $('join').disabled = !me || joined; $('leave').disabled = !joined;
+      for (const id of ['load-player', 'switch-provider', 'stop-player']) $(id).disabled = !localPlayback;
+      $('fallback-player').disabled = !localPlayback || localPlayback.provider === 'vidlink';
+      $('provider').disabled = !localPlayback;
+      for (const id of ['play', 'pause', 'seek']) $(id).disabled = true;
+      for (const id of ['complete', 'undo']) $(id).disabled = mode === 'api' || !active;
+      $('join').disabled = mode === 'api' || !me || joined; $('leave').disabled = !joined;
+      $('refresh-room').disabled = mode === 'api' || !me;
       $('chat-form').querySelector('button').disabled = mode === 'api' ? !me?.roomId : !joined;
     }
     // The only HTTP function. Change endpoint paths here or in the callers below.
@@ -356,21 +373,12 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       return data;
     }
     function position(s = room) { return s ? Math.max(0, s.positionMs + (s.status === 'playing' ? Date.now() + (s.offset || 0) - Date.parse(s.anchorAt) : 0)) : 0; }
-    function unload() { frame = null; loadedKey = null; $('player').replaceChildren(); }
-    function sync() {
-      if (!frame || room.provider !== 'cinemaos') return;
-      frame.contentWindow.postMessage({ command: 'seek', time: position() / 1000 }, 'https://cinemaos.tech');
-      frame.contentWindow.postMessage({ command: room.status === 'playing' ? 'play' : 'pause' }, 'https://cinemaos.tech');
-    }
+    function unload() { embeddedPlayer.clear(); }
     function apply(next) {
       if (!next || !Number.isInteger(next.revision)) throw new Error('Invalid room snapshot.');
       if (room && next.revision < room.revision) return;
-      const changed = !room || next.revision !== room.revision;
       room = { ...next, offset: Date.parse(next.serverTime) - Date.now() || 0 };
-      if (loadedKey && loadedKey !== `${room.sessionId}:${room.provider}`) unload();
       $('room-status').textContent = `${room.media?.title || 'No title selected'} · ${room.status} · ${room.provider} · ${joined ? 'joined' : 'not joined'}`;
-      $('provider').value = room.provider;
-      if (changed && joined) sync();
       controls();
     }
     function resetCatalog() {
@@ -490,7 +498,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         selectedEpisodes = data.episodes;
         for (const episode of selectedEpisodes) $('episode').add(new Option(`${episode.episodeNumber}. ${episode.name}`, episode.episodeNumber));
         $('episode').disabled = !selectedEpisodes.length;
-        $('episode-status').textContent = selectedEpisodes.length ? `${selectedEpisodes.length} episodes. Choose an episode, then use Watch together on this title.` : 'No episodes available for this season.';
+        $('episode-status').textContent = selectedEpisodes.length ? `${selectedEpisodes.length} episodes. Choose an episode, then use Watch on this title.` : 'No episodes available for this season.';
         showEpisode();
       } catch (error) {
         if (version !== seasonVersion || selectedTitle !== title) return;
@@ -519,21 +527,21 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       article.prepend(poster);
       article.append(button('Details', () => showDetails(title)));
       if (!item) article.append(button('Add to our list', () => add(title)));
-      article.append(button('Watch together', async () => {
-        if (mode === 'api') throw new Error('Shared playback is still being built. You can save this title to your list now.');
+      article.append(button('Watch (this browser)', async () => {
         if (!me) throw new Error('Connect and sign in first.');
-        const media = { commandId: uuid(), mediaType: title.mediaType, tmdbId: title.tmdbId };
+        const media = { mediaType: title.mediaType, tmdbId: title.tmdbId, title: title.title };
         if (title.mediaType === 'tv') {
           if (selectedTitle?.tmdbId !== title.tmdbId || selectedTitle?.mediaType !== 'tv') {
             await showDetails(title);
-            say('Choose an episode in Details, then click Watch together on the same show.');
+            say('Choose an episode in Details, then click Watch on the same show.');
             return;
           }
           media.season = Number($('season').value); media.episode = Number($('episode').value);
           if ($('episode').disabled || !selectedEpisodes.some(episode => episode.episodeNumber === media.episode)) throw new Error('Choose an available episode in Details first.');
         }
-        if (!joined) { const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); }
-        await add(title); apply(await request(`/api/rooms/${me.roomId}/media`, 'POST', media)); location.hash = 'room'; say('Title selected. Click Load player when ready.');
+        embeddedPlayer.load(media);
+        location.hash = 'room';
+        say('CinemaOS opened. Use Try VidLink fallback if it cannot play this title.');
       }));
       if (item && item.status !== 'watched') article.append(button('Remove', () => removeListItem(item.id)));
       return article;
@@ -626,18 +634,10 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     bind('refresh-room', async () => { if (!me) throw new Error('Connect first.'); apply(await request(`/api/rooms/${me.roomId}/state`)); });
     bind('play', () => command('play')); bind('pause', () => command('pause'));
     bind('seek', () => { const seconds = Number($('position').value); if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Enter a valid position.'); return command('seek', { targetPositionMs: Math.round(seconds * 1000) }); });
-    bind('switch-provider', () => command('provider', { provider: $('provider').value }));
-    bind('load-player', async () => {
-      const m = room.media, origin = room.provider === 'cinemaos' ? 'https://cinemaos.tech' : 'https://vidlink.pro';
-      if (!Number.isInteger(m.tmdbId) || m.tmdbId < 1 || !['movie', 'tv'].includes(m.mediaType)) throw new Error('Invalid media.');
-      if (m.mediaType === 'tv' && (!Number.isInteger(m.season) || m.season < 0 || !Number.isInteger(m.episode) || m.episode < 1)) throw new Error('Invalid episode.');
-      const path = room.provider === 'cinemaos' ? `/player/${m.tmdbId}` : `/${m.mediaType}/${m.tmdbId}`;
-      const url = new URL(path + (m.mediaType === 'tv' ? `/${m.season}/${m.episode}` : ''), origin);
-      url.searchParams.set(room.provider === 'cinemaos' ? 'startTime' : 'startAt', String(Math.floor(position() / 1000)));
-      url.searchParams.set('autoPlay', 'false'); url.searchParams.set('autoplay', 'false'); url.searchParams.set('autoNext', 'false'); url.searchParams.set('nextbutton', 'false');
-      unload(); frame = document.createElement('iframe'); frame.src = url.href; frame.title = m.title; frame.width = '640'; frame.height = '360'; frame.allow = 'autoplay; fullscreen; encrypted-media'; frame.referrerPolicy = 'strict-origin-when-cross-origin';
-      $('player').append(frame); loadedKey = `${room.sessionId}:${room.provider}`; say('External player loaded. Playback depends on the provider.');
-    });
+    bind('switch-provider', () => embeddedPlayer.switchProvider($('provider').value));
+    bind('load-player', () => embeddedPlayer.retry());
+    bind('fallback-player', () => embeddedPlayer.switchProvider('vidlink'));
+    bind('stop-player', unload);
     bind('refresh-chat', chat);
     form('chat-form', async () => { const body = $('message').value.trim(); if (!body || (mode === 'api' ? !me?.roomId : !joined)) throw new Error('Select a room and enter a message.'); await request(`/api/rooms/${me.roomId}/messages`, 'POST', { clientMessageId: uuid(), body }); $('message').value = ''; await chat(); });
     form('profile-form', async () => { if (!me) throw new Error('Connect first.'); const displayName = $('display-name').value.trim(); if (!displayName) throw new Error('Enter your name.'); const result = await request('/api/me/profile', 'PATCH', { displayName, avatarKey: $('avatar').value }); me.profile = result.profile; say('Profile saved.'); });
