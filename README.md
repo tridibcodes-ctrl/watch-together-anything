@@ -20,3 +20,10 @@ The frontend loads `@supabase/supabase-js` from jsDelivr. Its Project URL and pu
 
 
 
+
+## Room text chat
+
+Run the latest `backend/schema.sql` in Supabase SQL Editor, then restart Node. In Backend API mode, connect and select a room. The existing chat form sends messages, and Refresh chat loads the latest 100 messages in chronological order. Chat requires membership in the selected room, independently of playback presence. Messages persist in Supabase and are plain text. Live updates and older-message pagination are not implemented yet.
+
+- `GET /api/rooms/{roomId}/messages` returns `{items:[{id,senderId,senderName,body,sentAt}]}`.
+- `POST /api/rooms/{roomId}/messages` accepts `{clientMessageId,body}`. The backend derives sender identity and name. Retrying the same message ID does not create a duplicate.

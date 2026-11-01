@@ -205,7 +205,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       for (const id of ['load-player','switch-provider','complete','undo']) $(id).disabled = !active;
       for (const id of ['play','pause','seek']) $(id).disabled = !active || room.provider !== 'cinemaos';
       $('join').disabled = !me || joined; $('leave').disabled = !joined;
-      $('chat-form').querySelector('button').disabled = !joined;
+      $('chat-form').querySelector('button').disabled = mode === 'api' ? !me?.roomId : !joined;
     }
     // The only HTTP function. Change endpoint paths here or in the callers below.
     async function request(path,method='GET',body) {
@@ -274,9 +274,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     async function command(action,extra={}) { apply(await request(`/api/rooms/${me.roomId}/commands`,'POST',{commandId:uuid(),sessionId:room.sessionId,action,...extra})); }
     async function chat() {
-      if(!me) return;
-      const data = await request(`/api/rooms/${me.roomId}/messages`);
-      $('messages').replaceChildren(...data.items.map(m => node('li',`${m.senderName}: ${m.body}`)));
+      if(!me || !me.roomId) throw new Error('Connect and select a room first.');
+      const selectedRoomId=me.roomId;
+      const data = await request('/api/rooms/' + selectedRoomId + '/messages');
+      if(me?.roomId !== selectedRoomId) return;
+      $('messages').replaceChildren(...data.items.map(m => node('li',m.senderName + ': ' + m.body)));
     }
     async function connect() {
       me = null; room = null; joined = false; unload(); controls();
@@ -338,7 +340,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('room-invite').textContent=`Joined ${result.name}.`;
       $('room-status').textContent=`${result.name} · not watching yet`;
       say('Joined your partner’s room.');
-    });    form('search-form',catalog); bind('refresh-list',list);
+    });
+    form('search-form',catalog); bind('refresh-list',list);
     bind('join',async () => { const state = await request(`/api/rooms/${me.roomId}/join`,'POST',{}); joined = true; apply(state); await chat(); });
     bind('leave',async () => { await request(`/api/rooms/${me.roomId}/leave`,'POST',{}); joined = false; unload(); apply(await request(`/api/rooms/${me.roomId}/state`)); });
     bind('refresh-room',async () => { if(!me) throw new Error('Connect first.'); apply(await request(`/api/rooms/${me.roomId}/state`)); });
@@ -357,7 +360,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('player').append(frame); loadedKey=`${room.sessionId}:${room.provider}`; say('External player loaded. Playback depends on the provider.');
     });
     bind('refresh-chat',chat);
-    form('chat-form',async () => { const body=$('message').value.trim(); if(!body||!joined) throw new Error('Join the room and enter a message.'); await request(`/api/rooms/${me.roomId}/messages`,'POST',{clientMessageId:uuid(),body}); $('message').value=''; await chat(); });
+    form('chat-form',async () => { const body=$('message').value.trim(); if(!body || (mode === 'api' ? !me?.roomId : !joined)) throw new Error('Select a room and enter a message.'); await request(`/api/rooms/${me.roomId}/messages`,'POST',{clientMessageId:uuid(),body}); $('message').value=''; await chat(); });
     form('profile-form',async () => { if(!me) throw new Error('Connect first.'); const displayName=$('display-name').value.trim(); if(!displayName) throw new Error('Enter your name.'); const result=await request('/api/me/profile','PATCH',{displayName,avatarKey:$('avatar').value}); me.profile=result.profile; say('Profile saved.'); });
     bind('complete',async () => { const result=await request(`/api/sessions/${room.sessionId}/complete`,'POST',{commandId:uuid(),confirmed:true}); say(result.message || (result.completed ? 'Moved to Watched.' : 'Waiting for your partner.')); await list(); });
     bind('undo',async () => { await request(`/api/sessions/${room.sessionId}/undo-completion`,'POST',{commandId:uuid()}); await list(); say('Completion correction saved.'); });

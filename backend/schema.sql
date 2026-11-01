@@ -163,3 +163,25 @@ revoke all on function public.create_watch_room(text) from public;
 revoke all on function public.join_watch_room(text) from public;
 grant execute on function public.create_watch_room(text) to authenticated;
 grant execute on function public.join_watch_room(text) to authenticated;
+-- Saved room chat. Messages are plain text, visible only to room members.
+create table if not exists public.watch_room_messages (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references public.watch_rooms(id) on delete cascade,
+  sender_id uuid not null references auth.users(id),
+  client_message_id uuid not null,
+  sender_name text not null,
+  body text not null check (char_length(trim(body)) between 1 and 2000),
+  created_at timestamptz not null default now(),
+  unique (room_id, sender_id, client_message_id)
+);
+create index if not exists watch_room_messages_room_time_idx
+on public.watch_room_messages(room_id, created_at desc, id desc);
+alter table public.watch_room_messages enable row level security;
+drop policy if exists "Room members can read messages" on public.watch_room_messages;
+create policy "Room members can read messages"
+on public.watch_room_messages for select to authenticated
+using (public.is_room_member(room_id));
+drop policy if exists "Room members can send their own messages" on public.watch_room_messages;
+create policy "Room members can send their own messages"
+on public.watch_room_messages for insert to authenticated
+with check (sender_id = (select auth.uid()) and public.is_room_member(room_id));
