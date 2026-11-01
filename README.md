@@ -23,7 +23,7 @@ The intended experience lets both partners control playback, maintain a shared m
 | TMDB browsing/search | Steps 1–3 implemented | Browsing/search, posters, pagination, title details, season/episode selection, and loading/error states. Playback remains separate work. |
 | Shared movie/show list | Implemented; live database validation pending | Room-scoped add/read/remove, duplicate protection, canonical TMDB snapshots, and member-only live updates. |
 | Shared playback | Implemented; live validation pending | Persisted sessions, member commands, safe retries, Realtime, polling, and CineSrc/CinemaOS drift correction. |
-| Embedded playback | Implemented; streams unconfirmed | CineSrc/CinemaOS shared controls after video readiness; VidLink fallback stays manual. |
+| Embedded playback | Implemented; streams unconfirmed | CineSrc/CinemaOS controls queue room intent; the clock runs only after both accounts are ready. VidLink stays manual. |
 | Watched completion | Pending | Needs both-member confirmation, episode progress, and undo. |
 | Voice/video | Pending | No WebRTC signaling or STUN/TURN setup. |
 | Public signup/recovery | Pending | Only sign-in UI exists; create test accounts in Supabase Dashboard. Check project signup settings separately. |
@@ -173,7 +173,7 @@ For playing media, compute the intended position as anchor position plus elapsed
 
 A provider adapter should expose load, ready, play, pause, seek, position/status reporting, error, and ended capabilities. Apply state after the player is ready, handle browser autoplay restrictions with an explicit user action, and prevent remote changes from being echoed back as new commands. Measure drift and tune correction thresholds during two-device testing; no synchronization latency guarantee exists yet.
 
-If one partner buffers, the app needs an explicit policy (proposed initial behavior: pause together until both are ready). Presence loss should show disconnected/reconnecting and preserve the session. Reconnects load the latest snapshot, not an old locally cached position.
+The implemented readiness policy pauses the room until both partners are prepared at the same fixed position; buffering holds preserve play intent, while manual Pause cancels it. Presence loss should show disconnected/reconnecting and preserve the session. Reconnects load the latest snapshot, not an old locally cached position.
 
 ### Critical external-player limitation
 
@@ -357,7 +357,7 @@ Contract caveats:
 
 - /api/me still returns null groupId/roomId placeholders. Choose a room using /api/rooms.
 - The join response's createdBy currently contains the requesting user's ID, not necessarily the creator. Correct it before relying on that field for ownership.
-- Legacy group-list APIs, server presence, and session-completion APIs are not implemented. Join/Leave playback are local opt-in actions; membership is unchanged.
+- Legacy group-list APIs, general server presence, and session-completion APIs are not implemented. Join/Leave playback now report/clear a readiness lease; room membership is unchanged.
 
 ## Database model and access
 
@@ -368,6 +368,7 @@ Contract caveats:
 | watch_rooms | Room ID, name, creator, invite code, creation time; members can read |
 | watch_room_members | Room/user membership and join time; members can read membership in their room |
 | watch_room_messages | Text, sender ID/name snapshot, client message ID, room ID, timestamp; member-only reads and self-sender member inserts |
+| watch_playback_readiness | Short-lived, per-client readiness for the current session/provider/ready epoch; no direct client table access |
 | watch_room_list_items | Unique room/media-type/TMDB-ID title snapshot; removed_at hides removed titles and supports live UPDATE events. Members may update only removed_at. |
 | watch_room_playback | Authoritative session snapshot; member-only SELECT |
 | watch_playback_commands | Private command deduplication ledger |
@@ -421,7 +422,7 @@ Local demo opens only a local player. Watch does not add a watchlist item or mar
 
 `backend/playback.sql` stores the session, title/episode, provider, position, server time anchor, and revision. Both members may issue commands. The RPC locks the room, checks membership/session/revision, and deduplicates command UUIDs. Conflicts return HTTP 409 with current state. Retry last command reuses the exact original body and UUID after a transport failure.
 
-Realtime INSERT/UPDATE events trigger authenticated state reloads, with a three-second polling fallback. The selected controllable player's status is requested every two seconds; drift over two seconds triggers a seek. Server clock offset is estimated using the request midpoint. Old room responses and older revisions are ignored. Connection failures disable shared controls and attempt a local CinemaOS pause. Presence, synchronized buffering, and latency guarantees are not implemented.
+Realtime INSERT/UPDATE events trigger authenticated state reloads, with a three-second polling fallback. The selected controllable player's status is requested every two seconds; drift over two seconds triggers a seek. Server clock offset is estimated using the request midpoint. Old room responses and older revisions are ignored. Connection failures disable shared controls and attempt a local CinemaOS pause. Playback readiness now uses authenticated heartbeats and the shared pause gate described below. General presence and numerical latency guarantees are not implemented.
 
 The adapter sends `{command:'play'}`, `{command:'pause'}`, `{command:'seek', time:120}`, and `{command:'getStatus'}` to the exact `https://cinemaos.tech` origin. Incoming events must match the current iframe and provider origin. The current CinemaOS parser expects `{type:'PLAYER_EVENT', data:{event,currentTime,duration,paused?}}`, also accepting `playing`/`isPlaying`. Command objects and event names were provided from the provider documentation; the live CinemaOS event envelope and status fields remain unverified. Controls stay disabled if no valid video status arrives.
 
@@ -464,6 +465,26 @@ The adapter sends messages to the exact https://cinesrc.st origin with the struc
 URLs disable autoplay, autonext, and autoskip, and use t for initial position. This prevents automatic episode/intro changes from silently diverging from room state. Provider changes pause the room; drift correction uses the existing committed position/time anchor. Native controls are still local and are reconciled to the room state; use the shared buttons for intentional room commands.
 
 No new token is required. If CineSrc fails on either device, leave that playback marked unconfirmed and try another verified provider or a self-controlled video source. VidLink remains useful for manual watching, but is not a synchronized fallback. Do not enable speculative VidLink commands or bypass browser cross-origin restrictions.
+
+## Both-ready playback and buffering holds
+
+**Apply the updated backend/playback.sql, restart/reload Node, and hard-refresh BOTH browsers.** Old sessions and saved media are preserved. Updated clients refuse unguarded playback snapshots from an old migration instead of continuing without readiness checks.
+
+The room now separates playRequested (user intent) from status (whether the shared clock actually runs). Pressing Play together queues play intent; the actual status stays paused until BOTH member accounts have joined playback and report ready for the current session, provider, and readyEpoch. A room with only one member/ready participant intentionally waits. Manual Pause clears playRequested, so later recovery cannot resume against that choice. VidLink remains manual because the app cannot pause its video remotely.
+
+POST /api/rooms/{roomId}/readiness accepts {clientId,sessionId,provider,epoch,ready,joined} and returns the playback snapshot. It uses the authenticated user identity, not a user ID supplied in the body. State snapshots additionally include readyEpoch, playRequested, waitingForReady, and readiness:{readyCount,requiredCount,bothReady}. The UI displays the count and whether it is preparing locally or waiting for the partner. Play/Pause/Seek commands can be requested while loading; the server gate controls actual playback.
+
+The browser reports on readiness changes and renews a lease roughly every two seconds while joined. A lease expires after 15 seconds. Leaving playback, changing room, or signing out releases the current client; interrupted connections expire. Room membership and lists/messages remain intact. Multiple clients do not count as extra people: both distinct member accounts are required, and any fresh joined client reporting unready blocks its account. Leave playback in unused duplicate tabs; background throttling can expire readiness and pause the room conservatively.
+
+Readiness writes and playback commands lock the same room row. Missing, stale, buffering, or unready participants hold the authoritative clock. While a video is loading, its target is a fixed paused position instead of an ever-increasing timestamp. Session changes, provider changes, seeks, and pauses invalidate the old readiness epoch. Old reports cannot unlock a newer target. A buffering hold keeps play intent and resumes when the clients prepare again; a provider change starts paused without resuming automatically.
+
+On a playing-to-held transition, the database freezes position and advances the readiness epoch. On expiry it bounds elapsed time by the earliest member lease deadline, rather than advancing through an entire offline interval. State reads and readiness reports evaluate the gate; no background scheduler is installed. Room revisions change for accepted user commands and automatic hold/resume transitions, not for every healthy heartbeat. Manual commands can still conflict with a concurrent gate transition; the existing conflict/retry UI applies.
+
+The player adapter now distinguishes metadata readiness, observed playback/seek acknowledgement, an outstanding seek, and suspected buffering. It never issues another correction seek while one remains unacknowledged. Initial preparation and recovery seek to a fixed anchor. Once the player confirms it can play at that anchor, it reports ready. Native Play may still be required once for autoplay permission; blocked start attempts keep the gate waiting until a successful gesture.
+
+CineSrc's documented interface exposes timestamps and paused state, not buffered ranges or a guaranteed canplay/waiting notification. Ongoing stalls are inferred when a playing video's observed timestamp does not advance for about four seconds; stalled seeks and stale status also hold readiness. Repeated identical status samples do not count as progress, and the adapter stops extrapolating time during a suspected stall. Detection plus network/polling takes time; this is not an instantaneous or full-movie-download guarantee. If a provider never confirms the fixed seek, Reload player is an explicit retry instead of an endless stream of moving seeks. See [CineSrc events and getters](https://cinesrc.st/docs).
+
+Acceptance check: join one account first and queue Play; verify the room remains paused at 0/2 or 1/2. Join the second account with a slow-loading player and confirm the target stays fixed and no repeated seeking occurs. After both prepare, verify both videos resume. Then interrupt one stream, restore it, explicitly Pause during another hold, seek while waiting, change provider, reload one browser, and leave playback. Manual Pause must survive recovery; expired/old-context reports must not restart the room. Live two-device/network validation is still required in addition to the committed PostgreSQL and mocked-player tests.
 
 ## Remaining work and suggested order
 

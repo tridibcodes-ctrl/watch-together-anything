@@ -9,7 +9,7 @@ async function authenticate(request) {
 function createPlaybackHandler({ authenticateUser = authenticate, fetchImpl = fetch } = {}) {
   const metadata = createTmdbHandler({ authenticateUser, fetchImpl });
   return async function handlePlayback(request, response, sendJson) {
-    const match = /^\/api\/rooms\/([^/]+)\/(state|media|commands)$/.exec(new URL(request.url, 'http://localhost').pathname);
+    const match = /^\/api\/rooms\/([^/]+)\/(state|media|commands|readiness)$/.exec(new URL(request.url, 'http://localhost').pathname);
     if (!match) return false;
     const [, roomId, route] = match;
     const fail = (status, error) => { sendJson(response, status, { error }); return true; };
@@ -35,50 +35,60 @@ function createPlaybackHandler({ authenticateUser = authenticate, fetchImpl = fe
         }
         let input;
         try { input = JSON.parse(raw); } catch { return fail(400, 'Request must be valid JSON'); }
-        if (!input || !UUID.test(input.commandId || '') || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0) return fail(400, 'A command ID and nonnegative expectedRevision are required');
-        args.p_command_id = input.commandId;
-        args.p_expected_revision = input.expectedRevision;
-        if (route === 'media') {
-          if (!['movie', 'tv'].includes(input.mediaType) || !Number.isInteger(input.tmdbId) || input.tmdbId < 1 || input.tmdbId > 2147483647) return fail(400, 'Invalid title identity');
-          if (input.mediaType === 'tv' && (!Number.isInteger(input.season) || input.season < 0 || input.season > 9999 || !Number.isInteger(input.episode) || input.episode < 1 || input.episode > 9999)) return fail(400, 'Choose a valid season and episode');
-          const readMetadata = async path => {
-            let result;
-            await metadata({ url: path, method: 'GET', headers: request.headers }, { setHeader() {} }, (_, status, body) => { result = { status, body }; });
-            return result;
-          };
-          const result = await readMetadata(`/api/titles/${input.mediaType}/${input.tmdbId}`);
-          if (result.status !== 200) { sendJson(response, result.status, result.body); return true; }
-          const title = result.body.title;
-          args.p_action = 'media';
-          args.p_media = { mediaType: input.mediaType, tmdbId: input.tmdbId, title: title.title.slice(0, 500) };
-          if (input.mediaType === 'tv') {
-            const season = await readMetadata(`/api/titles/tv/${input.tmdbId}/seasons/${input.season}`);
-            if (season.status !== 200) { sendJson(response, season.status, season.body); return true; }
-            if (!season.body.episodes.some(episode => episode.episodeNumber === input.episode)) return fail(400, 'Episode not found in this season');
-            Object.assign(args.p_media, { season: input.season, episode: input.episode });
-          }
+        if (route === 'readiness') {
+          if (!input || !UUID.test(input.sessionId || '') || !UUID.test(input.clientId || '') ||
+              !['cinesrc','cinemaos'].includes(input.provider) || !Number.isSafeInteger(input.epoch) || input.epoch < 1 ||
+              typeof input.ready !== 'boolean' || typeof input.joined !== 'boolean') return fail(400, 'Invalid readiness report');
+          delete args.p_action;
+          Object.assign(args, { p_session_id: input.sessionId, p_client_id: input.clientId, p_provider: input.provider,
+            p_epoch: input.epoch, p_ready: input.ready, p_joined: input.joined });
         } else {
-          if (!UUID.test(input.sessionId || '') || !['play', 'pause', 'seek', 'provider'].includes(input.action)) return fail(400, 'Valid session ID and playback action required');
-          args.p_action = input.action; args.p_session_id = input.sessionId;
-          if (input.action === 'seek') {
-            if (!Number.isSafeInteger(input.targetPositionMs) || input.targetPositionMs < 0 || input.targetPositionMs > 604800000) return fail(400, 'Seek position must be between 0 and 604800000 milliseconds');
-            args.p_position_ms = input.targetPositionMs;
-          }
-          if (input.action === 'provider') {
-            if (!['cinesrc', 'cinemaos', 'vidlink'].includes(input.provider)) return fail(400, 'Unknown provider');
-            args.p_provider = input.provider;
+          if (!input || !UUID.test(input.commandId || '') || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0) return fail(400, 'A command ID and nonnegative expectedRevision are required');
+          args.p_command_id = input.commandId;
+          args.p_expected_revision = input.expectedRevision;
+          if (route === 'media') {
+            if (!['movie', 'tv'].includes(input.mediaType) || !Number.isInteger(input.tmdbId) || input.tmdbId < 1 || input.tmdbId > 2147483647) return fail(400, 'Invalid title identity');
+            if (input.mediaType === 'tv' && (!Number.isInteger(input.season) || input.season < 0 || input.season > 9999 || !Number.isInteger(input.episode) || input.episode < 1 || input.episode > 9999)) return fail(400, 'Choose a valid season and episode');
+            const readMetadata = async path => {
+              let result;
+              await metadata({ url: path, method: 'GET', headers: request.headers }, { setHeader() {} }, (_, status, body) => { result = { status, body }; });
+              return result;
+            };
+            const result = await readMetadata(`/api/titles/${input.mediaType}/${input.tmdbId}`);
+            if (result.status !== 200) { sendJson(response, result.status, result.body); return true; }
+            const title = result.body.title;
+            args.p_action = 'media';
+            args.p_media = { mediaType: input.mediaType, tmdbId: input.tmdbId, title: title.title.slice(0, 500) };
+            if (input.mediaType === 'tv') {
+              const season = await readMetadata(`/api/titles/tv/${input.tmdbId}/seasons/${input.season}`);
+              if (season.status !== 200) { sendJson(response, season.status, season.body); return true; }
+              if (!season.body.episodes.some(episode => episode.episodeNumber === input.episode)) return fail(400, 'Episode not found in this season');
+              Object.assign(args.p_media, { season: input.season, episode: input.episode });
+            }
+          } else {
+            if (!UUID.test(input.sessionId || '') || !['play', 'pause', 'seek', 'provider'].includes(input.action)) return fail(400, 'Valid session ID and playback action required');
+            args.p_action = input.action; args.p_session_id = input.sessionId;
+            if (input.action === 'seek') {
+              if (!Number.isSafeInteger(input.targetPositionMs) || input.targetPositionMs < 0 || input.targetPositionMs > 604800000) return fail(400, 'Seek position must be between 0 and 604800000 milliseconds');
+              args.p_position_ms = input.targetPositionMs;
+            }
+            if (input.action === 'provider') {
+              if (!['cinesrc', 'cinemaos', 'vidlink'].includes(input.provider)) return fail(400, 'Unknown provider');
+              args.p_provider = input.provider;
+            }
           }
         }
       }
-      const result = await upstream('/rpc/watch_playback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+      const rpc = route === 'readiness' ? 'watch_report_readiness' : 'watch_playback';
+      const result = await upstream('/rpc/' + rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
       const payload = await result.json();
       if (!result.ok) {
-        if (payload.code === 'PGRST202' || payload.code === '42P01') return fail(503, 'Playback setup required: run backend/playback.sql in Supabase SQL Editor');
+        if (payload.code === 'PGRST202' || payload.code === '42P01' || payload.code === '42703') return fail(503, 'Playback setup required: run backend/playback.sql in Supabase SQL Editor');
         if (payload.code === '42501') return fail(403, 'Room membership required');
         if (payload.code === '22023') return fail(400, 'Invalid playback command');
         return fail(502, 'Could not read or update playback state');
       }
-      if (payload.outcome === 'conflict') {
+      if (payload.outcome === 'conflict' && route !== 'readiness') {
         sendJson(response, 409, { error: 'Playback changed. The latest room state has been loaded; try your action again.', state: payload.state });
       } else {
         sendJson(response, 200, { ...payload.state, duplicate: payload.outcome === 'duplicate' });

@@ -52,14 +52,14 @@
       }
       if (type === 'cinesrc:loadedmetadata') return position(payload.duration) && payload.duration > 0 ? { event: 'playerstatus', duration: payload.duration, requestStatus: true } : null;
       const kind = typeof type === 'string' ? type.replace(/^cinesrc:/, '') : '';
-      if (type !== 'cinesrc:' + kind || !['play','pause','seeked','timeupdate','ended'].includes(kind)) return null;
+      if (type !== 'cinesrc:' + kind || !['play','pause','seeking','seeked','timeupdate','ended'].includes(kind)) return null;
       if (['timeupdate','seeked'].includes(kind) && !position(payload.currentTime)) return null;
       return { event: kind, ...(position(payload.currentTime) ? { seconds: payload.currentTime } : {}),
         ...(position(payload.duration) ? { duration: payload.duration } : {}),
         ...(['play','pause','ended'].includes(kind) ? { playing: kind === 'play' } : {}) };
     }
     const data = payload?.data;
-    if (payload?.type !== 'PLAYER_EVENT' || !data || !['play', 'pause', 'seeked', 'ended', 'timeupdate', 'playerstatus'].includes(data.event)) return null;
+    if (payload?.type !== 'PLAYER_EVENT' || !data || !['play', 'pause', 'seeking', 'seeked', 'ended', 'timeupdate', 'playerstatus'].includes(data.event)) return null;
     const id = data.mtmdbId ?? data.tmdbId;
     if ((provider === 'vidlink' || id !== undefined) && Number(id) !== media.tmdbId) return null;
     if ((provider === 'vidlink' || data.mediaType !== undefined) && data.mediaType !== media.mediaType) return null;
@@ -71,11 +71,14 @@
   }
   function createPlayer({ container, onState = () => {}, onFallback, windowImpl = window, documentImpl = document, setTimer = setTimeout, clearTimer = clearTimeout, now = Date.now }) {
     let frame = null, media = null, provider = 'cinesrc', seconds = 0, timer = null, generation = 0, ready = false, playing = false, measuredAt = now(), mediaMismatch = false;
-    const emit = (status, message) => onState({ media, provider, seconds, ready, playing, status, message });
+    let playable = false, pendingSeek = null, lastAdvanceAt = now(), lastStatusAt = now(), playAttemptAt = null, playBlocked = false, lastProgressSeconds = 0;
+    const emit = (status, message) => onState({ media, provider, seconds, ready, playing, playable, status, message });
     function sendCommand(command, params = {}) {
-      if (!frame || !PROVIDERS[provider].controls || (command !== 'getStatus' && !ready)) return false;
+      if (!frame?.contentWindow || !PROVIDERS[provider].controls || (!['getStatus','pause'].includes(command) && !ready)) return false;
       if (!['play','pause','seek','getStatus'].includes(command)) return false;
       if (command === 'seek' && !position(params.time)) return false;
+      if (command === 'play' && !playing && playAttemptAt === null) playAttemptAt = now();
+      if (command === 'seek') pendingSeek = { target: params.time, at: now() };
       if (provider === 'cinesrc') {
         const send = (name, args = []) => frame.contentWindow.postMessage({ type: 'cinesrc:command', command: name, args }, PROVIDERS.cinesrc.origin);
         if (command === 'getStatus') for (const getter of ['getCurrentTime','getDuration','getPaused']) send(getter);
@@ -93,8 +96,9 @@
     function load(nextMedia, nextProvider = 'cinesrc', startSeconds = 0) {
       const src = embedUrl(nextMedia, nextProvider, startSeconds);
       removeFrame(); media = { ...nextMedia }; provider = nextProvider;
-      ready = false; playing = false; mediaMismatch = false; measuredAt = now();
+      ready = false; playing = false; playable = false; pendingSeek = null; mediaMismatch = false; measuredAt = now(); lastStatusAt = now(); lastAdvanceAt = now(); playAttemptAt = null; playBlocked = false;
       seconds = provider !== 'cinemaos' && position(startSeconds) ? startSeconds : 0;
+      lastProgressSeconds = seconds;
       const version = generation;
       frame = documentImpl.createElement('iframe');
       frame.title = `${media.title || 'Selected title'} — ${PROVIDERS[provider].name}`;
@@ -124,10 +128,22 @@
       if (!update) return;
       if (update.event === 'mismatch') { mediaMismatch = true; ready = false; emit('error', 'Player changed episode locally. Reload the player to return to the room episode.'); return; }
       if (update.event === 'error') { ready = false; emit('error', `${PROVIDERS[provider].name} reported a playback error. Reload or choose another provider.`); return; }
+      const previouslyPlaying = playing;
+      lastStatusAt = now();
+      if (typeof update.seconds === 'number' && update.seconds > lastProgressSeconds + 0.1) {
+        lastAdvanceAt = now(); lastProgressSeconds = update.seconds; if (ready || update.duration > 0) playable = true;
+      }
+      if (update.event === 'seeking' && !pendingSeek) pendingSeek = { target: update.seconds ?? seconds, at: now() };
+      if (pendingSeek && typeof update.seconds === 'number' && Math.abs(update.seconds - pendingSeek.target) <= 1 && update.event !== 'seeking') {
+        pendingSeek = null; playable = true; lastAdvanceAt = now(); lastProgressSeconds = update.seconds;
+      }
+      if (['timeupdate','seeked'].includes(update.event) && (ready || update.duration > 0)) playable = true;
       seconds = update.seconds ?? (seconds + (playing ? Math.max(0, now() - measuredAt) / 1000 : 0)); measuredAt = now();
       if (update.playing !== undefined) playing = update.playing;
       if (update.event === 'play') playing = true;
       if (['pause','ended'].includes(update.event)) playing = false;
+      if (playing) { playAttemptAt = null; playBlocked = false; }
+      if (playing && !previouslyPlaying) lastAdvanceAt = now();
       if (!ready && (update.duration > 0 || update.seconds > 0)) {
         ready = true; clearTimer(timer); timer = null; emit('ready', `${PROVIDERS[provider].name} is responding with video status.`);
       }
@@ -138,10 +154,15 @@
     return {
       load, command: sendCommand,
       requestStatus() { return sendCommand('getStatus'); },
-      getStatus() { return { ready, playing, seconds: seconds + (playing ? Math.max(0, now() - measuredAt) / 1000 : 0), provider }; },
+      getStatus() {
+        if (!playing && playAttemptAt !== null && now() - playAttemptAt > 4000) playBlocked = true;
+        const buffering = playBlocked || !ready || (playing && now() - lastAdvanceAt > 4000) || (pendingSeek && now() - pendingSeek.at > 4000) || (ready && now() - lastStatusAt > 8000);
+        return { ready, playable, playing, needsGesture: playBlocked, buffering: !!buffering, seekPending: !!pendingSeek,
+          seconds: seconds + (playing && !buffering && !pendingSeek ? Math.max(0, now() - measuredAt) / 1000 : 0), provider };
+      },
       switchProvider(next) { if (!media) throw new Error('Choose a title first.'); load(media, next, seconds); },
       retry() { if (media) load(media, provider, seconds); },
-      clear() { removeFrame(); media = null; seconds = 0; ready = false; playing = false; provider = 'cinesrc'; emit('idle', 'Choose Watch on a movie or TV episode to open CineSrc.'); },
+      clear() { removeFrame(); media = null; seconds = 0; ready = false; playing = false; playable = false; pendingSeek = null; playAttemptAt = null; playBlocked = false; provider = 'cinesrc'; emit('idle', 'Choose Watch on a movie or TV episode to open CineSrc.'); },
       destroy() { this.clear(); windowImpl.removeEventListener('message', receive); }
     };
   }

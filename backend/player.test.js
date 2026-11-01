@@ -32,11 +32,11 @@ test('VidLink events require active frame, exact origin, media identity and fini
   assert.equal(playbackEvent(event, frame, tv, 'cinemaos'), null);
 });
 
-function harness() {
+function harness({ now } = {}) {
   const states = [], frames = [], timers = new Map(), listeners = new Map();
   let timerId = 0;
   const container = { children: [], replaceChildren() { this.children = []; }, append(frame) { this.children.push(frame); } };
-  const player = createPlayer({ container, onState: state => states.push(state),
+  const player = createPlayer({ container, now, onState: state => states.push(state),
     windowImpl: { addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name) },
     documentImpl: { createElement(tag) { assert.equal(tag, 'iframe'); const frame = { commands: [], contentWindow: { postMessage(message, origin) { frame.commands.push({ message, origin }); } }, setAttribute() {} }; frames.push(frame); return frame; } },
     setTimer(fn) { timers.set(++timerId, fn); return timerId; }, clearTimer(id) { timers.delete(id); }
@@ -151,4 +151,35 @@ test('CineSrc local episode navigation cannot silently synchronize the wrong epi
   assert.equal(app.player.getStatus().ready,false);
   receive({type:'cinesrc:timeupdate',currentTime:10,duration:1200});assert.equal(app.player.getStatus().ready,false);
   app.player.retry();assert.equal(app.player.getStatus().ready,false);assert.equal(new URL(app.frames.at(-1).src).searchParams.get('e'),'1');
+});
+
+test('stalled timestamps and pending seeks stop time extrapolation; blocked autoplay requires a gesture', () => {
+  let time=0;const app=harness({now:()=>time});app.player.load(tv,'cinesrc');const frame=app.frames[0];
+  const receive=data=>app.listeners.get('message')({origin:'https://cinesrc.st',source:frame.contentWindow,data});
+  receive({type:'cinesrc:loadedmetadata',duration:1200});assert.equal(app.player.getStatus().playable,false);
+  app.player.command('seek',{time:0});assert.equal(app.player.getStatus().seekPending,true);
+  receive({type:'cinesrc:response',command:'getCurrentTime',result:0});assert.equal(app.player.getStatus().seekPending,false);
+  assert.equal(app.player.getStatus().playable,true);
+  receive({type:'cinesrc:play'});time=5000;receive({type:'cinesrc:response',command:'getCurrentTime',result:0});
+  assert.equal(app.player.getStatus().buffering,true);assert.equal(app.player.getStatus().seconds,0);
+  receive({type:'cinesrc:pause'});app.player.command('seek',{time:10});time=10000;
+  receive({type:'cinesrc:response',command:'getCurrentTime',result:0});assert.equal(app.player.getStatus().seekPending,true);
+  assert.equal(app.player.getStatus().buffering,true);
+  receive({type:'cinesrc:seeked',currentTime:10,duration:1200});assert.equal(app.player.getStatus().seekPending,false);assert.equal(app.player.getStatus().buffering,false);
+  app.player.command('play');time=15000;receive({type:'cinesrc:response',command:'getPaused',result:true});
+  assert.equal(app.player.getStatus().needsGesture,true);app.player.command('pause');assert.equal(app.player.getStatus().buffering,true);
+  receive({type:'cinesrc:play'});assert.equal(app.player.getStatus().needsGesture,false);assert.equal(app.player.getStatus().buffering,false);
+});
+
+test('pause and status before an iframe attaches do not throw',()=>{
+  const app=harness();app.player.load(tv,'cinesrc');app.frames[0].contentWindow=null;
+  assert.equal(app.player.command('pause'),false);assert.equal(app.player.requestStatus(),false);
+});
+
+test('frequent small time advances count as progress instead of false buffering',()=>{
+  let time=0;const app=harness({now:()=>time});app.player.load(tv,'cinesrc');const frame=app.frames[0];
+  const receive=data=>app.listeners.get('message')({origin:'https://cinesrc.st',source:frame.contentWindow,data});
+  receive({type:'cinesrc:loadedmetadata',duration:1200});app.player.command('seek',{time:0});receive({type:'cinesrc:seeked',currentTime:0,duration:1200});receive({type:'cinesrc:play'});
+  for(time=25;time<=6000;time+=25)receive({type:'cinesrc:timeupdate',currentTime:time/1000,duration:1200});
+  assert.equal(app.player.getStatus().buffering,false);
 });

@@ -40,7 +40,10 @@ test('PostgreSQL playback transactions enforce membership, revisions, sessions, 
     const session = first.state.sessionId;
     assert.equal((await call({action:'media',id,revision:0,media})).outcome,'duplicate');
     assert.equal((await call({action:'media',id,revision:0,media:{...media,tmdbId:27205}})).outcome,'conflict');
+    const clients = [randomUUID(),randomUUID()];
+    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'cinesrc',first.state.readyEpoch,clients[0],true,true]);
     await as(b);
+    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'cinesrc',first.state.readyEpoch,clients[1],true,true]);
     const play = await call({action:'play',id:randomUUID(),revision:1,session});
     assert.equal(play.state.status,'playing');
     assert.equal(play.state.revision,2);
@@ -71,4 +74,72 @@ test('PostgreSQL playback transactions enforce membership, revisions, sessions, 
     await db.exec('set role anon');
     await assert.rejects(call(),/permission denied/);
   } finally { await db.close(); }
+});
+
+async function readinessFixture() {
+  const db=new PGlite();
+  await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);
+    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+    grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;`);
+  await db.exec(fs.readFileSync(path.join(__dirname,'schema.sql'),'utf8'));
+  await db.exec(fs.readFileSync(path.join(__dirname,'playback.sql'),'utf8'));
+  const [a,b,outsider,room]=Array.from({length:4},randomUUID);
+  await db.query('insert into auth.users values($1),($2),($3)',[a,b,outsider]);
+  await db.query("insert into watch_rooms(id,created_by,invite_code) values($1,$2,'code')",[room,a]);
+  await db.query('insert into watch_room_members(room_id,user_id) values($1,$2),($1,$3)',[room,a,b]);
+  await db.exec('set role authenticated');let state;
+  const as=actor=>db.query("select set_config('request.jwt.claim.sub',$1,false)",[actor]);
+  async function action(kind='get',extra={},actor=a){
+    await as(actor);
+    const result=(await db.query('select public.watch_playback($1,$2,$3,$4,$5,$6,$7,$8) result',[
+      room,kind,kind==='get'?null:randomUUID(),state?.revision??0,state?.sessionId??null,extra.media??null,extra.provider??null,extra.position??null
+    ])).rows[0].result;
+    state=result.state;return result;
+  }
+  async function report(actor,ready,snapshot=state,joined=true){
+    await as(actor);
+    const result=(await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7) result',[
+      room,snapshot.sessionId,snapshot.provider,snapshot.readyEpoch,actor,ready,joined
+    ])).rows[0].result;state=result.state;return result;
+  }
+  await action('media',{media:{mediaType:'movie',tmdbId:155,title:'Movie'}});
+  return {db,a,b,outsider,room,as,action,report,state:()=>state};
+}
+
+test('readiness freezes the room for a slow partner, resumes both, and respects manual pause and epochs',async()=>{
+  const f=await readinessFixture();
+  try{
+    await f.action('play');assert.equal(f.state().status,'paused');assert.equal(f.state().playRequested,true);
+    const original=f.state();await f.report(f.a,true);await f.report(f.b,false);
+    assert.equal(f.state().readiness.readyCount,1);assert.equal(f.state().waitingForReady,true);
+    await f.action();assert.equal(f.state().positionMs,0);
+    await f.report(f.b,true);assert.equal(f.state().status,'playing');assert.equal(f.state().readiness.readyCount,2);
+    await f.report(f.b,false);assert.equal(f.state().status,'paused');assert.ok(f.state().readyEpoch>original.readyEpoch);
+    const frozen=f.state().positionMs;await f.action();assert.equal(f.state().positionMs,frozen);
+    const stale=await f.report(f.a,true,original);assert.equal(stale.outcome,'conflict');assert.equal(f.state().status,'paused');
+    await f.report(f.a,true);await f.report(f.b,true);assert.equal(f.state().status,'playing');
+    await f.action('pause');assert.equal(f.state().playRequested,false);
+    await f.report(f.a,true);await f.report(f.b,true);assert.equal(f.state().status,'paused');assert.equal(f.state().readiness.bothReady,true);
+    await f.action('play');assert.equal(f.state().status,'playing');
+    await f.action('seek',{position:120000});assert.equal(f.state().status,'paused');assert.equal(f.state().positionMs,120000);assert.equal(f.state().playRequested,true);
+    await f.report(f.a,true);await f.report(f.b,true);assert.equal(f.state().status,'playing');
+    const beforeProvider=f.state();await f.action('provider',{provider:'cinemaos'});assert.equal(f.state().readiness.readyCount,0);
+    await f.report(f.a,true,beforeProvider);assert.equal(f.state().readiness.readyCount,0);
+    await assert.rejects(f.report(f.outsider,true),/membership/i);
+    await f.as(f.a);await assert.rejects(f.db.query('select * from public.watch_playback_readiness'),/permission denied/);
+  }finally{await f.db.close();}
+});
+
+test('expired readiness leases pause at lease expiry and leaving pauses the partner',async()=>{
+  const f=await readinessFixture();
+  try{
+    await f.report(f.a,true);await f.report(f.b,true);await f.action('play');assert.equal(f.state().status,'playing');
+    await f.db.exec('reset role');
+    await f.db.exec("update watch_room_playback set position_ms=10000,anchor_at=clock_timestamp()-interval '30 seconds'; update watch_playback_readiness set updated_at=clock_timestamp()-interval '30 seconds'");
+    await f.db.exec('set role authenticated');await f.action();
+    assert.equal(f.state().status,'paused');assert.ok(f.state().positionMs>=24000&&f.state().positionMs<28000);
+    const held=f.state().positionMs;await f.action();assert.equal(f.state().positionMs,held);
+    await f.report(f.a,true);await f.report(f.b,true);assert.equal(f.state().status,'playing');
+    await f.report(f.b,false,f.state(),false);assert.equal(f.state().status,'paused');assert.equal(f.state().playRequested,true);
+  }finally{await f.db.close();}
 });
