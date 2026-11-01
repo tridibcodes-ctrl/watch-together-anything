@@ -2,13 +2,13 @@
 
 A watch-together app for couples. Many couples can use the system; each private room has **at most two members**. User IDs are added through room creation and invitation, never hard-coded in the schema. An account can currently belong to multiple rooms.
 
-This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, TMDB discovery, and shared room lists are implemented. Movies and selected TV episodes can now open in CineSrc (new primary), CinemaOS, or manual VidLink fallback in the current browser. Shared playback state and controllable-provider adapters are implemented; real two-browser stream validation, watched tracking, and calls remain outstanding.
+This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, TMDB discovery, and shared room lists are implemented. Movies and selected TV episodes can now open in CineSrc (new primary), CinemaOS, or manual VidLink fallback in the current browser. Shared playback state and controllable-provider adapters are implemented; real two-browser stream validation and watched tracking remain outstanding.
 
 Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target design](#complete-target-design--planned-features) · [Local setup](#setup-from-a-fresh-clone) · [Implemented APIs](#implemented-http-api) · [Remaining work](#remaining-work-and-suggested-order)
 
 ## Requirements and implementation status
 
-The intended experience lets both partners control playback, maintain a shared movie/show list, chat or call, and move titles to Watched after finishing together. Episode progress must be distinguished from completing a series. Development aims to use free services; production cost and capacity are not established.
+The intended experience lets both partners control playback, maintain a shared movie/show list, chat, and move titles to Watched after finishing together. Episode progress must be distinguished from completing a series. Development aims to use free services; production cost and capacity are not established.
 
 | Feature | Status | Notes |
 | --- | --- | --- |
@@ -25,7 +25,6 @@ The intended experience lets both partners control playback, maintain a shared m
 | Shared playback | Implemented; live validation pending | Persisted sessions, member commands, safe retries, Realtime, polling, and CineSrc/CinemaOS drift correction. |
 | Embedded playback | Implemented; streams unconfirmed | CineSrc/CinemaOS controls queue room intent; the clock runs only after both accounts are ready. VidLink stays manual. |
 | Watched completion | Pending | Needs both-member confirmation, episode progress, and undo. |
-| Voice/video | Pending | No WebRTC signaling or STUN/TURN setup. |
 | Public signup/recovery | Pending | Only sign-in UI exists; create test accounts in Supabase Dashboard. Check project signup settings separately. |
 | Production deployment | Pending | Node listens only on 127.0.0.1:3000. |
 
@@ -48,7 +47,7 @@ flowchart LR
 - **Database:** Supabase PostgreSQL. Node forwards the user's token to REST/RPC calls, so Row Level Security (RLS) applies. This implementation does not use a service-role/secret key.
 - **Realtime:** Browser subscriptions listen for inserts in the selected room. Events cause an authenticated API reload; PostgreSQL retains the messages. RLS controls readable records.
 - **Catalog:** Node proxies TMDB popular movie/TV lists, search, title details, and TV seasons/episodes with a server-only token. Browse renders posters, pagination, and a details panel.
-- **Playback:** PostgreSQL stores room state; shared-playback.js applies updates through player.js. WebRTC calls remain planned.
+- **Playback:** PostgreSQL stores room state; shared-playback.js applies updates through player.js.
 
 ### Main flows
 
@@ -68,7 +67,6 @@ Think of the app as three connected pieces: **a catalog to choose something, a p
 | Save the couple's choices and activity | Supabase PostgreSQL | Shared list, chat, membership, playback session, completion confirmations |
 | Show the video | CinemaOS primary and VidLink fallback | Each browser loads its own stream |
 | Keep both partners coordinated | Backend, database, Realtime, and player adapter | Commit room state and apply it to CinemaOS players |
-| Carry a voice/video call | Browser WebRTC — planned | Camera/microphone between the two partners |
 
 ### What TMDB gives the frontend
 
@@ -119,10 +117,9 @@ This section explains the intended end-to-end system. The implementation table a
 | Change delivery | Supabase Realtime | Notify the selected room's clients about committed state changes. It does not replace persistent state. |
 | Catalog | TMDB through Node | Browsing, search, posters, title details, season/episode selection, and consistent title IDs. |
 | Playback | CineSrc/CinemaOS adapters implemented; live verification pending | Each browser plays its own stream; the backend coordinates controls |
-| Calls | Native WebRTC and authenticated signaling — planned | A two-person room can use one peer connection; add STUN/TURN connectivity as needed. |
 | Source collaboration | GitHub/GitHub Desktop | Share code and documentation. Git synchronization does not migrate a Supabase database or copy local environment files. |
 
-No Redis, Kafka, separate signaling framework, or group-call media server is needed for the initial two-person-per-room design. Reassess only when measured requirements justify more infrastructure. Specific hosting providers and production resource sizes have not been chosen.
+No Redis or Kafka is needed for the initial two-person-per-room design. Reassess only when measured requirements justify more infrastructure. Specific hosting providers and production resource sizes have not been chosen.
 
 ```mermaid
 flowchart TB
@@ -135,7 +132,6 @@ flowchart TB
   RT -->|Committed room changes| B
   A --> PA[External player in browser A]
   B --> PB[External player in browser B]
-  A <-->|WebRTC call media: direct or through TURN| B
 ```
 
 ### Accounts, invitations, membership, and presence
@@ -189,15 +185,9 @@ The selected requirement is finishing together, not “one person clicked play�
 
 When both current room members confirm the same session, commit watched/progress records and the list transition in one transaction. Show a waiting-for-partner state after the first confirmation. An ended event may prompt confirmation but should not unconditionally mark a title Watched. Changing title/episode or creating a new session must not reuse confirmations from an earlier one. Undo should make an explicit correction that both clients see.
 
-### Text, voice, and video communication
+### Text communication
 
 Saved text chat is already implemented. PostgreSQL stores messages, the API checks membership and sender identity, and Realtime prompts the current room to reload. Future additions include older-message pagination, visible delivery/reconnect state, and message retention/deletion choices.
-
-Voice/video calls are planned with browser WebRTC. Each participant grants camera/microphone permission. The peers exchange offer/answer descriptions and ICE connectivity candidates over an authenticated, room-scoped signaling channel, which could use Supabase Realtime. Call signaling is not the same as durable chat or the film's playback stream. [WebRTC peer connections and signaling](https://webrtc.org/getting-started/peer-connections)
-
-WebRTC does not charge an API license fee. STUN helps discover network connectivity; when a direct connection cannot be established, TURN relays call traffic. A TURN server may be self-hosted (for example with coturn) or purchased as a service, but its compute and bandwidth still need funding. Two people allow direct peer calls without adding a group-call SFU, but do not eliminate TURN requirements. Do not promise reliable calls on every network with zero relay capacity. [WebRTC TURN guidance](https://webrtc.org/getting-started/turn-server)
-
-Signaling must be restricted to the room members and a specific call ID, expire after the call, and handle simultaneous offers, denial of permissions, reconnection, mute/camera controls, and hangup. Camera/microphone tracks must stop on hangup or leaving the call. The proposed app does not record calls or forward movie video through WebRTC.
 
 ### Proposed remaining data and API boundaries
 
@@ -210,24 +200,24 @@ These are design proposals, not installed schema or implemented routes. Keep aut
 | Playback sessions / current state | Shared title, episode, provider, position anchor, status and revision |
 | Applied commands | Retry deduplication and ordering of accepted playback mutations |
 | Session completion confirmations | One confirmation per member for the current session/media |
-| Call/presence state | Short-lived room readiness, call IDs, participants and signaling |
+| Playback readiness/presence | Short-lived room readiness and connected participants |
 
-The implemented catalog endpoints are GET /api/catalog, GET /api/search, GET /api/titles/{movie|tv}/{tmdbId}, and GET /api/titles/tv/{tmdbId}/seasons/{seasonNumber}. New shared-list APIs should be room-scoped. Playback needs snapshot, media selection, control, and presence endpoints; completion needs confirm/undo operations. Call signaling may use authenticated Realtime rather than a REST route per ICE candidate. Define exact response shapes and update the starter's contract before implementing each feature; the old group-based mock routes are not a finalized backend contract.
+The implemented catalog endpoints are GET /api/catalog, GET /api/search, GET /api/titles/{movie|tv}/{tmdbId}, and GET /api/titles/tv/{tmdbId}/seasons/{seasonNumber}. New shared-list APIs should be room-scoped. Playback needs snapshot, media selection, control, and presence endpoints; completion needs confirm/undo operations. Define exact response shapes and update the starter's contract before implementing each feature; the old group-based mock routes are not a finalized backend contract.
 
 ### Nonfunctional requirements and tradeoffs
 
 | Area | Target/design rule |
 | --- | --- |
-| Isolation | Every couple's rooms, lists, chat, progress, playback and signaling are accessible only to their members. |
+| Isolation | Every couple's rooms, lists, chat, progress, and playback are accessible only to their members. |
 | Consistency | Enforce capacity, command ordering, and shared completion in transactions. Use deduplication IDs and revisions for retries/reconnects. |
 | Durability | Store user-owned history and current snapshots in PostgreSQL; do not rely on a single Node process's memory or WebSocket events. |
 | Responsiveness | Deliver chat/control changes promptly; measure two-device latency and playback drift before setting numerical targets. |
 | Recovery | Refresh/reconnect restores the last committed state. Show meaningful offline/provider errors and preserve user intent safely. |
 | Security | Verify tokens, enforce RLS/membership, validate inputs, use HTTPS/WSS in deployment, keep server tokens out of the browser, and add rate limits before public release. |
 | Privacy | Treat room messages and lists as private data. Stored chat is not end-to-end encrypted; do not claim it is. Plan retention, deletion, and backup access. |
-| Compatibility | Test mobile/desktop browsers, autoplay restrictions, iframe capabilities, and call permissions/network conditions. |
+| Compatibility | Test mobile/desktop browsers, autoplay restrictions, iframe capabilities, and network conditions. |
 | Maintainability | Keep provider adapters replaceable, document APIs, add migrations/tests, and preserve Local demo for independent frontend development. |
-| Cost | Bound requests, metadata caching, chat history, and live connections. Track database, Realtime, hosting and TURN usage. Free-tier availability is not an unlimited-service guarantee. |
+| Cost | Bound requests, metadata caching, chat history, and live connections. Track database, Realtime, and hosting usage. Free-tier availability is not an unlimited-service guarantee. |
 
 There are no production availability, user-count, or latency commitments yet. Two participants per room is a product limit; it is not a claim that total application traffic is limited to two people. Scale estimates need an expected number of simultaneous rooms and measured provider/service quotas.
 
@@ -237,7 +227,7 @@ For remote couples, serve the app over HTTPS and deploy the API to a reachable h
 
 GitHub Desktop synchronizes source files. It does not transfer .env credentials, install npm dependencies, apply database changes, or make a local server accessible to a partner. Each checkout follows the setup instructions below. Avoid running both old and new checkouts on port 3000 and then editing a different copy of the source.
 
-The frontend developer can design in Local demo without the API running. Backend work should expose stable, documented JSON contracts. The frontend should display clear states for loading, no room, waiting for partner, disconnected, player unavailable, and call permission errors. Agree on completed feature acceptance using two separate authenticated browser profiles before adding more features.
+The frontend developer can design in Local demo without the API running. Backend work should expose stable, documented JSON contracts. The frontend should display clear states for loading, no room, waiting for partner, disconnected, and player unavailable. Agree on completed feature acceptance using two separate authenticated browser profiles before adding more features.
 
 ## Repository map
 
@@ -493,8 +483,7 @@ Acceptance check: join one account first and queue Play; verify the room remains
 3. **Playback sessions - implemented:** verify the applied migration and real two-account updates. Add presence, buffering coordination, and command-ledger retention later.
 4. **Player adapters - synchronization implemented, live validation pending:** verify CineSrc playback and two-browser play/pause/seek on a playable stream; CinemaOS remains an optional provider. VidLink remains a manual fallback.
 5. **Watched progress:** require both partners' confirmation, track episodes separately from whole series, and support undo.
-6. **Voice/video:** WebRTC plus authenticated signaling, permissions, connection recovery and STUN/TURN. No call backend exists; free relay capacity is not guaranteed.
-7. **Product/operations:** frontend design, signup/confirmation/password reset, invite rotation/expiry, room departure/deletion, rate limits, deployment, configuration, monitoring and service quota checks.
+6. **Product/operations:** frontend design, signup/confirmation/password reset, invite rotation/expiry, room departure/deletion, rate limits, deployment, configuration, monitoring and service quota checks.
 
 ## Known limitations and validation
 
