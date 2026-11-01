@@ -99,3 +99,67 @@ on public.watch_room_members for select to authenticated
 using (public.is_room_member(room_id));
 
 -- Room creation and invite endpoints will add members dynamically. Keep user IDs out of this schema.
+-- Invite codes let the second authenticated user join the room.
+alter table public.watch_rooms add column if not exists invite_code text;
+update public.watch_rooms
+set invite_code = lower(substr(replace(pg_catalog.gen_random_uuid()::text, '-', ''), 1, 12))
+where invite_code is null;
+create unique index if not exists watch_rooms_invite_code_key
+on public.watch_rooms(invite_code);
+alter table public.watch_rooms alter column invite_code set not null;
+
+create or replace function public.create_watch_room(p_name text default 'Our room')
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  new_room public.watch_rooms;
+  current_user_id uuid := (select auth.uid());
+begin
+  if current_user_id is null then
+    raise exception using errcode = '28000', message = 'Sign-in required';
+  end if;
+  if length(trim(coalesce(p_name, ''))) < 1 or length(trim(p_name)) > 60 then
+    raise exception using errcode = '22023', message = 'Room name must be 1 to 60 characters';
+  end if;
+  insert into public.watch_rooms(created_by, name, invite_code)
+  values (current_user_id, trim(p_name), lower(substr(replace(pg_catalog.gen_random_uuid()::text, '-', ''), 1, 12)))
+  returning * into new_room;
+  insert into public.watch_room_members(room_id, user_id)
+  values (new_room.id, current_user_id);
+  return pg_catalog.jsonb_build_object('roomId', new_room.id, 'name', new_room.name, 'inviteCode', new_room.invite_code);
+end;
+$$;
+
+create or replace function public.join_watch_room(p_invite_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_room public.watch_rooms;
+  current_user_id uuid := (select auth.uid());
+begin
+  if current_user_id is null then
+    raise exception using errcode = '28000', message = 'Sign-in required';
+  end if;
+  select * into target_room from public.watch_rooms
+  where invite_code = lower(trim(coalesce(p_invite_code, '')))
+  for update;
+  if target_room.id is null then
+    raise exception using errcode = 'P0002', message = 'Invite code not found';
+  end if;
+  insert into public.watch_room_members(room_id, user_id)
+  values (target_room.id, current_user_id)
+  on conflict (room_id, user_id) do nothing;
+  return pg_catalog.jsonb_build_object('roomId', target_room.id, 'name', target_room.name);
+end;
+$$;
+
+revoke all on function public.create_watch_room(text) from public;
+revoke all on function public.join_watch_room(text) from public;
+grant execute on function public.create_watch_room(text) to authenticated;
+grant execute on function public.join_watch_room(text) to authenticated;

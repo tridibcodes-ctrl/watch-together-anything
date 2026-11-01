@@ -209,6 +209,73 @@ const server = http.createServer(async (request, response) => {
     }
     return;
   }
+  if (request.method === "POST" && ["/api/rooms", "/api/rooms/join"].includes(request.url)) {
+    try {
+      const { verifyAuth } = await import("@supabase/server/core");
+      const authHeaders = new Headers();
+      if (request.headers.authorization) authHeaders.set("authorization", request.headers.authorization);
+      if (request.headers.apikey) authHeaders.set("apikey", request.headers.apikey);
+      const authRequest = new Request(new URL(request.url, "http://localhost:3000"), { headers: authHeaders });
+      const { data: authData, error: authError } = await verifyAuth(authRequest, { auth: "user" });
+      if (authError) {
+        sendJson(response, authError.status || 401, { error: "Sign-in required or token invalid" });
+        return;
+      }
+
+      let rawBody = "";
+      for await (const chunk of request) {
+        rawBody += chunk;
+        if (rawBody.length > 4096) {
+          sendJson(response, 413, { error: "Request body is too large" });
+          return;
+        }
+      }
+      let body;
+      try { body = rawBody ? JSON.parse(rawBody) : {}; }
+      catch { sendJson(response, 400, { error: "Request body must be valid JSON" }); return; }
+
+      const isJoin = request.url === "/api/rooms/join";
+      const inviteCode = typeof body.inviteCode === "string" ? body.inviteCode.trim() : "";
+      const roomName = typeof body.name === "string" ? body.name.trim() : "Our room";
+      if (isJoin && (!inviteCode || inviteCode.length > 32)) {
+        sendJson(response, 400, { error: "Enter a valid invite code" });
+        return;
+      }
+      if (!isJoin && (!roomName || roomName.length > 60)) {
+        sendJson(response, 400, { error: "Room name must be between 1 and 60 characters" });
+        return;
+      }
+
+      const supabaseUrl = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+      const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+      if (!supabaseUrl || !publishableKey) {
+        sendJson(response, 500, { error: "Supabase configuration is incomplete" });
+        return;
+      }
+      const rpcName = isJoin ? "join_watch_room" : "create_watch_room";
+      const rpcArgs = isJoin ? { p_invite_code: inviteCode } : { p_name: roomName };
+      const rpcResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/${rpcName}`, {
+        method: "POST",
+        headers: {
+          apikey: publishableKey,
+          Authorization: request.headers.authorization,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(rpcArgs),
+      });
+      const result = await rpcResponse.json().catch(() => ({}));
+      if (!rpcResponse.ok) {
+        const status = rpcResponse.status >= 500 ? 409 : rpcResponse.status;
+        sendJson(response, status, { error: result.message || "Room operation failed" });
+        return;
+      }
+      sendJson(response, isJoin ? 200 : 201, { ...result, createdBy: authData.userClaims.id });
+    } catch (error) {
+      console.error("Room operation failed:", error.message);
+      sendJson(response, 500, { error: "Room operation failed" });
+    }
+    return;
+  }
   sendJson(response, 404, { error: "Not found" });
 });
 
