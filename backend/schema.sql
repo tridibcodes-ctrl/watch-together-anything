@@ -185,3 +185,19 @@ drop policy if exists "Room members can send their own messages" on public.watch
 create policy "Room members can send their own messages"
 on public.watch_room_messages for insert to authenticated
 with check (sender_id = (select auth.uid()) and public.is_room_member(room_id));
+
+-- Publish chat inserts for room-scoped Supabase Realtime subscriptions.
+do $$
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    create publication supabase_realtime;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public' and tablename = 'watch_room_messages'
+  ) then
+    alter publication supabase_realtime add table public.watch_room_messages;
+  end if;
+end;
+$$;

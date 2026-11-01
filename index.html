@@ -90,6 +90,7 @@
       <p>Voice/video needs WebRTC signaling from the backend; it is not implemented in this HTML starter.</p>
 
       <h3>Text chat</h3>
+      <p id="chat-status" role="status" aria-live="polite">Live chat is off in Local demo.</p>
       <button id="refresh-chat" type="button">Refresh chat</button>
       <ol id="messages"></ol>
       <form id="chat-form">
@@ -174,10 +175,58 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Qed9LYz9rBBnUK3sMhrQwg_OzznRQO6";
     const authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     let authSession = null;
+    let chatChannel = null, chatGeneration = 0, chatTimer = null, chatRequestVersion = 0;
+    function stopLiveChat() {
+      chatGeneration++; chatRequestVersion++;
+      clearTimeout(chatTimer); chatTimer = null;
+      const previous = chatChannel; chatChannel = null;
+      if (previous) authClient.removeChannel(previous).catch(() => {});
+    }
+    function startLiveChat() {
+      stopLiveChat();
+      $('messages').replaceChildren();
+      if (mode !== 'api' || !authSession || !me?.roomId) {
+        $('chat-status').textContent = mode === 'demo' ? 'Live chat is off in Local demo.' : 'Select a room to start live chat.';
+        return;
+      }
+      const generation = chatGeneration, roomId = me.roomId;
+      const current = () => generation === chatGeneration && mode === 'api' && me?.roomId === roomId;
+      const reload = () => {
+        if (!current()) return;
+        clearTimeout(chatTimer);
+        chatTimer = setTimeout(() => {
+          if (current()) chat().catch(() => {
+            if (current()) $('chat-status').textContent = 'Could not load messages. Use Refresh chat to retry.';
+          });
+        }, 80);
+      };
+      $('chat-status').textContent = 'Connecting live chat…';
+      const channel = authClient.channel('room-chat:' + roomId + ':' + generation)
+        .on('postgres_changes', {event:'INSERT',schema:'public',table:'watch_room_messages',filter:'room_id=eq.' + roomId}, reload);
+      chatChannel = channel;
+      channel.subscribe(status => {
+        if (!current()) return;
+        if (status === 'SUBSCRIBED') {
+          $('chat-status').textContent = 'Live chat connected.';
+          reload();
+        } else if (['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)) {
+          $('chat-status').textContent = 'Live chat disconnected. Use Refresh chat or reconnect.';
+        }
+      });
+      reload();
+    }
     authClient.auth.onAuthStateChange((_event, session) => {
       authSession = session;
       $('sign-out').disabled = !session;
-      if (!session) $('auth-status').textContent = 'Not signed in.';
+      if (!session) {
+        $('auth-status').textContent = 'Not signed in.';
+        stopLiveChat();
+        if (mode === 'api') {
+          me = null; room = null; joined = false; unload(); controls();
+          $('messages').replaceChildren();
+          $('chat-status').textContent = 'Sign in to use live chat.';
+        }
+      }
     });
     async function checkBackendIdentity(session) {
       const host = location.hostname;
@@ -275,12 +324,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     async function command(action,extra={}) { apply(await request(`/api/rooms/${me.roomId}/commands`,'POST',{commandId:uuid(),sessionId:room.sessionId,action,...extra})); }
     async function chat() {
       if(!me || !me.roomId) throw new Error('Connect and select a room first.');
-      const selectedRoomId=me.roomId;
+      const selectedRoomId=me.roomId, selectedUserId=me.userId, version=++chatRequestVersion;
       const data = await request('/api/rooms/' + selectedRoomId + '/messages');
-      if(me?.roomId !== selectedRoomId) return;
+      if(me?.roomId !== selectedRoomId || me?.userId !== selectedUserId || version !== chatRequestVersion) return;
       $('messages').replaceChildren(...data.items.map(m => node('li',m.senderName + ': ' + m.body)));
     }
     async function connect() {
+      stopLiveChat();
       me = null; room = null; joined = false; unload(); controls();
       $('catalog').replaceChildren(); $('list-items').replaceChildren(); $('messages').replaceChildren();
       me = await request('/api/me'); $('display-name').value = me.profile.displayName; $('avatar').value = me.profile.avatarKey;
@@ -295,9 +345,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         select.value=me.roomId || '';
         const selected = roomData.items.find(item => item.roomId === me.roomId);
         $('room-invite').textContent = selected ? 'Selected ' + selected.name + '. Invite code: ' + selected.inviteCode : 'No room selected.';
+        startLiveChat();
         say(`Backend connected. Profile loaded. ${roomData.items.length} room(s) available.`);
         return;
       }
+      $('chat-status').textContent = 'Live chat is off in Local demo.';
       await catalog(); await list(); apply(await request(`/api/rooms/${me.roomId}/state`));
       say(mode === 'demo' ? 'Local demo ready. Changes reset on reload; no backend is running.' : 'Backend connected.');
     }
@@ -320,6 +372,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('messages').replaceChildren();
       $('room-invite').textContent = selected ? 'Selected ' + selected.name + '. Invite code: ' + selected.inviteCode : 'No room selected.';
       $('room-status').textContent = selected ? selected.name + ' · not watching yet' : 'No room selected.';
+      startLiveChat();
     };
     form('create-room-form',async () => {
       if(!me) throw new Error('Connect and sign in first.');
@@ -327,6 +380,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const name=$('room-name').value.trim();
       const result=await request('/api/rooms','POST',{name});
       me.roomId=result.roomId;
+      startLiveChat();
       $('room-invite').textContent=`Room created: ${result.name}. Share this invite code with your partner: ${result.inviteCode}`;
       $('room-status').textContent=`${result.name} · not watching yet`;
       say('Room created. Share the invite code with your partner.');
@@ -337,6 +391,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const inviteCode=$('invite-code').value.trim();
       const result=await request('/api/rooms/join','POST',{inviteCode});
       me.roomId=result.roomId;
+      startLiveChat();
       $('room-invite').textContent=`Joined ${result.name}.`;
       $('room-status').textContent=`${result.name} · not watching yet`;
       say('Joined your partner’s room.');
