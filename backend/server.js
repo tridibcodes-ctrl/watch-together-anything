@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { handleChat } = require("./chat");
 const { handleTmdb } = require("./tmdb");
+const { handleWatchlist } = require("./watchlist");
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -15,6 +16,7 @@ function sendJson(response, status, body) {
 const server = http.createServer(async (request, response) => {
   if (await handleTmdb(request, response, sendJson)) return;
   if (await handleChat(request, response, sendJson)) return;
+  if (await handleWatchlist(request, response, sendJson)) return;
   if (request.method === "GET" && request.url === "/") {
     fs.readFile(path.join(__dirname, "..", "index.html"), (error, html) => {
       if (error) {

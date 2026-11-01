@@ -201,3 +201,50 @@ begin
   end if;
 end;
 $$;
+
+-- Room watchlist. Soft removal produces UPDATE events that can be filtered by
+-- room and checked by RLS; Postgres DELETE events do not offer that isolation.
+create table if not exists public.watch_room_list_items (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references public.watch_rooms(id) on delete cascade,
+  media_type text not null check (media_type in ('movie', 'tv')),
+  tmdb_id integer not null check (tmdb_id > 0),
+  title text not null,
+  year text not null default '',
+  overview text not null default '',
+  poster_path text,
+  added_by uuid not null references auth.users(id),
+  created_at timestamptz not null default now(),
+  removed_at timestamptz,
+  unique (room_id, media_type, tmdb_id)
+);
+create index if not exists watch_room_list_room_time_idx
+on public.watch_room_list_items(room_id, created_at desc);
+alter table public.watch_room_list_items enable row level security;
+drop policy if exists "Members read their watchlist" on public.watch_room_list_items;
+create policy "Members read their watchlist"
+on public.watch_room_list_items for select to authenticated
+using (public.is_room_member(room_id));
+drop policy if exists "Members add to their watchlist" on public.watch_room_list_items;
+create policy "Members add to their watchlist"
+on public.watch_room_list_items for insert to authenticated
+with check (public.is_room_member(room_id) and added_by = (select auth.uid()));
+drop policy if exists "Members remove or restore watchlist items" on public.watch_room_list_items;
+create policy "Members remove or restore watchlist items"
+on public.watch_room_list_items for update to authenticated
+using (public.is_room_member(room_id)) with check (public.is_room_member(room_id));
+-- Only removed_at may be changed with a user's token. Other columns are immutable.
+revoke update, delete on public.watch_room_list_items from authenticated, anon;
+grant select, insert on public.watch_room_list_items to authenticated;
+grant update (removed_at) on public.watch_room_list_items to authenticated;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public'
+      and tablename = 'watch_room_list_items'
+  ) then
+    alter publication supabase_realtime add table public.watch_room_list_items;
+  end if;
+end;
+$$;

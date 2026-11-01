@@ -2,7 +2,7 @@
 
 A watch-together app for couples. Many couples can use the system; each private room has **at most two members**. User IDs are added through room creation and invitation, never hard-coded in the schema. An account can currently belong to multiple rooms.
 
-This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, and TMDB movie/TV discovery with details and episode selection are implemented. Shared lists, playback synchronization, watched tracking, and calls are still being built.
+This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, and TMDB movie/TV discovery with details and episode selection are implemented. Shared room lists are now implemented; playback synchronization, watched tracking, and calls are still being built.
 
 Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target design](#complete-target-design--planned-features) · [Local setup](#setup-from-a-fresh-clone) · [Implemented APIs](#implemented-http-api) · [Remaining work](#remaining-work-and-suggested-order)
 
@@ -20,8 +20,8 @@ The intended experience lets both partners control playback, maintain a shared m
 | Joined-room list/selection | Done | Member-only list; connection and selection preferences use local storage. |
 | Saved text chat | Done | Latest 100 messages; verified sender; duplicate client message IDs ignored on retry. |
 | Live chat | Done | Room-filtered Supabase Postgres Changes events trigger message reloads; manual refresh remains available. |
-| TMDB browsing/search | Steps 1–3 implemented | Browsing/search, posters, pagination, title details, season/episode selection, and loading/error states. Shared list/playback remain separate work. |
-| Shared movie/show list | Pending | Frontend demo/contract scaffolding only; no real list table or endpoints. |
+| TMDB browsing/search | Steps 1–3 implemented | Browsing/search, posters, pagination, title details, season/episode selection, and loading/error states. Playback remains separate work. |
+| Shared movie/show list | Implemented; live database validation pending | Room-scoped add/read/remove, duplicate protection, canonical TMDB snapshots, and member-only live updates. |
 | Shared playback | Pending | No persisted session/command API or verified player synchronization. Both members should have control. |
 | Watched completion | Pending | Needs both-member confirmation, episode progress, and undo. |
 | Voice/video | Pending | No WebRTC signaling or STUN/TURN setup. |
@@ -47,7 +47,7 @@ flowchart LR
 - **Database:** Supabase PostgreSQL. Node forwards the user's token to REST/RPC calls, so Row Level Security (RLS) applies. This implementation does not use a service-role/secret key.
 - **Realtime:** Browser subscriptions listen for inserts in the selected room. Events cause an authenticated API reload; PostgreSQL retains the messages. RLS controls readable records.
 - **Catalog:** Node proxies TMDB popular movie/TV lists, search, title details, and TV seasons/episodes with a server-only token. Browse renders posters, pagination, and a details panel.
-- **Planned:** Room-scoped shared lists, playback sessions, external-player adapters, and WebRTC calls.
+- **Planned:** Playback sessions, external-player adapters, and WebRTC calls.
 
 ### Main flows
 
@@ -88,7 +88,7 @@ Cinemaos is the intended primary embed provider; VidLink is the fallback. They b
 1. Browser requests `/api/search?type=movie&q=...&page=1`, or `/api/catalog?type=tv&page=1` for browsing.
 2. Node validates parameters and calls TMDB with `TMDB_READ_ACCESS_TOKEN` from its environment. The token is never sent to browser code.
 3. Node normalizes TMDB's movie/TV response fields to our title shape: ID, type, title, year, overview, poster reference, and pagination information.
-4. The frontend renders title cards, posters, page navigation, and details. Saving a title's identity in the selected room's list is planned; the catalog is not copied into Supabase.
+4. The frontend renders title cards, posters, page navigation, and details. Adding a title now saves its identity and a small metadata snapshot in the selected room's list; the catalog is not copied into Supabase.
 5. Planned: selecting Watch creates/updates the room's playback session. A separate provider adapter attempts to load the matching title/episode.
 
 Step 1 implements catalog/search, parameter validation, a 10-second upstream timeout, safe error messages, upstream rate-limit handling, and a 60-second in-memory metadata cache capped at 100 entries. Authentication runs before cache reads. No arbitrary upstream URLs are accepted.
@@ -99,7 +99,7 @@ To check step 2, hard-refresh `http://127.0.0.1:3000/`, sign in, choose Backend 
 
 Step 3 adds a Details button to every title card. The panel shows the overview, genres, release year, status, and movie runtime. TV titles load seasons from TMDB, including specials (season 0); selecting a season fetches its episodes. Episode selection shows the name, summary, air date, and runtime when available. Metadata can include future episodes and does not guarantee playable availability. Opening another title, closing details, reconnecting, or signing out invalidates pending responses. Failed season requests have a Retry button. Episode selection belongs to the opened show; Watch together on another show opens that show's details first. Local demo uses explicitly labelled sample seasons/episodes.
 
-To check step 3, restart Node and hard-refresh the page. Connect in Backend API mode, search for a movie, and open Details. Then search TV for Breaking Bad, open Details, switch seasons, and select an episode. Confirm the episode text changes. Try switching titles/seasons while requests load, closing details, and Local demo. Selection is local to this browser; shared list persistence and playback sessions are still pending. No database migration is needed.
+To check step 3, restart Node and hard-refresh the page. Connect in Backend API mode, search for a movie, and open Details. Then search TV for Breaking Bad, open Details, switch seasons, and select an episode. Confirm the episode text changes. Try switching titles/seasons while requests load, closing details, and Local demo. Selection is local to this browser; the shared list now persists separately, while playback sessions are still pending. No database migration is needed.
 
 TMDB's developer API is free for noncommercial use with attribution; commercial use needs separate arrangements. Before publishing, include an approved TMDB logo and the required notice: “This product uses the TMDB API but is not endorsed or certified by TMDB.” Review current terms if the app starts generating revenue. [TMDB FAQ and attribution requirements](https://developer.themoviedb.org/docs/faq)
 
@@ -244,6 +244,8 @@ The frontend developer can design in Local demo without the API running. Backend
 index.html                 HTML UI, demo/mock backend, auth and Realtime client
 backend/server.js          HTTP server, root page, profile and room APIs
 backend/chat.js            Chat API, membership checks and validation
+backend/watchlist.js       Room-scoped list API and TMDB snapshots
+backend/watchlist.test.js  Mocked API/frontend regression checks
 backend/tmdb.js            Authenticated TMDB catalog/search and metadata cache
 backend/schema.sql         Tables, RLS, RPCs, capacity trigger, Realtime publication
 backend/package.json       Backend dependencies
@@ -322,6 +324,9 @@ Content-Type is needed for JSON bodies. Errors use an object with an error strin
 | POST | /api/rooms/join | {inviteCode} | {roomId,name,createdBy} — caveat below |
 | GET | /api/rooms/{roomId}/messages | — | {items:[{id,senderId,senderName,body,sentAt}]} |
 | POST | /api/rooms/{roomId}/messages | {clientMessageId,body} | 201 {sent:true} |
+| GET | /api/rooms/{roomId}/list | — | {items:[{id,status:"planned",title:{tmdbId,mediaType,title,year,overview,posterPath}}]} |
+| POST | /api/rooms/{roomId}/list | {mediaType,tmdbId} | 201 {item} for new title; 200 for existing/restored title |
+| DELETE | /api/rooms/{roomId}/list/{itemId} | — | 204, or 404 if item does not belong to this room |
 
 Profile names are trimmed and limited to 1–40 characters. Avatar keys: moon, sun, star, heart. Messages are trimmed and limited to 1–2000 characters; client message IDs must be UUIDs. Chat reads return the latest 100 messages in chronological order, without older-message pagination.
 
@@ -333,7 +338,7 @@ Contract caveats:
 
 - /api/me still returns null groupId/roomId placeholders. Choose a room using /api/rooms.
 - The join response's createdBy currently contains the requesting user's ID, not necessarily the creator. Correct it before relying on that field for ownership.
-- The Backend contract block inside index.html contains proposed routes and some outdated response shapes. The table above describes actual routes. Group lists, room state/media/commands/presence, and session-completion APIs are **not implemented** and return 404. Connect in Backend API mode loads the profile/rooms and starts chat; Browse uses its own search form. Add/Watch still call future APIs and are not working backend features.
+- The Backend contract block inside index.html contains proposed routes and some outdated response shapes. The table above describes actual routes. Legacy group-list APIs, room state/media/commands/presence, and session-completion APIs are **not implemented** and return 404. Add/Remove use room-list APIs now. Watch together displays a clear not-yet-implemented message in Backend API mode.
 
 ## Database model and access
 
@@ -344,6 +349,7 @@ Contract caveats:
 | watch_rooms | Room ID, name, creator, invite code, creation time; members can read |
 | watch_room_members | Room/user membership and join time; members can read membership in their room |
 | watch_room_messages | Text, sender ID/name snapshot, client message ID, room ID, timestamp; member-only reads and self-sender member inserts |
+| watch_room_list_items | Unique room/media-type/TMDB-ID title snapshot; removed_at hides removed titles and supports live UPDATE events. Members may update only removed_at. |
 | create_watch_room(text) | Authenticated RPC for room and creator membership |
 | join_watch_room(text) | Authenticated RPC to join by code |
 | is_room_member(uuid) | Membership helper for RLS |
@@ -367,10 +373,20 @@ where pubname = 'supabase_realtime'
 
 A connected channel does not prove database-event delivery. The page displays database-listener status/errors. If manual refresh works but live delivery fails, check this publication, the selected room, and SELECT RLS permissions. Do not disable RLS as a workaround.
 
+## Shared watchlist setup and acceptance check
+
+Run the updated backend/schema.sql in Supabase SQL Editor, then restart Node (or let dev watch mode reload the new modules) and hard-refresh both pages. Connect in Backend API mode and select the same room in two separate accounts. Add a movie and a show from Browse; both should appear in Our list without manual refresh. Add a title twice to confirm only one entry exists. Remove it in either account, then add it again to restore it. Refresh/reconnect to verify persistence. Select a different room to verify isolation.
+
+The backend verifies membership on every list request and fetches canonical title details through the existing TMDB handler before a new insert. It does not trust client-supplied title/overview/creator fields. It stores a small metadata snapshot; no video is saved. Both members may remove any item in their shared list.
+
+Removal is a soft deletion: removed_at is set, active reads exclude that row, and re-adding the same identity restores it. Removed snapshots remain readable to room members at the database level until a future retention/deletion flow is added. This deliberately uses INSERT/UPDATE Realtime events with room filters and RLS, rather than unfiltered Postgres DELETE notifications. The schema adds watch_room_list_items to supabase_realtime. Existing chat and list listeners share the selected room's channel and are removed on room switch/sign-out. Refresh list remains available as a fallback.
+
+All items currently return status planned. Playback and joint completion will introduce Watching/Watched later; there is no client endpoint to mark a title watched in this increment. Active list reads currently rely on the Supabase project's default REST row cap; list pagination is a future task for large lists. The unique identity includes media type so equal movie/TV IDs do not collide. Test results from mocked services do not establish live database RLS or publication correctness.
+
 ## Remaining work and suggested order
 
-1. **TMDB — steps 1–3 implemented:** catalog/search, posters, pagination, title details, and season/episode selection. Token requests returned HTTP 200 for popular movies and TV search; the user confirmed real browsing works. Check the new details flow in the browser. Next implement the room-scoped shared list. Complete required TMDB attribution with an approved logo before publishing.
-2. **Room-scoped shared list:** tables, RLS, add/remove titles and live updates. Replace the proposed groupId contract or deliberately implement groups; do not rely on the null placeholder.
+1. **TMDB — steps 1–3 implemented:** catalog/search, posters, pagination, title details, and season/episode selection. Token requests returned HTTP 200 for popular movies and TV search; the user confirmed real browsing works. Check the new details flow in the browser. The room-scoped shared list is implemented; apply its schema and verify two-account behavior next. Complete required TMDB attribution with an approved logo before publishing.
+2. **Room-scoped shared list — implemented:** apply the updated schema, verify adds/removals in two accounts, persistence, and room isolation. The backend uses room IDs; group-based list routes remain only in Local demo. Watching/Watched transitions are not part of this increment.
 3. **Playback sessions:** persist title/episode, status, position/time anchor and revision. Authorize both members, validate commands, handle duplicate/stale commands, and recover on reconnect.
 4. **Player adapters:** Cinemaos is the intended primary provider, VidLink the fallback. Existing iframe/postMessage code is experimental; provider contracts and cross-client synchronization are unverified. Check origins, supported events, readiness, drift correction and fallback. Metadata does not guarantee a playable title.
 5. **Watched progress:** require both partners' confirmation, track episodes separately from whole series, and support undo.
@@ -379,7 +395,7 @@ A connected channel does not prove database-event delivery. The page displays da
 
 ## Known limitations and validation
 
-- There are no committed automated tests, CI workflow, or migration history. Prior checks used syntax validation, mocked auth/chat/Realtime checks, and manual two-account flows. The developer reported profiles, rooms, saved chat, and live chat working; recheck against your own Supabase project.
+- Watchlist tests are committed and run with `npm --prefix backend test`; they cover mocked backend/auth/TMDB behavior, stale frontend responses, demo isolation, and Realtime subscription cleanup. Live Supabase RLS/publication verification is still required. There is no CI workflow or versioned migration history. Prior checks used syntax validation, mocked auth/chat/Realtime checks, and manual two-account flows. The developer reported profiles, rooms, saved chat, and live chat working; recheck against your own Supabase project.
 - Rejoining an already joined full room can hit the BEFORE INSERT capacity trigger before ON CONFLICT DO NOTHING. Handle existing membership explicitly before inserting.
 - Profiles default to avatar_key='default', but the form/save route accepts moon/sun/star/heart. Align defaults. The HTML name input allows 60 characters while the API accepts 40.
 - Newly created/joined rooms set the active ID but do not repopulate the selector until reconnect. Reconnecting chooses a remembered room or the first returned room.

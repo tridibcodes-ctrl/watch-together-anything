@@ -81,6 +81,7 @@
     <section id="list" aria-labelledby="list-heading">
       <h2 id="list-heading">Our list</h2>
       <button id="refresh-list" type="button">Refresh list</button>
+      <p id="list-status" role="status" aria-live="polite">Connect and select a room to load your shared list.</p>
       <div id="list-items"></div>
     </section>
 
@@ -160,10 +161,10 @@ GET /api/titles/{movie|tv}/{tmdbId}
   → {title:{tmdbId,mediaType,title,year,overview,posterPath,genres,runtimeMinutes,status,seasons}}
 GET /api/titles/tv/{tmdbId}/seasons/{seasonNumber}
   → {tmdbId,mediaType,seasonNumber,name,episodes:[{episodeNumber,name,overview,airDate,runtimeMinutes}]}
-GET /api/groups/{id}/list
+GET /api/rooms/{roomId}/list
   → {items:[{id,title:{tmdbId,mediaType,title,year,overview},status}]}
-POST /api/groups/{id}/list ← {mediaType,tmdbId} → {item}
-DELETE /api/groups/{id}/list/{itemId} → 204
+POST /api/rooms/{roomId}/list ← {mediaType,tmdbId} → {item}
+DELETE /api/rooms/{roomId}/list/{itemId} → 204
 PATCH /api/me/profile ← {displayName,avatarKey} → {profile}
 
 GET /api/rooms/{id}/state
@@ -224,7 +225,9 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     const authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     let authSession = null;
     let chatChannel = null, chatGeneration = 0, chatTimer = null, chatRequestVersion = 0;
+    let listVersion = 0, listTimer = null;
     function stopLiveChat() {
+      listVersion++; clearTimeout(listTimer); listTimer = null;
       chatGeneration++; chatRequestVersion++;
       clearTimeout(chatTimer); chatTimer = null;
       const previous = chatChannel; chatChannel = null;
@@ -233,6 +236,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function startLiveChat() {
       stopLiveChat();
       $('messages').replaceChildren();
+      $('list-items').replaceChildren();
+      $('list-status').textContent = 'Connect and select a room to load your shared list.';
       if (mode !== 'api' || !authSession || !me?.roomId) {
         $('chat-status').textContent = mode === 'demo' ? 'Live chat is off in Local demo.' : 'Select a room to start live chat.';
         return;
@@ -248,13 +253,18 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           });
         }, 80);
       };
+      const reloadList = () => {
+        if (!current()) return;
+        clearTimeout(listTimer);
+        listTimer = setTimeout(() => { if (current()) list().catch(() => {}); }, 80);
+      };
       $('chat-status').textContent = 'Connecting live chat…';
       const channel = authClient.channel('room-chat:' + roomId + ':' + generation)
         .on('system', {}, payload => {
           if (!current() || payload.extension !== 'postgres_changes') return;
           if (payload.status === 'ok') {
             $('chat-status').textContent = 'Live chat ready. Database listener confirmed.';
-            reload();
+            reload(); reloadList();
           } else {
             $('chat-status').textContent = 'Database live updates unavailable: ' + (payload.message || payload.status) + '. Use Refresh chat.';
           }
@@ -263,18 +273,20 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           if (!current()) return;
           $('chat-status').textContent = 'Live chat receiving messages.';
           reload();
-        });
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'watch_room_list_items', filter: 'room_id=eq.' + roomId }, reloadList)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'watch_room_list_items', filter: 'room_id=eq.' + roomId }, reloadList);
       chatChannel = channel;
       channel.subscribe(status => {
         if (!current()) return;
         if (status === 'SUBSCRIBED') {
           $('chat-status').textContent = 'Channel connected; waiting for the database listener.';
-          reload();
+          reload(); reloadList();
         } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
           $('chat-status').textContent = 'Live chat disconnected. Use Refresh chat or reconnect.';
         }
       });
-      reload();
+      reload(); reloadList();
     }
     authClient.auth.onAuthStateChange((_event, session) => {
       authSession = session;
@@ -286,6 +298,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           resetCatalog();
           me = null; room = null; joined = false; unload(); controls();
           $('messages').replaceChildren();
+          $('list-items').replaceChildren();
+          $('list-status').textContent = 'Sign in to load your shared list.';
           $('chat-status').textContent = 'Sign in to use live chat.';
         }
       }
@@ -392,13 +406,39 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         }
       }
     }
-    async function list() {
-      if (!me) return;
-      const data = await request(`/api/groups/${me.groupId}/list`);
-      $('list-items').replaceChildren(...data.items.map(i => card(i.title, i)));
-      if (!data.items.length) $('list-items').append(node('p', 'Your list is empty.'));
+    function listPath() {
+      if (!me || (mode === 'api' && !me.roomId)) throw new Error('Connect and select a room first.');
+      return mode === 'demo' ? '/api/groups/' + me.groupId + '/list' : '/api/rooms/' + me.roomId + '/list';
     }
-    async function add(title) { if (!me) throw new Error('Connect and sign in first.'); await request(`/api/groups/${me.groupId}/list`, 'POST', { mediaType: title.mediaType, tmdbId: title.tmdbId }); await list(); }
+    async function list() {
+      const version = ++listVersion, roomId = me?.roomId, userId = me?.userId, currentMode = mode;
+      if (!me || (mode === 'api' && !roomId)) {
+        $('list-items').replaceChildren();
+        $('list-status').textContent = 'Connect and select a room to load your shared list.';
+        return;
+      }
+      const current = () => version === listVersion && me?.roomId === roomId && me?.userId === userId && mode === currentMode;
+      $('list-status').textContent = 'Loading shared list…';
+      try {
+        const data = await request(listPath());
+        if (!current()) return;
+        $('list-items').replaceChildren(...data.items.map(i => card(i.title, i)));
+        $('list-status').textContent = data.items.length ? data.items.length + ' title(s) in your shared list.' : 'Your list is empty. Add a movie or show from Browse.';
+      } catch (error) {
+        if (current()) $('list-status').textContent = 'Could not load list: ' + error.message;
+        throw error;
+      }
+    }
+    async function add(title) {
+      const path = listPath(), roomId = me.roomId;
+      await request(path, 'POST', { mediaType: title.mediaType, tmdbId: title.tmdbId });
+      if (me?.roomId === roomId) { await list(); say('Added to your shared list.'); }
+    }
+    async function removeListItem(itemId) {
+      const path = listPath(), roomId = me.roomId;
+      await request(path + '/' + encodeURIComponent(itemId), 'DELETE');
+      if (me?.roomId === roomId) { await list(); say('Removed from your shared list.'); }
+    }
     function closeDetails() {
       detailsVersion++; seasonVersion++; selectedTitle = null; selectedEpisodes = [];
       $('title-details').hidden = true;
@@ -480,6 +520,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       article.append(button('Details', () => showDetails(title)));
       if (!item) article.append(button('Add to our list', () => add(title)));
       article.append(button('Watch together', async () => {
+        if (mode === 'api') throw new Error('Shared playback is still being built. You can save this title to your list now.');
         if (!me) throw new Error('Connect and sign in first.');
         const media = { commandId: uuid(), mediaType: title.mediaType, tmdbId: title.tmdbId };
         if (title.mediaType === 'tv') {
@@ -494,7 +535,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (!joined) { const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); }
         await add(title); apply(await request(`/api/rooms/${me.roomId}/media`, 'POST', media)); location.hash = 'room'; say('Title selected. Click Load player when ready.');
       }));
-      if (item && item.status !== 'watched') article.append(button('Remove', async () => { await request(`/api/groups/${me.groupId}/list/${item.id}`, 'DELETE'); await list(); }));
+      if (item && item.status !== 'watched') article.append(button('Remove', () => removeListItem(item.id)));
       return article;
     }
     async function command(action, extra = {}) { apply(await request(`/api/rooms/${me.roomId}/commands`, 'POST', { commandId: uuid(), sessionId: room.sessionId, action, ...extra })); }
