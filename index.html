@@ -68,16 +68,7 @@
         <button>Join room by code</button>
       </form>
       <p id="room-invite" role="status" aria-live="polite"></p>
-      <p>Create a private room or join your partner using their invite code. Each room supports two people.</p>
-      <form id="create-room-form">
-        <label>Room name <input id="room-name" maxlength="60" value="Our room" required></label>
-        <button>Create room</button>
-      </form>
-      <form id="join-room-form">
-        <label>Invite code <input id="invite-code" maxlength="32" required></label>
-        <button>Join room by code</button>
-      </form>
-      <p id="room-invite" role="status" aria-live="polite"></p>
+
       <button id="join" type="button">Join</button>
       <button id="leave" type="button">Leave</button>
       <button id="refresh-room" type="button">Refresh room</button>
@@ -298,25 +289,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       mode = $('mode').value; base = nextBase; await connect();
     });
     form('create-room-form',async () => {
-      if(!me) throw new Error('Connect and sign in first.');
-      if(mode !== 'api') throw new Error('Switch to Backend API mode to create a room.');
-      const name=$('room-name').value.trim();
-      const result=await request('/api/rooms','POST',{name});
-      me.roomId=result.roomId;
-      $('room-invite').textContent=`Room created: ${result.name}. Share this invite code with your partner: ${result.inviteCode}`;
-      $('room-status').textContent=`${result.name} · not watching yet`;
-      say('Room created. Share the invite code with your partner.');
-    });
-    form('join-room-form',async () => {
-      if(!me) throw new Error('Connect and sign in first.');
-      if(mode !== 'api') throw new Error('Switch to Backend API mode to join a room.');
-      const inviteCode=$('invite-code').value.trim();
-      const result=await request('/api/rooms/join','POST',{inviteCode});
-      me.roomId=result.roomId;
-      $('room-invite').textContent=`Joined ${result.name}.`;
-      $('room-status').textContent=`${result.name} · not watching yet`;
-      say('Joined your partner’s room.');
-    });    form('create-room-form',async () => {
       if(!me) throw new Error('Connect and sign in first.');
       if(mode !== 'api') throw new Error('Switch to Backend API mode to create a room.');
       const name=$('room-name').value.trim();
