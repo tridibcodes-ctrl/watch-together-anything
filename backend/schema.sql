@@ -24,25 +24,22 @@ on public.profiles for update to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
 
--- The app has one private room. Its membership table is limited to two users.
+-- Each couple gets a separate room. Each room is limited to two members.
 create table if not exists public.watch_rooms (
   id uuid primary key default gen_random_uuid(),
-  singleton boolean not null default true unique check (singleton),
   name text not null default 'Our room',
   created_at timestamptz not null default now()
 );
-
-insert into public.watch_rooms (singleton)
-values (true)
-on conflict (singleton) do nothing;
+alter table public.watch_rooms drop column if exists singleton;
+alter table public.watch_rooms add column if not exists created_by uuid references auth.users(id) on delete set null;
 
 create table if not exists public.watch_room_members (
   room_id uuid not null references public.watch_rooms(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   joined_at timestamptz not null default now(),
-  primary key (room_id, user_id),
-  unique (user_id)
+  primary key (room_id, user_id)
 );
+alter table public.watch_room_members drop constraint if exists watch_room_members_user_id_key;
 
 create or replace function public.enforce_room_capacity()
 returns trigger
@@ -101,5 +98,4 @@ create policy "Room members can read membership"
 on public.watch_room_members for select to authenticated
 using (public.is_room_member(room_id));
 
--- Add the two Auth user IDs to watch_room_members from the SQL Editor.
--- Keep the IDs out of this shared migration file.
+-- Room creation and invite endpoints will add members dynamically. Keep user IDs out of this schema.
