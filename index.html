@@ -54,9 +54,7 @@
           </select></label>
         <button>Search</button>
       </form>
-      <p>For TV playback, select a season and episode before clicking Watch together.</p>
-      <label>Season <input id="season" type="number" min="0" value="1"></label>
-      <label>Episode <input id="episode" type="number" min="1" value="1"></label>
+      <p>Open Details to read more and choose a TV episode.</p>
       <div id="catalog"></div>
       <p id="catalog-status" role="status" aria-live="polite">Search or browse popular titles.</p>
       <nav aria-label="Catalog pages">
@@ -64,6 +62,19 @@
         <span id="catalog-page">No page loaded</span>
         <button id="catalog-next" type="button" disabled>Next</button>
       </nav>
+      <section id="title-details" aria-labelledby="details-heading" hidden>
+        <h3 id="details-heading">Title details</h3>
+        <button id="close-details" type="button">Close details</button>
+        <p id="details-status" role="status" aria-live="polite"></p>
+        <div id="details-content"></div>
+        <div id="episode-picker" hidden>
+          <label>Season <select id="season" disabled></select></label>
+          <label>Episode <select id="episode" disabled></select></label>
+          <p id="episode-status" role="status" aria-live="polite"></p>
+          <div id="episode-content"></div>
+          <button id="retry-season" type="button" hidden>Retry season</button>
+        </div>
+      </section>
       <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
     </section>
 
@@ -144,7 +155,11 @@
   → {profile:{userId,displayName,avatarKey},groupId,roomId}
 GET /api/catalog?type=movie&amp;page=1
 GET /api/search?type=movie&amp;q=...&amp;page=1
-  → {items:[{tmdbId,mediaType,title,year,overview}],page,hasMore}
+  → {items:[{tmdbId,mediaType,title,year,overview,posterPath}],page,hasMore}
+GET /api/titles/{movie|tv}/{tmdbId}
+  → {title:{tmdbId,mediaType,title,year,overview,posterPath,genres,runtimeMinutes,status,seasons}}
+GET /api/titles/tv/{tmdbId}/seasons/{seasonNumber}
+  → {tmdbId,mediaType,seasonNumber,name,episodes:[{episodeNumber,name,overview,airDate,runtimeMinutes}]}
 GET /api/groups/{id}/list
   → {items:[{id,title:{tmdbId,mediaType,title,year,overview},status}]}
 POST /api/groups/{id}/list ← {mediaType,tmdbId} → {item}
@@ -192,6 +207,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     const savedConnection = preference('multiplay.connection');
     let mode = savedConnection?.mode === 'api' ? 'api' : 'demo', base = savedConnection?.base || '', me, room, joined = false, frame, loadedKey;
     let catalogState = null, catalogLoading = false, catalogVersion = 0;
+    let selectedTitle = null, selectedEpisodes = [], detailsVersion = 0, seasonVersion = 0;
     $('mode').value = mode; $('backend').value = base;
     const samples = [
       { tmdbId: 155, mediaType: 'movie', title: 'The Dark Knight', year: '2008', overview: 'A new threat arrives in Gotham.' },
@@ -344,6 +360,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       controls();
     }
     function resetCatalog() {
+      closeDetails();
       catalogVersion++; catalogState = null; catalogLoading = false;
       $('catalog').replaceChildren();
       $('catalog-page').textContent = 'No page loaded';
@@ -382,6 +399,70 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (!data.items.length) $('list-items').append(node('p', 'Your list is empty.'));
     }
     async function add(title) { if (!me) throw new Error('Connect and sign in first.'); await request(`/api/groups/${me.groupId}/list`, 'POST', { mediaType: title.mediaType, tmdbId: title.tmdbId }); await list(); }
+    function closeDetails() {
+      detailsVersion++; seasonVersion++; selectedTitle = null; selectedEpisodes = [];
+      $('title-details').hidden = true;
+      $('season').replaceChildren(); $('episode').replaceChildren();
+      $('season').disabled = true; $('episode').disabled = true;
+    }
+    async function showDetails(title) {
+      closeDetails();
+      const version = detailsVersion;
+      $('title-details').hidden = false;
+      $('details-heading').textContent = title.title;
+      $('details-status').textContent = 'Loading details…';
+      $('details-content').replaceChildren(); $('episode-content').replaceChildren();
+      $('episode-picker').hidden = true;
+      try {
+        const data = await request(`/api/titles/${title.mediaType}/${title.tmdbId}`);
+        if (version !== detailsVersion) return;
+        selectedTitle = data.title;
+        $('details-content').append(node('p', `${selectedTitle.year || 'Year unknown'} · ${selectedTitle.status || 'Status unknown'}`),
+          node('p', selectedTitle.overview || 'No summary available.'),
+          node('p', `Genres: ${selectedTitle.genres.join(', ') || 'Unknown'}`));
+        if (selectedTitle.runtimeMinutes) $('details-content').append(node('p', `Runtime: ${selectedTitle.runtimeMinutes} minutes`));
+        $('details-status').textContent = mode === 'demo' ? 'Local demo: sample metadata.' : 'Details loaded.';
+        if (selectedTitle.mediaType === 'tv') {
+          $('episode-picker').hidden = false;
+          for (const season of selectedTitle.seasons) $('season').add(new Option(`${season.name} (${season.episodeCount} episodes)`, season.seasonNumber));
+          $('season').disabled = !selectedTitle.seasons.length;
+          if (!selectedTitle.seasons.length) { $('episode-status').textContent = 'No seasons available.'; return; }
+          const first = selectedTitle.seasons.find(season => season.seasonNumber > 0) || selectedTitle.seasons[0];
+          $('season').value = String(first.seasonNumber);
+          await loadSeason();
+        }
+      } catch (error) {
+        if (version === detailsVersion) $('details-status').textContent = `Could not load details: ${error.message} Open Details again to retry.`;
+      }
+    }
+    async function loadSeason() {
+      if (!selectedTitle || selectedTitle.mediaType !== 'tv') return;
+      const version = ++seasonVersion, title = selectedTitle, season = Number($('season').value);
+      selectedEpisodes = [];
+      $('episode').replaceChildren(); $('episode').disabled = true;
+      $('episode-content').replaceChildren(); $('retry-season').hidden = true;
+      $('episode-status').textContent = 'Loading episodes…';
+      try {
+        const data = await request(`/api/titles/tv/${title.tmdbId}/seasons/${season}`);
+        if (version !== seasonVersion || selectedTitle !== title) return;
+        selectedEpisodes = data.episodes;
+        for (const episode of selectedEpisodes) $('episode').add(new Option(`${episode.episodeNumber}. ${episode.name}`, episode.episodeNumber));
+        $('episode').disabled = !selectedEpisodes.length;
+        $('episode-status').textContent = selectedEpisodes.length ? `${selectedEpisodes.length} episodes. Choose an episode, then use Watch together on this title.` : 'No episodes available for this season.';
+        showEpisode();
+      } catch (error) {
+        if (version !== seasonVersion || selectedTitle !== title) return;
+        $('episode-status').textContent = `Could not load episodes: ${error.message}`;
+        $('retry-season').hidden = false;
+      }
+    }
+    function showEpisode() {
+      $('episode-content').replaceChildren();
+      const episode = selectedEpisodes.find(item => item.episodeNumber === Number($('episode').value));
+      if (!episode) return;
+      $('episode-content').append(node('h4', episode.name), node('p', episode.overview || 'No episode summary available.'),
+        node('p', `Air date: ${episode.airDate || 'Unknown'}${episode.runtimeMinutes ? ' · ' + episode.runtimeMinutes + ' minutes' : ''}`));
+    }
     function card(title, item) {
       const article = document.createElement('article'); article.append(node('h3', title.title), node('p', `${title.year || ''} · ${title.mediaType}${item ? ' · ' + item.status : ''}`), node('p', title.overview || ''));
       const poster = node('p', 'Poster unavailable.');
@@ -394,11 +475,20 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         poster.replaceChildren(image);
       }
       article.prepend(poster);
+      article.append(button('Details', () => showDetails(title)));
       if (!item) article.append(button('Add to our list', () => add(title)));
       article.append(button('Watch together', async () => {
         if (!me) throw new Error('Connect and sign in first.');
         const media = { commandId: uuid(), mediaType: title.mediaType, tmdbId: title.tmdbId };
-        if (title.mediaType === 'tv') { media.season = Number($('season').value); media.episode = Number($('episode').value); if (!Number.isInteger(media.season) || media.season < 0 || !Number.isInteger(media.episode) || media.episode < 1) throw new Error('Enter a valid season and episode.'); }
+        if (title.mediaType === 'tv') {
+          if (selectedTitle?.tmdbId !== title.tmdbId || selectedTitle?.mediaType !== 'tv') {
+            await showDetails(title);
+            say('Choose an episode in Details, then click Watch together on the same show.');
+            return;
+          }
+          media.season = Number($('season').value); media.episode = Number($('episode').value);
+          if ($('episode').disabled || !selectedEpisodes.some(episode => episode.episodeNumber === media.episode)) throw new Error('Choose an available episode in Details first.');
+        }
         if (!joined) { const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); }
         await add(title); apply(await request(`/api/rooms/${me.roomId}/media`, 'POST', media)); location.hash = 'room'; say('Title selected. Click Load player when ready.');
       }));
@@ -484,6 +574,10 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     form('search-form', () => catalog()); bind('refresh-list', list);
     bind('catalog-previous', () => catalog(catalogState.page - 1, catalogState));
     bind('catalog-next', () => catalog(catalogState.page + 1, catalogState));
+    bind('close-details', closeDetails);
+    $('season').onchange = () => act(loadSeason);
+    $('episode').onchange = showEpisode;
+    bind('retry-season', loadSeason);
     bind('join', async () => { const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); await chat(); });
     bind('leave', async () => { await request(`/api/rooms/${me.roomId}/leave`, 'POST', {}); joined = false; unload(); apply(await request(`/api/rooms/${me.roomId}/state`)); });
     bind('refresh-room', async () => { if (!me) throw new Error('Connect first.'); apply(await request(`/api/rooms/${me.roomId}/state`)); });
@@ -513,6 +607,16 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (path === '/api/me') return { profile: { ...demo.profile }, groupId: 'demo-group', roomId: 'demo-room' };
       if (path === '/api/me/profile') { Object.assign(demo.profile, body); return { profile: { ...demo.profile } }; }
       if (path.startsWith('/api/catalog?') || path.startsWith('/api/search?')) { const q = new URL(path, 'http://demo').searchParams; return { items: samples.filter(t => t.mediaType === q.get('type') && t.title.toLowerCase().includes((q.get('q') || '').toLowerCase())), page: 1, hasMore: false }; }
+      const titlePath = /^\/api\/titles\/(movie|tv)\/(\d+)(?:\/seasons\/(\d+))?$/.exec(path);
+      if (titlePath) {
+        const title = samples.find(item => item.mediaType === titlePath[1] && item.tmdbId === Number(titlePath[2]));
+        if (!title) throw new Error('Unknown demo title.');
+        if (titlePath[3] !== undefined) {
+          if (title.mediaType !== 'tv' || Number(titlePath[3]) !== 1) throw new Error('Unknown demo season.');
+          return { tmdbId: title.tmdbId, mediaType: 'tv', seasonNumber: 1, name: 'Sample season', episodes: [1, 2].map(episodeNumber => ({ episodeNumber, name: `Sample episode ${episodeNumber}`, overview: 'Local demo episode data; not fetched from TMDB.', airDate: null, runtimeMinutes: null })) };
+        }
+        return { title: { ...title, genres: [], runtimeMinutes: null, status: 'Demo', seasons: title.mediaType === 'tv' ? [{ seasonNumber: 1, name: 'Sample season', episodeCount: 2, airDate: null }] : [] } };
+      }
       if (path.includes('/list')) {
         if (method === 'DELETE') { demo.list = demo.list.filter(i => i.id !== path.split('/').pop()); return null; }
         if (method === 'POST') { let item = demo.list.find(i => i.title.tmdbId === body.tmdbId && i.title.mediaType === body.mediaType); if (!item) { const title = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); if (!title) throw new Error('Unknown demo title.'); item = { id: uuid(), title, status: 'planned' }; demo.list.push(item); } return { item }; }

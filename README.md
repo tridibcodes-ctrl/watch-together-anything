@@ -2,7 +2,7 @@
 
 A watch-together app for couples. Many couples can use the system; each private room has **at most two members**. User IDs are added through room creation and invitation, never hard-coded in the schema. An account can currently belong to multiple rooms.
 
-This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved chat, and live chat work. Movie discovery, shared lists, playback synchronization, watched tracking, and calls are still being built.
+This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, and TMDB movie/TV discovery with details and episode selection are implemented. Shared lists, playback synchronization, watched tracking, and calls are still being built.
 
 Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target design](#complete-target-design--planned-features) · [Local setup](#setup-from-a-fresh-clone) · [Implemented APIs](#implemented-http-api) · [Remaining work](#remaining-work-and-suggested-order)
 
@@ -20,7 +20,7 @@ The intended experience lets both partners control playback, maintain a shared m
 | Joined-room list/selection | Done | Member-only list; connection and selection preferences use local storage. |
 | Saved text chat | Done | Latest 100 messages; verified sender; duplicate client message IDs ignored on retry. |
 | Live chat | Done | Room-filtered Supabase Postgres Changes events trigger message reloads; manual refresh remains available. |
-| TMDB browsing/search | Steps 1–2 implemented | Authenticated movie/TV browsing and search, posters, Previous/Next pagination, loading/empty/error states. Live token requests and user browsing confirmed; details pending. |
+| TMDB browsing/search | Steps 1–3 implemented | Browsing/search, posters, pagination, title details, season/episode selection, and loading/error states. Shared list/playback remain separate work. |
 | Shared movie/show list | Pending | Frontend demo/contract scaffolding only; no real list table or endpoints. |
 | Shared playback | Pending | No persisted session/command API or verified player synchronization. Both members should have control. |
 | Watched completion | Pending | Needs both-member confirmation, episode progress, and undo. |
@@ -46,7 +46,7 @@ flowchart LR
 - **Backend:** Node native http, fetch, fs, and path; CommonJS modules. The installed dependency is @supabase/server for token verification. No framework or ORM.
 - **Database:** Supabase PostgreSQL. Node forwards the user's token to REST/RPC calls, so Row Level Security (RLS) applies. This implementation does not use a service-role/secret key.
 - **Realtime:** Browser subscriptions listen for inserts in the selected room. Events cause an authenticated API reload; PostgreSQL retains the messages. RLS controls readable records.
-- **Catalog:** Node proxies TMDB popular movie/TV lists and search with a server-only token. Browse renders posters and supports pagination. Details are planned.
+- **Catalog:** Node proxies TMDB popular movie/TV lists, search, title details, and TV seasons/episodes with a server-only token. Browse renders posters, pagination, and a details panel.
 - **Planned:** Room-scoped shared lists, playback sessions, external-player adapters, and WebRTC calls.
 
 ### Main flows
@@ -63,7 +63,7 @@ Think of the app as three connected pieces: **a catalog to choose something, a p
 
 | Responsibility | Service/component | Example |
 | --- | --- | --- |
-| Find and describe a title | TMDB, through our Node API | Search for a movie and show its poster/year; season/episode discovery is planned |
+| Find and describe a title | TMDB, through our Node API | Search for a title, read its details, and choose a TV season/episode |
 | Save the couple's choices and activity | Supabase PostgreSQL | Shared list, chat, membership, playback session, completion confirmations |
 | Show the video | A supported external player — integration unverified | Embed the selected movie/episode in each partner's browser |
 | Keep both partners coordinated | Our backend, database, Realtime, and player adapter — planned | Accept Pause, update room state, tell both controllable players to pause |
@@ -71,7 +71,7 @@ Think of the app as three connected pieces: **a catalog to choose something, a p
 
 ### What TMDB gives the frontend
 
-TMDB supplies catalog metadata and images. The integration uses popular lists and search for movie/show names, poster references, summaries, dates, and identifiers. Details and season/episode information are planned. Browse uses real results in Backend API mode and keeps the sample catalog in Local demo. See [TMDB's introduction](https://developer.themoviedb.org/docs/getting-started) and [search-to-details workflow](https://developer.themoviedb.org/docs/search-and-query-for-details).
+TMDB supplies catalog metadata and images. The integration uses popular lists and search for movie/show names, poster references, summaries, dates, and identifiers. Details include genres, status, movie runtime, and TV seasons/episodes. Browse uses real results in Backend API mode and keeps the sample catalog in Local demo. See [TMDB's introduction](https://developer.themoviedb.org/docs/getting-started) and [search-to-details workflow](https://developer.themoviedb.org/docs/search-and-query-for-details).
 
 A shared-list item should refer to a title using `(mediaType, tmdbId)`, such as `('movie', 155)`, instead of treating a typed title as its identity. Movie and TV IDs are separate namespaces, so store the type too. For an episode, also store season and episode numbers. This avoids ambiguity between remakes, translations, and titles that share a name.
 
@@ -88,14 +88,18 @@ Cinemaos is the intended primary embed provider; VidLink is the fallback. They b
 1. Browser requests `/api/search?type=movie&q=...&page=1`, or `/api/catalog?type=tv&page=1` for browsing.
 2. Node validates parameters and calls TMDB with `TMDB_READ_ACCESS_TOKEN` from its environment. The token is never sent to browser code.
 3. Node normalizes TMDB's movie/TV response fields to our title shape: ID, type, title, year, overview, poster reference, and pagination information.
-4. The frontend renders title cards, posters, and page navigation. Details and saving a title's identity in the selected room's list are planned; the catalog is not copied into Supabase.
+4. The frontend renders title cards, posters, page navigation, and details. Saving a title's identity in the selected room's list is planned; the catalog is not copied into Supabase.
 5. Planned: selecting Watch creates/updates the room's playback session. A separate provider adapter attempts to load the matching title/episode.
 
 Step 1 implements catalog/search, parameter validation, a 10-second upstream timeout, safe error messages, upstream rate-limit handling, and a 60-second in-memory metadata cache capped at 100 entries. Authentication runs before cache reads. No arbitrary upstream URLs are accepted.
 
 Step 2 adds poster rendering and Previous/Next navigation to Browse. Images load lazily from TMDB's image CDN at `w185`, following [TMDB's image URL format](https://developer.themoviedb.org/docs/image-basics); missing/failed images show “Poster unavailable.” Search submission starts at page 1. Navigation keeps the last submitted type/query even if the inputs have been edited. Buttons are disabled while loading and at page boundaries. Loading, empty, and error states appear beside Browse. Failed requests keep previous results; older responses cannot replace a newer search or results after reconnect/sign-out. Local demo stays available with its existing single-page samples. The required TMDB notice is displayed; an approved TMDB logo is still needed before publishing.
 
-To check step 2, hard-refresh `http://127.0.0.1:3000/`, sign in, choose Backend API, leave Backend origin blank, and Connect. Submit an empty Movie search to browse popular titles, use Next/Previous, then search for a movie or TV show and confirm the page resets to 1. Verify posters, page boundaries, and no-result searches. Switch to Local demo and confirm sample browsing still works. Details and season/episode selection are the next TMDB step; Add/Watch still depend on unfinished list/playback APIs in Backend API mode.
+To check step 2, hard-refresh `http://127.0.0.1:3000/`, sign in, choose Backend API, leave Backend origin blank, and Connect. Submit an empty Movie search to browse popular titles, use Next/Previous, then search for a movie or TV show and confirm the page resets to 1. Verify posters, page boundaries, and no-result searches. Switch to Local demo and confirm sample browsing still works. Add/Watch still depend on unfinished list/playback APIs in Backend API mode.
+
+Step 3 adds a Details button to every title card. The panel shows the overview, genres, release year, status, and movie runtime. TV titles load seasons from TMDB, including specials (season 0); selecting a season fetches its episodes. Episode selection shows the name, summary, air date, and runtime when available. Metadata can include future episodes and does not guarantee playable availability. Opening another title, closing details, reconnecting, or signing out invalidates pending responses. Failed season requests have a Retry button. Episode selection belongs to the opened show; Watch together on another show opens that show's details first. Local demo uses explicitly labelled sample seasons/episodes.
+
+To check step 3, restart Node and hard-refresh the page. Connect in Backend API mode, search for a movie, and open Details. Then search TV for Breaking Bad, open Details, switch seasons, and select an episode. Confirm the episode text changes. Try switching titles/seasons while requests load, closing details, and Local demo. Selection is local to this browser; shared list persistence and playback sessions are still pending. No database migration is needed.
 
 TMDB's developer API is free for noncommercial use with attribution; commercial use needs separate arrangements. Before publishing, include an approved TMDB logo and the required notice: “This product uses the TMDB API but is not endorsed or certified by TMDB.” Review current terms if the app starts generating revenue. [TMDB FAQ and attribution requirements](https://developer.themoviedb.org/docs/faq)
 
@@ -112,7 +116,7 @@ This section explains the intended end-to-end system. The implementation table a
 | Identity | Supabase Auth | Account/session lifecycle; each person has their own identity. |
 | Durable state | Supabase PostgreSQL with RLS | Transactions, room membership, saved lists, messages, progress, and authoritative playback snapshots. |
 | Change delivery | Supabase Realtime | Notify the selected room's clients about committed state changes. It does not replace persistent state. |
-| Catalog | TMDB through Node | Browsing, search, posters, and consistent title IDs; details planned. |
+| Catalog | TMDB through Node | Browsing, search, posters, title details, season/episode selection, and consistent title IDs. |
 | Playback | Controllable external-player adapter — planned/unverified | Each browser plays its own stream; our backend coordinates controls instead of relaying the film. |
 | Calls | Native WebRTC and authenticated signaling — planned | A two-person room can use one peer connection; add STUN/TURN connectivity as needed. |
 | Source collaboration | GitHub/GitHub Desktop | Share code and documentation. Git synchronization does not migrate a Supabase database or copy local environment files. |
@@ -207,7 +211,7 @@ These are design proposals, not installed schema or implemented routes. Keep aut
 | Session completion confirmations | One confirmation per member for the current session/media |
 | Call/presence state | Short-lived room readiness, call IDs, participants and signaling |
 
-The implemented catalog endpoints are GET /api/catalog and GET /api/search; details/season/episode endpoints are planned. New shared-list APIs should be room-scoped. Playback needs snapshot, media selection, control, and presence endpoints; completion needs confirm/undo operations. Call signaling may use authenticated Realtime rather than a REST route per ICE candidate. Define exact response shapes and update the starter's contract before implementing each feature; the old group-based mock routes are not a finalized backend contract.
+The implemented catalog endpoints are GET /api/catalog, GET /api/search, GET /api/titles/{movie|tv}/{tmdbId}, and GET /api/titles/tv/{tmdbId}/seasons/{seasonNumber}. New shared-list APIs should be room-scoped. Playback needs snapshot, media selection, control, and presence endpoints; completion needs confirm/undo operations. Call signaling may use authenticated Realtime rather than a REST route per ICE candidate. Define exact response shapes and update the starter's contract before implementing each feature; the old group-based mock routes are not a finalized backend contract.
 
 ### Nonfunctional requirements and tradeoffs
 
@@ -309,6 +313,8 @@ Content-Type is needed for JSON bodies. Errors use an object with an error strin
 | GET | /api/health | — | {status:"ok"} |
 | GET | /api/catalog?type=movie&page=1 | type: movie or tv | {items:[{tmdbId,mediaType,title,year,overview,posterPath}],page,hasMore} |
 | GET | /api/search?type=tv&q=Breaking%20Bad&page=1 | type: movie or tv; q: trimmed 1–200 characters | Same shape as catalog |
+| GET | /api/titles/{movie\|tv}/{tmdbId} | Positive 32-bit TMDB ID | {title:{...catalogTitle,genres:[string],runtimeMinutes,status,seasons:[{seasonNumber,name,episodeCount,airDate}]}} |
+| GET | /api/titles/tv/{tmdbId}/seasons/{seasonNumber} | Season 0–9999 (0 is specials) | {tmdbId,mediaType:"tv",seasonNumber,name,episodes:[{episodeNumber,name,overview,airDate,runtimeMinutes}]} |
 | GET | /api/me | — | {userId,profile:{displayName,avatarKey},groupId:null,roomId:null} |
 | PATCH | /api/me/profile | {displayName,avatarKey} | {profile:{displayName,avatarKey}} |
 | GET | /api/rooms | — | {items:[{roomId,name,inviteCode}]} |
@@ -320,6 +326,8 @@ Content-Type is needed for JSON bodies. Errors use an object with an error strin
 Profile names are trimmed and limited to 1–40 characters. Avatar keys: moon, sun, star, heart. Messages are trimmed and limited to 1–2000 characters; client message IDs must be UUIDs. Chat reads return the latest 100 messages in chronological order, without older-message pagination.
 
 Catalog uses TMDB's popular lists; search uses its movie/TV search endpoints. Both require sign-in but no room membership. `page` defaults to 1 and accepts integers from 1 to 500. Results use English (`en-US`); `year` is a string (empty when unknown), and `posterPath` is a TMDB image reference or null. Search excludes adult titles. Errors: 400 invalid parameters, 401 invalid session, 503 missing TMDB configuration, 429 upstream rate limit, 502 upstream failure, 504 upstream timeout. TMDB response bodies and credentials are never returned to the browser.
+
+Details and season routes use the same authentication, bounded cache, timeout, and upstream error handling. Missing titles/seasons return 404. Details include genre names, movie runtime in minutes or null, and an empty seasons array for movies. Episodes include nullable airDate/runtimeMinutes. All endpoints return normalized metadata rather than raw upstream response bodies. Step 3 syntax and mocked backend/frontend checks passed, including specials, ID validation, auth/cache, missing/malformed upstream data, episode display, and stale responses after closing details. Live browser validation of the new panel remains to be completed.
 
 Contract caveats:
 
@@ -361,7 +369,7 @@ A connected channel does not prove database-event delivery. The page displays da
 
 ## Remaining work and suggested order
 
-1. **TMDB — in progress:** steps 1–2 add backend popular catalog/search plus frontend posters, pagination, and loading/empty/error states. Token requests returned HTTP 200 for popular movies and TV search; the user confirmed real browsing works. Next add movie/TV details and season/episode selection. Complete required TMDB attribution with an approved logo before publishing.
+1. **TMDB — steps 1–3 implemented:** catalog/search, posters, pagination, title details, and season/episode selection. Token requests returned HTTP 200 for popular movies and TV search; the user confirmed real browsing works. Check the new details flow in the browser. Next implement the room-scoped shared list. Complete required TMDB attribution with an approved logo before publishing.
 2. **Room-scoped shared list:** tables, RLS, add/remove titles and live updates. Replace the proposed groupId contract or deliberately implement groups; do not rely on the null placeholder.
 3. **Playback sessions:** persist title/episode, status, position/time anchor and revision. Authorize both members, validate commands, handle duplicate/stale commands, and recover on reconnect.
 4. **Player adapters:** Cinemaos is the intended primary provider, VidLink the fallback. Existing iframe/postMessage code is experimental; provider contracts and cross-client synchronization are unverified. Check origins, supported events, readiness, drift correction and fallback. Metadata does not guarantee a playable title.
