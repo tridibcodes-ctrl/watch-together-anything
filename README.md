@@ -278,13 +278,13 @@ A fresh clone does not include the previous checkout's .env or installed depende
 3. Start Node from the repository root:
 
    ```powershell
-   node --env-file=.env backend/server.js
+   npm --prefix backend run dev
    ```
 
 4. Open [http://127.0.0.1:3000/](http://127.0.0.1:3000/), sign in, select **Backend API**, leave Backend origin blank, and Connect.
 5. Create a room. In a second browser/profile, sign into a second account and join by code.
 
-Restart Node after backend or .env edits. Hard-refresh after HTML changes; Node reads the file for each page request. Keep a consistent origin: localhost and 127.0.0.1 have separate browser session/preference storage.
+The dev command uses Node watch mode to reload imported backend files when edited. Restart it after .env edits. Use `npm --prefix backend start` for a run without automatic reload. Hard-refresh after HTML changes; Node reads the file for each page request. Keep a consistent origin: localhost and 127.0.0.1 have separate browser session/preference storage.
 
 The schema supports reapplication during development through IF NOT EXISTS and policy/function replacement. It also contains legacy upgrades dropping the old singleton room flag and obsolete unique-user constraint. Review before applying to populated environments. There is no versioned migration runner.
 

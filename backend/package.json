@@ -1,5 +1,9 @@
 {
   "dependencies": {
     "@supabase/server": "^1.9.2"
+  },
+  "scripts": {
+    "start": "node --env-file=../.env server.js",
+    "dev": "node --watch --env-file=../.env server.js"
   }
 }
