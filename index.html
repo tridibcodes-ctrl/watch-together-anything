@@ -1,27 +1,34 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Multiplay</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
+
 <body>
-  <!-- No CSS, libraries, build tools, or backend implementation. -->
+
   <header>
     <h1>Multiplay</h1>
     <p>One room. Two people.</p>
-    <nav><a href="#browse">Browse</a> | <a href="#list">Our list</a> | <a href="#room">Room</a> | <a href="#profile">Profile</a></nav>
+    <nav><a href="#browse">Browse</a> | <a href="#list">Our list</a> | <a href="#room">Room</a> | <a
+        href="#profile">Profile</a></nav>
   </header>
 
   <section aria-labelledby="connection-heading">
     <h2 id="connection-heading">Connection</h2>
     <form id="connection-form">
-      <label>Mode <select id="mode"><option value="demo">Local demo</option><option value="api">Backend API</option></select></label>
+      <label>Mode <select id="mode">
+          <option value="demo">Local demo</option>
+          <option value="api">Backend API</option>
+        </select></label>
       <label>Backend origin <input id="backend" type="url" placeholder="http://localhost:3000"></label>
       <button>Connect</button>
     </form>
-    <p>Demo uses sample data in memory. For API mode, serve this file using your editor's local server. Enter the backend origin without /api; leave blank for the same origin.</p>
+    <p>Demo uses sample data in memory. For API mode, serve this file using your editor's local server. Enter the
+      backend origin without /api; leave blank for the same origin.</p>
     <p id="status" role="status" aria-live="polite"></p>
   </section>
 
@@ -41,7 +48,10 @@
       <h2 id="browse-heading">Browse</h2>
       <form id="search-form">
         <label>Search <input id="query" type="search"></label>
-        <label>Type <select id="media-type"><option value="movie">Movie</option><option value="tv">TV</option></select></label>
+        <label>Type <select id="media-type">
+            <option value="movie">Movie</option>
+            <option value="tv">TV</option>
+          </select></label>
         <button>Search</button>
       </form>
       <p>For TV playback, select a season and episode before clicking Watch together.</p>
@@ -59,7 +69,9 @@
     <section id="room" aria-labelledby="room-heading">
       <h2 id="room-heading">Room</h2>
       <p>Create a private room or join your partner using their invite code. Each room supports two people.</p>
-      <label>Your rooms <select id="room-select"><option value="">No room selected</option></select></label>
+      <label>Your rooms <select id="room-select">
+          <option value="">No room selected</option>
+        </select></label>
       <form id="create-room-form">
         <label>Room name <input id="room-name" maxlength="60" value="Our room" required></label>
         <button>Create room</button>
@@ -81,10 +93,14 @@
       <label>Position in seconds <input id="position" type="number" min="0" value="0"></label>
       <button id="seek" type="button">Seek together</button>
       <p>
-        <label>Provider <select id="provider"><option value="cinemaos">Cinemaos</option><option value="vidlink">VidLink</option></select></label>
+        <label>Provider <select id="provider">
+            <option value="cinemaos">Cinemaos</option>
+            <option value="vidlink">VidLink</option>
+          </select></label>
         <button id="switch-provider" type="button">Switch for both</button>
       </p>
-      <p>VidLink synchronization is unverified; shared controls are disabled for it. Use the app's shared buttons for Cinemaos. Native iframe controls remain local.</p>
+      <p>VidLink synchronization is unverified; shared controls are disabled for it. Use the app's shared buttons for
+        Cinemaos. Native iframe controls remain local.</p>
       <button id="complete" type="button">We finished together</button>
       <button id="undo" type="button">Undo completion</button>
       <p>Voice/video needs WebRTC signaling from the backend; it is not implemented in this HTML starter.</p>
@@ -103,14 +119,20 @@
       <h2 id="profile-heading">Profile</h2>
       <form id="profile-form">
         <label>Display name <input id="display-name" maxlength="60" required></label>
-        <label>Avatar <select id="avatar"><option value="moon">Moon</option><option value="sun">Sun</option><option value="star">Star</option><option value="heart">Heart</option></select></label>
+        <label>Avatar <select id="avatar">
+            <option value="moon">Moon</option>
+            <option value="sun">Sun</option>
+            <option value="star">Star</option>
+            <option value="heart">Heart</option>
+          </select></label>
         <button>Save</button>
       </form>
     </section>
 
     <details>
       <summary>Backend contract</summary>
-      <p>Authenticated API calls should send the Supabase access token as a Bearer token. The backend must still enforce room membership and permissions. Keep secret keys out of this file.</p>
+      <p>Authenticated API calls should send the Supabase access token as a Bearer token. The backend must still enforce
+        room membership and permissions. Keep secret keys out of this file.</p>
       <pre>GET /api/me
   → {profile:{userId,displayName,avatarKey},groupId,roomId}
 GET /api/catalog?type=movie&amp;page=1
@@ -145,7 +167,9 @@ Shared-list status: planned | watching | watched.
 Serialize playback commands and deduplicate UUIDs on the backend.
 Completion must verify both users' confirmations; one request is not proof.
 TV completion applies to an episode, not automatically the entire series.</pre>
-      <p>This page uses manual refresh for room state and chat. Add authenticated realtime subscriptions when your backend is ready. External playback, readiness, drift correction, automatic completion, pagination, and call integration require further work.</p>
+      <p>This page uses manual refresh for room state and chat. Add authenticated realtime subscriptions when your
+        backend is ready. External playback, readiness, drift correction, automatic completion, pagination, and call
+        integration require further work.</p>
     </details>
   </main>
 
@@ -162,13 +186,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     let mode = savedConnection?.mode === 'api' ? 'api' : 'demo', base = savedConnection?.base || '', me, room, joined = false, frame, loadedKey;
     $('mode').value = mode; $('backend').value = base;
     const samples = [
-      {tmdbId:155,mediaType:'movie',title:'The Dark Knight',year:'2008',overview:'A new threat arrives in Gotham.'},
-      {tmdbId:27205,mediaType:'movie',title:'Inception',year:'2010',overview:'An unusual assignment inside dreams.'},
-      {tmdbId:1396,mediaType:'tv',title:'Breaking Bad',year:'2008',overview:'A chemistry teacher makes a life-changing choice.'}
+      { tmdbId: 155, mediaType: 'movie', title: 'The Dark Knight', year: '2008', overview: 'A new threat arrives in Gotham.' },
+      { tmdbId: 27205, mediaType: 'movie', title: 'Inception', year: '2010', overview: 'An unusual assignment inside dreams.' },
+      { tmdbId: 1396, mediaType: 'tv', title: 'Breaking Bad', year: '2008', overview: 'A chemistry teacher makes a life-changing choice.' }
     ];
     const demo = {
-      profile:{userId:'demo-user',displayName:'Your name',avatarKey:'moon'}, list:[], messages:[],
-      room:{roomId:'demo-room',sessionId:null,media:null,provider:'cinemaos',status:'paused',positionMs:0,anchorAt:new Date().toISOString(),revision:0}
+      profile: { userId: 'demo-user', displayName: 'Your name', avatarKey: 'moon' }, list: [], messages: [],
+      room: { roomId: 'demo-room', sessionId: null, media: null, provider: 'cinemaos', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: 0 }
     };
     const uuid = () => crypto.randomUUID();
     const SUPABASE_URL = "https://hxfqojvwfsytqergqywt.supabase.co";
@@ -180,7 +204,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       chatGeneration++; chatRequestVersion++;
       clearTimeout(chatTimer); chatTimer = null;
       const previous = chatChannel; chatChannel = null;
-      if (previous) authClient.removeChannel(previous).catch(() => {});
+      if (previous) authClient.removeChannel(previous).catch(() => { });
     }
     function startLiveChat() {
       stopLiveChat();
@@ -211,7 +235,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
             $('chat-status').textContent = 'Database live updates unavailable: ' + (payload.message || payload.status) + '. Use Refresh chat.';
           }
         })
-        .on('postgres_changes', {event:'INSERT',schema:'public',table:'watch_room_messages',filter:'room_id=eq.' + roomId}, () => {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'watch_room_messages', filter: 'room_id=eq.' + roomId }, () => {
           if (!current()) return;
           $('chat-status').textContent = 'Live chat receiving messages.';
           reload();
@@ -222,7 +246,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (status === 'SUBSCRIBED') {
           $('chat-status').textContent = 'Channel connected; waiting for the database listener.';
           reload();
-        } else if (['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)) {
+        } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
           $('chat-status').textContent = 'Live chat disconnected. Use Refresh chat or reconnect.';
         }
       });
@@ -259,19 +283,19 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('sign-out').disabled = false;
     }
     function say(text) { $('status').textContent = text; }
-    function node(tag,text) { const item = document.createElement(tag); item.textContent = text; return item; }
-    function button(text,fn) { const b = node('button',text); b.type = 'button'; b.onclick = () => act(fn,b); return b; }
-    async function act(fn,b) { if (b) b.disabled = true; try { await fn(); } catch(e) { say(e.message); } finally { if(b) b.disabled = false; controls(); } }
+    function node(tag, text) { const item = document.createElement(tag); item.textContent = text; return item; }
+    function button(text, fn) { const b = node('button', text); b.type = 'button'; b.onclick = () => act(fn, b); return b; }
+    async function act(fn, b) { if (b) b.disabled = true; try { await fn(); } catch (e) { say(e.message); } finally { if (b) b.disabled = false; controls(); } }
     function controls() {
       const active = !!(joined && room?.sessionId);
-      for (const id of ['load-player','switch-provider','complete','undo']) $(id).disabled = !active;
-      for (const id of ['play','pause','seek']) $(id).disabled = !active || room.provider !== 'cinemaos';
+      for (const id of ['load-player', 'switch-provider', 'complete', 'undo']) $(id).disabled = !active;
+      for (const id of ['play', 'pause', 'seek']) $(id).disabled = !active || room.provider !== 'cinemaos';
       $('join').disabled = !me || joined; $('leave').disabled = !joined;
       $('chat-form').querySelector('button').disabled = mode === 'api' ? !me?.roomId : !joined;
     }
     // The only HTTP function. Change endpoint paths here or in the callers below.
-    async function request(path,method='GET',body) {
-      if(mode === 'demo') return mock(path,method,body);
+    async function request(path, method = 'GET', body) {
+      if (mode === 'demo') return mock(path, method, body);
       const headers = {};
       if (body !== undefined) headers['Content-Type'] = 'application/json';
       const { data: sessionData, error: sessionError } = await authClient.auth.getSession();
@@ -281,66 +305,66 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       headers.Authorization = `Bearer ${authSession.access_token}`;
       headers.apikey = SUPABASE_PUBLISHABLE_KEY;
       const response = await fetch(base + path, {
-        method,headers,signal:AbortSignal.timeout(12000),
-        ...(body === undefined ? {} : {body:JSON.stringify(body)})
+        method, headers, signal: AbortSignal.timeout(12000),
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
       });
-      if(response.status === 204) return null;
+      if (response.status === 204) return null;
       const data = await response.json().catch(() => null);
-      if(!response.ok) throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || `HTTP ${response.status}`);
-      if(data === null) throw new Error('Expected JSON from the backend.');
+      if (!response.ok) throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || `HTTP ${response.status}`);
+      if (data === null) throw new Error('Expected JSON from the backend.');
       return data;
     }
-    function position(s=room) { return s ? Math.max(0,s.positionMs + (s.status === 'playing' ? Date.now() + (s.offset || 0) - Date.parse(s.anchorAt) : 0)) : 0; }
+    function position(s = room) { return s ? Math.max(0, s.positionMs + (s.status === 'playing' ? Date.now() + (s.offset || 0) - Date.parse(s.anchorAt) : 0)) : 0; }
     function unload() { frame = null; loadedKey = null; $('player').replaceChildren(); }
     function sync() {
-      if(!frame || room.provider !== 'cinemaos') return;
-      frame.contentWindow.postMessage({command:'seek',time:position()/1000},'https://cinemaos.tech');
-      frame.contentWindow.postMessage({command:room.status === 'playing' ? 'play' : 'pause'},'https://cinemaos.tech');
+      if (!frame || room.provider !== 'cinemaos') return;
+      frame.contentWindow.postMessage({ command: 'seek', time: position() / 1000 }, 'https://cinemaos.tech');
+      frame.contentWindow.postMessage({ command: room.status === 'playing' ? 'play' : 'pause' }, 'https://cinemaos.tech');
     }
     function apply(next) {
-      if(!next || !Number.isInteger(next.revision)) throw new Error('Invalid room snapshot.');
-      if(room && next.revision < room.revision) return;
+      if (!next || !Number.isInteger(next.revision)) throw new Error('Invalid room snapshot.');
+      if (room && next.revision < room.revision) return;
       const changed = !room || next.revision !== room.revision;
-      room = {...next,offset:Date.parse(next.serverTime)-Date.now() || 0};
-      if(loadedKey && loadedKey !== `${room.sessionId}:${room.provider}`) unload();
+      room = { ...next, offset: Date.parse(next.serverTime) - Date.now() || 0 };
+      if (loadedKey && loadedKey !== `${room.sessionId}:${room.provider}`) unload();
       $('room-status').textContent = `${room.media?.title || 'No title selected'} · ${room.status} · ${room.provider} · ${joined ? 'joined' : 'not joined'}`;
       $('provider').value = room.provider;
-      if(changed && joined) sync();
+      if (changed && joined) sync();
       controls();
     }
     async function catalog() {
       const type = $('media-type').value, q = $('query').value.trim();
-      const data = await request(`/api/${q ? 'search' : 'catalog'}?type=${type}&page=1${q ? '&q='+encodeURIComponent(q) : ''}`);
+      const data = await request(`/api/${q ? 'search' : 'catalog'}?type=${type}&page=1${q ? '&q=' + encodeURIComponent(q) : ''}`);
       $('catalog').replaceChildren(...data.items.map(t => card(t)));
-      if(!data.items.length) $('catalog').append(node('p','No results.'));
+      if (!data.items.length) $('catalog').append(node('p', 'No results.'));
     }
     async function list() {
-      if(!me) return;
+      if (!me) return;
       const data = await request(`/api/groups/${me.groupId}/list`);
-      $('list-items').replaceChildren(...data.items.map(i => card(i.title,i)));
-      if(!data.items.length) $('list-items').append(node('p','Your list is empty.'));
+      $('list-items').replaceChildren(...data.items.map(i => card(i.title, i)));
+      if (!data.items.length) $('list-items').append(node('p', 'Your list is empty.'));
     }
-    async function add(title) { if(!me) throw new Error('Connect and sign in first.'); await request(`/api/groups/${me.groupId}/list`,'POST',{mediaType:title.mediaType,tmdbId:title.tmdbId}); await list(); }
-    function card(title,item) {
-      const article = document.createElement('article'); article.append(node('h3',title.title),node('p',`${title.year || ''} · ${title.mediaType}${item ? ' · '+item.status : ''}`),node('p',title.overview || ''));
-      if(!item) article.append(button('Add to our list',() => add(title)));
-      article.append(button('Watch together',async () => {
-        if(!me) throw new Error('Connect and sign in first.');
-        const media = {commandId:uuid(),mediaType:title.mediaType,tmdbId:title.tmdbId};
-        if(title.mediaType === 'tv') { media.season = Number($('season').value); media.episode = Number($('episode').value); if(!Number.isInteger(media.season)||media.season<0||!Number.isInteger(media.episode)||media.episode<1) throw new Error('Enter a valid season and episode.'); }
-        if(!joined) { const state = await request(`/api/rooms/${me.roomId}/join`,'POST',{}); joined = true; apply(state); }
-        await add(title); apply(await request(`/api/rooms/${me.roomId}/media`,'POST',media)); location.hash = 'room'; say('Title selected. Click Load player when ready.');
+    async function add(title) { if (!me) throw new Error('Connect and sign in first.'); await request(`/api/groups/${me.groupId}/list`, 'POST', { mediaType: title.mediaType, tmdbId: title.tmdbId }); await list(); }
+    function card(title, item) {
+      const article = document.createElement('article'); article.append(node('h3', title.title), node('p', `${title.year || ''} · ${title.mediaType}${item ? ' · ' + item.status : ''}`), node('p', title.overview || ''));
+      if (!item) article.append(button('Add to our list', () => add(title)));
+      article.append(button('Watch together', async () => {
+        if (!me) throw new Error('Connect and sign in first.');
+        const media = { commandId: uuid(), mediaType: title.mediaType, tmdbId: title.tmdbId };
+        if (title.mediaType === 'tv') { media.season = Number($('season').value); media.episode = Number($('episode').value); if (!Number.isInteger(media.season) || media.season < 0 || !Number.isInteger(media.episode) || media.episode < 1) throw new Error('Enter a valid season and episode.'); }
+        if (!joined) { const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); }
+        await add(title); apply(await request(`/api/rooms/${me.roomId}/media`, 'POST', media)); location.hash = 'room'; say('Title selected. Click Load player when ready.');
       }));
-      if(item && item.status !== 'watched') article.append(button('Remove',async () => { await request(`/api/groups/${me.groupId}/list/${item.id}`,'DELETE'); await list(); }));
+      if (item && item.status !== 'watched') article.append(button('Remove', async () => { await request(`/api/groups/${me.groupId}/list/${item.id}`, 'DELETE'); await list(); }));
       return article;
     }
-    async function command(action,extra={}) { apply(await request(`/api/rooms/${me.roomId}/commands`,'POST',{commandId:uuid(),sessionId:room.sessionId,action,...extra})); }
+    async function command(action, extra = {}) { apply(await request(`/api/rooms/${me.roomId}/commands`, 'POST', { commandId: uuid(), sessionId: room.sessionId, action, ...extra })); }
     async function chat() {
-      if(!me || !me.roomId) throw new Error('Connect and select a room first.');
-      const selectedRoomId=me.roomId, selectedUserId=me.userId, version=++chatRequestVersion;
+      if (!me || !me.roomId) throw new Error('Connect and select a room first.');
+      const selectedRoomId = me.roomId, selectedUserId = me.userId, version = ++chatRequestVersion;
       const data = await request('/api/rooms/' + selectedRoomId + '/messages');
-      if(me?.roomId !== selectedRoomId || me?.userId !== selectedUserId || version !== chatRequestVersion) return;
-      $('messages').replaceChildren(...data.items.map(m => node('li',m.senderName + ': ' + m.body)));
+      if (me?.roomId !== selectedRoomId || me?.userId !== selectedUserId || version !== chatRequestVersion) return;
+      $('messages').replaceChildren(...data.items.map(m => node('li', m.senderName + ': ' + m.body)));
     }
     async function connect() {
       stopLiveChat();
@@ -348,14 +372,14 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('catalog').replaceChildren(); $('list-items').replaceChildren(); $('messages').replaceChildren();
       me = await request('/api/me'); $('display-name').value = me.profile.displayName; $('avatar').value = me.profile.avatarKey;
       if (mode === 'api') {
-        const roomData=await request('/api/rooms');
-        const select=$('room-select');
-        select.replaceChildren(new Option('Choose a room',''));
-        for(const item of roomData.items) select.add(new Option(item.name,item.roomId));
-        me.rooms=roomData.items;
+        const roomData = await request('/api/rooms');
+        const select = $('room-select');
+        select.replaceChildren(new Option('Choose a room', ''));
+        for (const item of roomData.items) select.add(new Option(item.name, item.roomId));
+        me.rooms = roomData.items;
         const rememberedRoom = preference('multiplay.room.' + me.userId);
         me.roomId = roomData.items.find(item => item.roomId === rememberedRoom)?.roomId || roomData.items[0]?.roomId || null;
-        select.value=me.roomId || '';
+        select.value = me.roomId || '';
         const selected = roomData.items.find(item => item.roomId === me.roomId);
         $('room-invite').textContent = selected ? 'Selected ' + selected.name + '. Invite code: ' + selected.inviteCode : 'No room selected.';
         startLiveChat();
@@ -366,14 +390,14 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       await catalog(); await list(); apply(await request(`/api/rooms/${me.roomId}/state`));
       say(mode === 'demo' ? 'Local demo ready. Changes reset on reload; no backend is running.' : 'Backend connected.');
     }
-    function bind(id,fn) { $(id).onclick = e => act(fn,e.currentTarget); }
-    function form(id,fn) { $(id).onsubmit = e => { e.preventDefault(); act(fn,e.submitter); }; }
-    form('connection-form',async () => {
-      const nextBase = $('backend').value.trim().replace(/\/$/,'');
-      if(nextBase) { const u = new URL(nextBase); if(!['http:','https:'].includes(u.protocol)||u.username||u.password||u.pathname!=='/'||u.search||u.hash) throw new Error('Enter only the backend origin, without /api.'); }
-      if($('mode').value === 'api' && location.protocol === 'file:') throw new Error('Serve this file using your editor’s local server before using API mode.');
+    function bind(id, fn) { $(id).onclick = e => act(fn, e.currentTarget); }
+    function form(id, fn) { $(id).onsubmit = e => { e.preventDefault(); act(fn, e.submitter); }; }
+    form('connection-form', async () => {
+      const nextBase = $('backend').value.trim().replace(/\/$/, '');
+      if (nextBase) { const u = new URL(nextBase); if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.pathname !== '/' || u.search || u.hash) throw new Error('Enter only the backend origin, without /api.'); }
+      if ($('mode').value === 'api' && location.protocol === 'file:') throw new Error('Serve this file using your editor’s local server before using API mode.');
       mode = $('mode').value; base = nextBase;
-      preference('multiplay.connection', {mode, base});
+      preference('multiplay.connection', { mode, base });
       await connect();
     });
     $('room-select').onchange = () => {
@@ -387,69 +411,69 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('room-status').textContent = selected ? selected.name + ' · not watching yet' : 'No room selected.';
       startLiveChat();
     };
-    form('create-room-form',async () => {
-      if(!me) throw new Error('Connect and sign in first.');
-      if(mode !== 'api') throw new Error('Switch to Backend API mode to create a room.');
-      const name=$('room-name').value.trim();
-      const result=await request('/api/rooms','POST',{name});
-      me.roomId=result.roomId;
+    form('create-room-form', async () => {
+      if (!me) throw new Error('Connect and sign in first.');
+      if (mode !== 'api') throw new Error('Switch to Backend API mode to create a room.');
+      const name = $('room-name').value.trim();
+      const result = await request('/api/rooms', 'POST', { name });
+      me.roomId = result.roomId;
       startLiveChat();
-      $('room-invite').textContent=`Room created: ${result.name}. Share this invite code with your partner: ${result.inviteCode}`;
-      $('room-status').textContent=`${result.name} · not watching yet`;
+      $('room-invite').textContent = `Room created: ${result.name}. Share this invite code with your partner: ${result.inviteCode}`;
+      $('room-status').textContent = `${result.name} · not watching yet`;
       say('Room created. Share the invite code with your partner.');
     });
-    form('join-room-form',async () => {
-      if(!me) throw new Error('Connect and sign in first.');
-      if(mode !== 'api') throw new Error('Switch to Backend API mode to join a room.');
-      const inviteCode=$('invite-code').value.trim();
-      const result=await request('/api/rooms/join','POST',{inviteCode});
-      me.roomId=result.roomId;
+    form('join-room-form', async () => {
+      if (!me) throw new Error('Connect and sign in first.');
+      if (mode !== 'api') throw new Error('Switch to Backend API mode to join a room.');
+      const inviteCode = $('invite-code').value.trim();
+      const result = await request('/api/rooms/join', 'POST', { inviteCode });
+      me.roomId = result.roomId;
       startLiveChat();
-      $('room-invite').textContent=`Joined ${result.name}.`;
-      $('room-status').textContent=`${result.name} · not watching yet`;
+      $('room-invite').textContent = `Joined ${result.name}.`;
+      $('room-status').textContent = `${result.name} · not watching yet`;
       say('Joined your partner’s room.');
     });
-    form('search-form',catalog); bind('refresh-list',list);
-    bind('join',async () => { const state = await request(`/api/rooms/${me.roomId}/join`,'POST',{}); joined = true; apply(state); await chat(); });
-    bind('leave',async () => { await request(`/api/rooms/${me.roomId}/leave`,'POST',{}); joined = false; unload(); apply(await request(`/api/rooms/${me.roomId}/state`)); });
-    bind('refresh-room',async () => { if(!me) throw new Error('Connect first.'); apply(await request(`/api/rooms/${me.roomId}/state`)); });
-    bind('play',() => command('play')); bind('pause',() => command('pause'));
-    bind('seek',() => { const seconds=Number($('position').value); if(!Number.isFinite(seconds)||seconds<0) throw new Error('Enter a valid position.'); return command('seek',{targetPositionMs:Math.round(seconds*1000)}); });
-    bind('switch-provider',() => command('provider',{provider:$('provider').value}));
-    bind('load-player',async () => {
-      const m=room.media, origin=room.provider === 'cinemaos' ? 'https://cinemaos.tech' : 'https://vidlink.pro';
-      if(!Number.isInteger(m.tmdbId)||m.tmdbId<1||!['movie','tv'].includes(m.mediaType)) throw new Error('Invalid media.');
-      if(m.mediaType==='tv'&&(!Number.isInteger(m.season)||m.season<0||!Number.isInteger(m.episode)||m.episode<1)) throw new Error('Invalid episode.');
+    form('search-form', catalog); bind('refresh-list', list);
+    bind('join', async () => { const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); await chat(); });
+    bind('leave', async () => { await request(`/api/rooms/${me.roomId}/leave`, 'POST', {}); joined = false; unload(); apply(await request(`/api/rooms/${me.roomId}/state`)); });
+    bind('refresh-room', async () => { if (!me) throw new Error('Connect first.'); apply(await request(`/api/rooms/${me.roomId}/state`)); });
+    bind('play', () => command('play')); bind('pause', () => command('pause'));
+    bind('seek', () => { const seconds = Number($('position').value); if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Enter a valid position.'); return command('seek', { targetPositionMs: Math.round(seconds * 1000) }); });
+    bind('switch-provider', () => command('provider', { provider: $('provider').value }));
+    bind('load-player', async () => {
+      const m = room.media, origin = room.provider === 'cinemaos' ? 'https://cinemaos.tech' : 'https://vidlink.pro';
+      if (!Number.isInteger(m.tmdbId) || m.tmdbId < 1 || !['movie', 'tv'].includes(m.mediaType)) throw new Error('Invalid media.');
+      if (m.mediaType === 'tv' && (!Number.isInteger(m.season) || m.season < 0 || !Number.isInteger(m.episode) || m.episode < 1)) throw new Error('Invalid episode.');
       const path = room.provider === 'cinemaos' ? `/player/${m.tmdbId}` : `/${m.mediaType}/${m.tmdbId}`;
-      const url=new URL(path+(m.mediaType==='tv' ? `/${m.season}/${m.episode}` : ''),origin);
-      url.searchParams.set(room.provider==='cinemaos' ? 'startTime' : 'startAt',String(Math.floor(position()/1000)));
-      url.searchParams.set('autoPlay','false'); url.searchParams.set('autoplay','false'); url.searchParams.set('autoNext','false'); url.searchParams.set('nextbutton','false');
-      unload(); frame=document.createElement('iframe'); frame.src=url.href; frame.title=m.title; frame.width='640'; frame.height='360'; frame.allow='autoplay; fullscreen; encrypted-media'; frame.referrerPolicy='strict-origin-when-cross-origin';
-      $('player').append(frame); loadedKey=`${room.sessionId}:${room.provider}`; say('External player loaded. Playback depends on the provider.');
+      const url = new URL(path + (m.mediaType === 'tv' ? `/${m.season}/${m.episode}` : ''), origin);
+      url.searchParams.set(room.provider === 'cinemaos' ? 'startTime' : 'startAt', String(Math.floor(position() / 1000)));
+      url.searchParams.set('autoPlay', 'false'); url.searchParams.set('autoplay', 'false'); url.searchParams.set('autoNext', 'false'); url.searchParams.set('nextbutton', 'false');
+      unload(); frame = document.createElement('iframe'); frame.src = url.href; frame.title = m.title; frame.width = '640'; frame.height = '360'; frame.allow = 'autoplay; fullscreen; encrypted-media'; frame.referrerPolicy = 'strict-origin-when-cross-origin';
+      $('player').append(frame); loadedKey = `${room.sessionId}:${room.provider}`; say('External player loaded. Playback depends on the provider.');
     });
-    bind('refresh-chat',chat);
-    form('chat-form',async () => { const body=$('message').value.trim(); if(!body || (mode === 'api' ? !me?.roomId : !joined)) throw new Error('Select a room and enter a message.'); await request(`/api/rooms/${me.roomId}/messages`,'POST',{clientMessageId:uuid(),body}); $('message').value=''; await chat(); });
-    form('profile-form',async () => { if(!me) throw new Error('Connect first.'); const displayName=$('display-name').value.trim(); if(!displayName) throw new Error('Enter your name.'); const result=await request('/api/me/profile','PATCH',{displayName,avatarKey:$('avatar').value}); me.profile=result.profile; say('Profile saved.'); });
-    bind('complete',async () => { const result=await request(`/api/sessions/${room.sessionId}/complete`,'POST',{commandId:uuid(),confirmed:true}); say(result.message || (result.completed ? 'Moved to Watched.' : 'Waiting for your partner.')); await list(); });
-    bind('undo',async () => { await request(`/api/sessions/${room.sessionId}/undo-completion`,'POST',{commandId:uuid()}); await list(); say('Completion correction saved.'); });
+    bind('refresh-chat', chat);
+    form('chat-form', async () => { const body = $('message').value.trim(); if (!body || (mode === 'api' ? !me?.roomId : !joined)) throw new Error('Select a room and enter a message.'); await request(`/api/rooms/${me.roomId}/messages`, 'POST', { clientMessageId: uuid(), body }); $('message').value = ''; await chat(); });
+    form('profile-form', async () => { if (!me) throw new Error('Connect first.'); const displayName = $('display-name').value.trim(); if (!displayName) throw new Error('Enter your name.'); const result = await request('/api/me/profile', 'PATCH', { displayName, avatarKey: $('avatar').value }); me.profile = result.profile; say('Profile saved.'); });
+    bind('complete', async () => { const result = await request(`/api/sessions/${room.sessionId}/complete`, 'POST', { commandId: uuid(), confirmed: true }); say(result.message || (result.completed ? 'Moved to Watched.' : 'Waiting for your partner.')); await list(); });
+    bind('undo', async () => { await request(`/api/sessions/${room.sessionId}/undo-completion`, 'POST', { commandId: uuid() }); await list(); say('Completion correction saved.'); });
 
     // Local mock of the same endpoints. No persistent accounts or actual multi-user sync.
-    function mock(path,method,body) {
-      const snapshot=() => ({...structuredClone(demo.room),serverTime:new Date().toISOString()});
-      if(path==='/api/me') return {profile:{...demo.profile},groupId:'demo-group',roomId:'demo-room'};
-      if(path==='/api/me/profile') { Object.assign(demo.profile,body); return {profile:{...demo.profile}}; }
-      if(path.startsWith('/api/catalog?')||path.startsWith('/api/search?')) { const q=new URL(path,'http://demo').searchParams; return {items:samples.filter(t=>t.mediaType===q.get('type')&&t.title.toLowerCase().includes((q.get('q')||'').toLowerCase())),page:1,hasMore:false}; }
-      if(path.includes('/list')) {
-        if(method==='DELETE') { demo.list=demo.list.filter(i=>i.id!==path.split('/').pop()); return null; }
-        if(method==='POST') { let item=demo.list.find(i=>i.title.tmdbId===body.tmdbId&&i.title.mediaType===body.mediaType); if(!item) { const title=samples.find(t=>t.tmdbId===body.tmdbId&&t.mediaType===body.mediaType); if(!title) throw new Error('Unknown demo title.'); item={id:uuid(),title,status:'planned'}; demo.list.push(item); } return {item}; }
-        return {items:demo.list};
+    function mock(path, method, body) {
+      const snapshot = () => ({ ...structuredClone(demo.room), serverTime: new Date().toISOString() });
+      if (path === '/api/me') return { profile: { ...demo.profile }, groupId: 'demo-group', roomId: 'demo-room' };
+      if (path === '/api/me/profile') { Object.assign(demo.profile, body); return { profile: { ...demo.profile } }; }
+      if (path.startsWith('/api/catalog?') || path.startsWith('/api/search?')) { const q = new URL(path, 'http://demo').searchParams; return { items: samples.filter(t => t.mediaType === q.get('type') && t.title.toLowerCase().includes((q.get('q') || '').toLowerCase())), page: 1, hasMore: false }; }
+      if (path.includes('/list')) {
+        if (method === 'DELETE') { demo.list = demo.list.filter(i => i.id !== path.split('/').pop()); return null; }
+        if (method === 'POST') { let item = demo.list.find(i => i.title.tmdbId === body.tmdbId && i.title.mediaType === body.mediaType); if (!item) { const title = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); if (!title) throw new Error('Unknown demo title.'); item = { id: uuid(), title, status: 'planned' }; demo.list.push(item); } return { item }; }
+        return { items: demo.list };
       }
-      if(path.endsWith('/messages')) { if(method==='POST') { const message={id:body.clientMessageId,senderName:demo.profile.displayName,body:body.body,createdAt:new Date().toISOString()}; if(!demo.messages.some(m=>m.id===message.id)) demo.messages.push(message); return {message}; } return {items:demo.messages}; }
-      if(path.endsWith('/media')) { const t=samples.find(t=>t.tmdbId===body.tmdbId&&t.mediaType===body.mediaType); demo.room={...demo.room,sessionId:uuid(),media:{...body,title:t.title},provider:'cinemaos',status:'paused',positionMs:0,anchorAt:new Date().toISOString(),revision:demo.room.revision+1}; const item=demo.list.find(i=>i.title.tmdbId===t.tmdbId&&i.title.mediaType===t.mediaType); if(item.status!=='watched') item.status='watching'; return snapshot(); }
-      if(path.endsWith('/commands')) { if(body.sessionId!==demo.room.sessionId) throw new Error('Stale session.'); demo.room.positionMs=body.action==='seek' ? body.targetPositionMs : position(demo.room); if(body.action==='play'||body.action==='pause') demo.room.status=body.action==='play' ? 'playing' : 'paused'; if(body.action==='provider') { demo.room.provider=body.provider; demo.room.status='paused'; } demo.room.anchorAt=new Date().toISOString(); demo.room.revision++; return snapshot(); }
-      if(path.endsWith('/complete')||path.endsWith('/undo-completion')) { const completed=path.endsWith('/complete'); if(demo.room.media?.mediaType==='movie') demo.list.filter(i=>i.title.tmdbId===demo.room.media.tmdbId&&i.title.mediaType==='movie').forEach(i=>i.status=completed ? 'watched' : 'watching'); return {completed,message:'Demo updated. Your backend must verify shared completion; TV updates only the selected episode.'}; }
-      if(path.endsWith('/leave')) return null;
-      if(path.endsWith('/join')||path.endsWith('/state')) return snapshot();
+      if (path.endsWith('/messages')) { if (method === 'POST') { const message = { id: body.clientMessageId, senderName: demo.profile.displayName, body: body.body, createdAt: new Date().toISOString() }; if (!demo.messages.some(m => m.id === message.id)) demo.messages.push(message); return { message }; } return { items: demo.messages }; }
+      if (path.endsWith('/media')) { const t = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); demo.room = { ...demo.room, sessionId: uuid(), media: { ...body, title: t.title }, provider: 'cinemaos', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: demo.room.revision + 1 }; const item = demo.list.find(i => i.title.tmdbId === t.tmdbId && i.title.mediaType === t.mediaType); if (item.status !== 'watched') item.status = 'watching'; return snapshot(); }
+      if (path.endsWith('/commands')) { if (body.sessionId !== demo.room.sessionId) throw new Error('Stale session.'); demo.room.positionMs = body.action === 'seek' ? body.targetPositionMs : position(demo.room); if (body.action === 'play' || body.action === 'pause') demo.room.status = body.action === 'play' ? 'playing' : 'paused'; if (body.action === 'provider') { demo.room.provider = body.provider; demo.room.status = 'paused'; } demo.room.anchorAt = new Date().toISOString(); demo.room.revision++; return snapshot(); }
+      if (path.endsWith('/complete') || path.endsWith('/undo-completion')) { const completed = path.endsWith('/complete'); if (demo.room.media?.mediaType === 'movie') demo.list.filter(i => i.title.tmdbId === demo.room.media.tmdbId && i.title.mediaType === 'movie').forEach(i => i.status = completed ? 'watched' : 'watching'); return { completed, message: 'Demo updated. Your backend must verify shared completion; TV updates only the selected episode.' }; }
+      if (path.endsWith('/leave')) return null;
+      if (path.endsWith('/join') || path.endsWith('/state')) return snapshot();
       throw new Error('Demo endpoint not implemented.');
     }
     form('sign-in-form', async () => {
@@ -483,6 +507,5 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     act(initialize);
   </script>
 </body>
+
 </html>
-
-
