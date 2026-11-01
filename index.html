@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Multiplay</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <!-- No CSS, libraries, build tools, or backend implementation. -->
@@ -24,6 +25,17 @@
     <p id="status" role="status" aria-live="polite"></p>
   </section>
 
+  <section aria-labelledby="auth-heading">
+    <h2 id="auth-heading">Sign in</h2>
+    <p>Use an account already created for this private project. Public sign-up is not enabled here.</p>
+    <form id="sign-in-form">
+      <label>Email <input id="auth-email" type="email" autocomplete="username" required></label>
+      <label>Password <input id="auth-password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Sign in and check backend</button>
+    </form>
+    <button id="sign-out" type="button" disabled>Sign out</button>
+    <p id="auth-status" role="status" aria-live="polite">Not signed in.</p>
+  </section>
   <main>
     <section id="browse" aria-labelledby="browse-heading">
       <h2 id="browse-heading">Browse</h2>
@@ -85,7 +97,7 @@
 
     <details>
       <summary>Backend contract</summary>
-      <p>All requests use session cookies. The backend must authenticate the caller, enforce the two-member limit, validate membership, and protect mutations against CSRF. Cross-origin development needs explicit credentialed CORS. Do not put secrets in this file.</p>
+      <p>Authenticated API calls should send the Supabase access token as a Bearer token. The backend must still enforce room membership and permissions. Keep secret keys out of this file.</p>
       <pre>GET /api/me
   → {profile:{userId,displayName,avatarKey},groupId,roomId}
 GET /api/catalog?type=movie&amp;page=1
@@ -138,6 +150,27 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       room:{roomId:'demo-room',sessionId:null,media:null,provider:'cinemaos',status:'paused',positionMs:0,anchorAt:new Date().toISOString(),revision:0}
     };
     const uuid = () => crypto.randomUUID();
+    const SUPABASE_URL = "https://hxfqojvwfsytqergqywt.supabase.co";
+    const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Qed9LYz9rBBnUK3sMhrQwg_OzznRQO6";
+    const authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    let authSession = null;
+    async function checkBackendIdentity(session) {
+      const host = location.hostname;
+      if (!['127.0.0.1', 'localhost', '::1'].includes(host) || location.port !== '3000') {
+        throw new Error('Open this page at http://127.0.0.1:3000/ while the local backend is running.');
+      }
+      const response = await fetch('/api/me', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+        },
+        cache: 'no-store',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Backend returned HTTP ${response.status}`);
+      $('auth-status').textContent = `Signed in. Backend verified user: ${data.userId}`;
+      $('sign-out').disabled = false;
+    }
     function say(text) { $('status').textContent = text; }
     function node(tag,text) { const item = document.createElement(tag); item.textContent = text; return item; }
     function button(text,fn) { const b = node('button',text); b.type = 'button'; b.onclick = () => act(fn,b); return b; }
@@ -152,9 +185,14 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     // The only HTTP function. Change endpoint paths here or in the callers below.
     async function request(path,method='GET',body) {
       if(mode === 'demo') return mock(path,method,body);
+      const headers = {};
+      if (body !== undefined) headers['Content-Type'] = 'application/json';
+      if (authSession) {
+        headers.Authorization = `Bearer ${authSession.access_token}`;
+        headers.apikey = SUPABASE_PUBLISHABLE_KEY;
+      }
       const response = await fetch(base + path, {
-        method,credentials:'include',signal:AbortSignal.timeout(12000),
-        headers:body === undefined ? {} : {'Content-Type':'application/json'},
+        method,headers,signal:AbortSignal.timeout(12000),
         ...(body === undefined ? {} : {body:JSON.stringify(body)})
       });
       if(response.status === 204) return null;
@@ -271,6 +309,28 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if(path.endsWith('/join')||path.endsWith('/state')) return snapshot();
       throw new Error('Demo endpoint not implemented.');
     }
+    form('sign-in-form', async () => {
+      const email = $('auth-email').value.trim();
+      const password = $('auth-password').value;
+      const { data, error } = await authClient.auth.signInWithPassword({ email, password });
+      if (error) throw new Error(error.message);
+      authSession = data.session;
+      await checkBackendIdentity(authSession);
+    });
+    bind('sign-out', async () => {
+      const { error } = await authClient.auth.signOut();
+      if (error) throw new Error(error.message);
+      authSession = null;
+      $('sign-out').disabled = true;
+      $('auth-status').textContent = 'Signed out.';
+    });
+    authClient.auth.getSession().then(async ({data, error}) => {
+      if (error) throw error;
+      authSession = data.session;
+      if (authSession) await checkBackendIdentity(authSession);
+    }).catch(error => {
+      $('auth-status').textContent = `Session check failed: ${error.message}`;
+    });
     act(connect);
   </script>
 </body>
