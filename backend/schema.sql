@@ -23,3 +23,83 @@ create policy "Users can update their own profile"
 on public.profiles for update to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
+
+-- The app has one private room. Its membership table is limited to two users.
+create table if not exists public.watch_rooms (
+  id uuid primary key default gen_random_uuid(),
+  singleton boolean not null default true unique check (singleton),
+  name text not null default 'Our room',
+  created_at timestamptz not null default now()
+);
+
+insert into public.watch_rooms (singleton)
+values (true)
+on conflict (singleton) do nothing;
+
+create table if not exists public.watch_room_members (
+  room_id uuid not null references public.watch_rooms(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  primary key (room_id, user_id),
+  unique (user_id)
+);
+
+create or replace function public.enforce_room_capacity()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  member_count integer;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(new.room_id::text, 0)
+  );
+  select count(*) into member_count
+  from public.watch_room_members
+  where room_id = new.room_id;
+  if member_count >= 2 then
+    raise exception 'This room already has two members';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists watch_room_members_capacity on public.watch_room_members;
+create trigger watch_room_members_capacity
+before insert on public.watch_room_members
+for each row execute function public.enforce_room_capacity();
+
+create or replace function public.is_room_member(target_room_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.watch_room_members m
+    where m.room_id = target_room_id
+      and m.user_id = (select auth.uid())
+  );
+$$;
+
+revoke all on function public.is_room_member(uuid) from public;
+grant execute on function public.is_room_member(uuid) to authenticated;
+
+alter table public.watch_rooms enable row level security;
+alter table public.watch_room_members enable row level security;
+
+drop policy if exists "Room members can read the room" on public.watch_rooms;
+create policy "Room members can read the room"
+on public.watch_rooms for select to authenticated
+using (public.is_room_member(id));
+
+drop policy if exists "Room members can read membership" on public.watch_room_members;
+create policy "Room members can read membership"
+on public.watch_room_members for select to authenticated
+using (public.is_room_member(room_id));
+
+-- Add the two Auth user IDs to watch_room_members from the SQL Editor.
+-- Keep the IDs out of this shared migration file.
