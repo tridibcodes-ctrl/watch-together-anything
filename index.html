@@ -202,12 +202,25 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       };
       $('chat-status').textContent = 'Connecting live chat…';
       const channel = authClient.channel('room-chat:' + roomId + ':' + generation)
-        .on('postgres_changes', {event:'INSERT',schema:'public',table:'watch_room_messages',filter:'room_id=eq.' + roomId}, reload);
+        .on('system', {}, payload => {
+          if (!current() || payload.extension !== 'postgres_changes') return;
+          if (payload.status === 'ok') {
+            $('chat-status').textContent = 'Live chat ready. Database listener confirmed.';
+            reload();
+          } else {
+            $('chat-status').textContent = 'Database live updates unavailable: ' + (payload.message || payload.status) + '. Use Refresh chat.';
+          }
+        })
+        .on('postgres_changes', {event:'INSERT',schema:'public',table:'watch_room_messages',filter:'room_id=eq.' + roomId}, () => {
+          if (!current()) return;
+          $('chat-status').textContent = 'Live chat receiving messages.';
+          reload();
+        });
       chatChannel = channel;
       channel.subscribe(status => {
         if (!current()) return;
         if (status === 'SUBSCRIBED') {
-          $('chat-status').textContent = 'Live chat connected.';
+          $('chat-status').textContent = 'Channel connected; waiting for the database listener.';
           reload();
         } else if (['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)) {
           $('chat-status').textContent = 'Live chat disconnected. Use Refresh chat or reconnect.';
