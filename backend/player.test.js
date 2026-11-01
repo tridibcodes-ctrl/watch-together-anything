@@ -24,7 +24,7 @@ test('provider URLs retain the exact movie or episode and use provider-specific 
 test('VidLink events require active frame, exact origin, media identity and finite position', () => {
   const frame = { contentWindow: {} };
   const event = { origin: 'https://vidlink.pro', source: frame.contentWindow, data: { type: 'PLAYER_EVENT', data: { event: 'timeupdate', mtmdbId: 1396, mediaType: 'tv', season: 0, episode: 1, currentTime: 90 } } };
-  assert.deepEqual(playbackEvent(event, frame, tv, 'vidlink'), { event: 'timeupdate', seconds: 90 });
+  assert.deepEqual(playbackEvent(event, frame, tv, 'vidlink'), { event: 'timeupdate', seconds: 90, duration: 0, playing: undefined });
   for (const changed of [
     { origin: 'https://vidlink.pro.evil.test' }, { source: {} }, { data: 'bad json' },
     ...[{ mtmdbId: 155 }, { mediaType: 'movie' }, { episode: 2 }, { currentTime: Infinity }, { currentTime: -1 }, { currentTime: '90' }, { event: 'error' }].map(data => ({ data: { type: 'PLAYER_EVENT', data: { ...event.data.data, ...data } } }))
@@ -38,7 +38,7 @@ function harness() {
   const container = { children: [], replaceChildren() { this.children = []; }, append(frame) { this.children.push(frame); } };
   const player = createPlayer({ container, onState: state => states.push(state),
     windowImpl: { addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name) },
-    documentImpl: { createElement(tag) { assert.equal(tag, 'iframe'); const frame = { contentWindow: {}, setAttribute() {} }; frames.push(frame); return frame; } },
+    documentImpl: { createElement(tag) { assert.equal(tag, 'iframe'); const frame = { commands: [], contentWindow: { postMessage(message, origin) { frame.commands.push({ message, origin }); } }, setAttribute() {} }; frames.push(frame); return frame; } },
     setTimer(fn) { timers.set(++timerId, fn); return timerId; }, clearTimer(id) { timers.delete(id); }
   });
   return { player, states, frames, timers, listeners, container };
@@ -61,14 +61,33 @@ test('new selection starts primary; explicit or reported load failure falls back
   assert.equal(app.container.children.length, 1);
 });
 
-test('no events or load confirmation only suggests fallback and never interrupts playback automatically', () => {
+test('iframe load does not imply a working video; confirmation timer continues without video status', () => {
   const app = harness(); app.player.load(movie);
   [...app.timers.values()][0]();
   assert.equal(app.states.at(-1).status, 'unconfirmed');
   assert.equal(app.frames.length, 1);
   app.frames[0].onload();
   assert.equal(app.states.at(-1).status, 'loaded');
-  assert.equal(app.timers.size, 0);
+  assert.equal(app.timers.size, 1);
+  assert.equal(app.player.getStatus().ready, false);
+  assert.equal(app.frames[0].commands[0].message.command, 'getStatus');
+});
+
+test('CinemaOS controls wait for status and always target the exact provider origin', () => {
+  const app = harness(); app.player.load(movie);
+  assert.equal(app.player.command('play'), false);
+  app.frames[0].onload();
+  app.listeners.get('message')({ origin: 'https://cinemaos.tech', source: app.frames[0].contentWindow,
+    data: { type: 'PLAYER_EVENT', data: { event: 'playerstatus', currentTime: 0, duration: 900, paused: true } } });
+  assert.equal(app.player.getStatus().ready, true);
+  assert.equal(app.player.command('seek', { time: 120 }), true);
+  assert.equal(app.player.command('play'), true);
+  assert.equal(app.player.command('seek', { time: -1 }), false);
+  assert.deepEqual(app.frames[0].commands.at(-2), { message: { command: 'seek', time: 120 }, origin: 'https://cinemaos.tech' });
+  assert.deepEqual(app.frames[0].commands.at(-1), { message: { command: 'play' }, origin: 'https://cinemaos.tech' });
+  app.player.switchProvider('vidlink');
+  assert.equal(app.player.command('play'), false);
+  assert.equal(app.player.getStatus().ready, false);
 });
 
 test('verified VidLink progress resumes on retry; old frames and late load events are ignored', () => {

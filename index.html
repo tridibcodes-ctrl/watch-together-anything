@@ -7,6 +7,7 @@
   <title>Multiplay</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./player.js"></script>
+  <script src="./shared-playback.js"></script>
 </head>
 
 <body>
@@ -102,10 +103,12 @@
       </form>
       <p id="room-invite" role="status" aria-live="polite"></p>
 
-      <button id="join" type="button">Join</button>
-      <button id="leave" type="button">Leave</button>
+      <button id="join" type="button">Join playback</button>
+      <button id="leave" type="button">Leave playback</button>
       <button id="refresh-room" type="button">Refresh room</button>
       <p id="room-status">No title selected.</p>
+      <p id="sync-status" role="status" aria-live="polite">Select a room to share playback.</p>
+      <button id="retry-command" type="button">Retry last playback command</button>
       <h3 id="player-title">Player</h3>
       <p id="player-status" role="status" aria-live="polite">Choose Watch on a movie or TV episode to open CinemaOS.</p>
       <div id="player"></div>
@@ -121,10 +124,12 @@
             <option value="cinemaos">CinemaOS (primary)</option>
             <option value="vidlink">VidLink</option>
           </select></label>
-        <button id="switch-provider" type="button" disabled>Switch player</button>
+        <button id="switch-provider" type="button" disabled>Switch provider</button>
       </p>
-      <p>Use the controls inside the player. Provider changes and playback currently affect this browser only;
-        shared playback controls will be enabled when room synchronization is implemented.</p>
+      <p>In Backend API mode, Watch selects the room's title. Both partners join playback, then use Play/Pause/Seek
+        together once CinemaOS reports video status. Use the native Play button once if your browser requires it.
+        Native controls are local and are corrected to the room state. VidLink cannot receive shared controls;
+        its fallback playback is manual. Provider changes apply to the room.</p>
       <button id="complete" type="button">We finished together</button>
       <button id="undo" type="button">Undo completion</button>
       <p>Voice/video needs WebRTC signaling from the backend; it is not implemented in this HTML starter.</p>
@@ -173,23 +178,24 @@ DELETE /api/rooms/{roomId}/list/{itemId} → 204
 PATCH /api/me/profile ← {displayName,avatarKey} → {profile}
 
 GET /api/rooms/{id}/state
-POST /api/rooms/{id}/join ← {}
-POST /api/rooms/{id}/media ← {commandId,mediaType,tmdbId,season?,episode?}
+// Join/Leave playback are local opt-in actions.
+POST /api/rooms/{id}/media ← {commandId,expectedRevision,mediaType,tmdbId,season?,episode?}
 POST /api/rooms/{id}/commands
-  ← {commandId,sessionId,action:"play"|"pause"|"seek"|"provider",targetPositionMs?,provider?}
+  ← {commandId,expectedRevision,sessionId,action:"play"|"pause"|"seek"|"provider",targetPositionMs?,provider?}
   → {roomId,sessionId,media:{mediaType,tmdbId,title,season?,episode?},
      provider,status,positionMs,anchorAt,revision,serverTime}
   // An empty room has sessionId:null and media:null.
   // Each state-producing route above returns this same room snapshot.
-POST /api/rooms/{id}/leave ← {} → 204
+// Leaving playback does not remove room membership.
 
 GET /api/rooms/{id}/messages → {items:[{id,senderName,body,createdAt}]}
 POST /api/rooms/{id}/messages ← {clientMessageId,body} → {message}
+// Planned (not implemented):
 POST /api/sessions/{id}/complete ← {commandId,confirmed:true}
   → {completed,message}
 POST /api/sessions/{id}/undo-completion ← {commandId} → {completed:false}
 
-Errors: {error:{code,message}} with an appropriate HTTP status.
+Errors: {error:string}; playback conflict: {error:string,state} with an appropriate HTTP status.
 Positions are milliseconds; timestamps are ISO UTC; TMDB IDs are numbers.
 Shared-list status: planned | watching | watched.
 Serialize playback commands and deduplicate UUIDs on the backend.
@@ -213,13 +219,36 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     const savedConnection = preference('multiplay.connection');
     let mode = savedConnection?.mode === 'api' ? 'api' : 'demo', base = savedConnection?.base || '', me, room, joined = false;
     let localPlayback = null;
+    let sharedView = { state: null, joined: false, busy: false, canControl: false, online: false };
     const embeddedPlayer = MultiplayPlayer.createPlayer({ container: $('player'), onState(state) {
       localPlayback = state.media ? state : null;
       $('player-title').textContent = state.media ? `${state.media.title}${state.media.mediaType === 'tv' ? ' · S' + state.media.season + ' E' + state.media.episode : ''}` : 'Player';
       $('player-status').textContent = state.message;
       $('provider').value = state.provider;
       controls();
+      if (mode === 'api') sharedPlayback.playerEvent(state);
+    }, onFallback() {
+      if (mode === 'api' && sharedView.joined) act(() => sharedPlayback.command('provider', { provider: 'vidlink' }));
+      else embeddedPlayer.switchProvider('vidlink');
     } });
+    const sharedPlayback = MultiplaySync.createRoomSync({ request, player: embeddedPlayer,
+      subscribe(roomId, refresh) {
+        const channel = authClient.channel('playback:' + roomId)
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'watch_room_playback', filter: 'room_id=eq.' + roomId }, refresh)
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'watch_room_playback', filter: 'room_id=eq.' + roomId }, refresh)
+          .subscribe(status => { if (status === 'SUBSCRIBED') refresh(); });
+        return () => { authClient.removeChannel(channel).catch(() => {}); };
+      },
+      onChange(view) {
+        sharedView = view;
+        if (mode !== 'api') return;
+        room = view.state; joined = view.joined;
+        $('room-status').textContent = room?.media ? `${room.media.title} · ${room.provider} · ${room.status} · revision ${room.revision}` : 'No shared title selected.';
+        $('sync-status').textContent = !view.roomId ? 'Select a room to share playback.' : !view.online ? 'Connecting to room playback…' : !room?.media ? 'Choose Watch on a title to share it with this room.' : !joined ? 'A room title is selected. Click Join playback to load it.' : room.provider === 'vidlink' ? 'VidLink fallback: title/provider shared; play, pause and seek are manual.' : view.canControl ? 'CinemaOS shared controls ready. Both partners can control the room.' : 'Waiting for CinemaOS video status. Press its native Play button if needed, or try VidLink.';
+        controls();
+      },
+      onError(message) { $('sync-status').textContent = message; }
+    });
     let catalogState = null, catalogLoading = false, catalogVersion = 0;
     let selectedTitle = null, selectedEpisodes = [], detailsVersion = 0, seasonVersion = 0;
     $('mode').value = mode; $('backend').value = base;
@@ -240,6 +269,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     let chatChannel = null, chatGeneration = 0, chatTimer = null, chatRequestVersion = 0;
     let listVersion = 0, listTimer = null;
     function stopLiveChat() {
+      if (typeof sharedPlayback !== 'undefined') sharedPlayback.selectRoom(null);
       listVersion++; clearTimeout(listTimer); listTimer = null;
       chatGeneration++; chatRequestVersion++;
       clearTimeout(chatTimer); chatTimer = null;
@@ -248,6 +278,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function startLiveChat() {
       stopLiveChat();
+      if (typeof sharedPlayback !== 'undefined' && mode === 'api' && me?.roomId) sharedPlayback.selectRoom(me.roomId);
       $('messages').replaceChildren();
       $('list-items').replaceChildren();
       $('list-status').textContent = 'Connect and select a room to load your shared list.';
@@ -345,10 +376,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       for (const id of ['load-player', 'switch-provider', 'stop-player']) $(id).disabled = !localPlayback;
       $('fallback-player').disabled = !localPlayback || localPlayback.provider === 'vidlink';
       $('provider').disabled = !localPlayback;
-      for (const id of ['play', 'pause', 'seek']) $(id).disabled = true;
+      for (const id of ['play', 'pause', 'seek']) $(id).disabled = mode !== 'api' || !sharedView.canControl;
       for (const id of ['complete', 'undo']) $(id).disabled = mode === 'api' || !active;
-      $('join').disabled = mode === 'api' || !me || joined; $('leave').disabled = !joined;
-      $('refresh-room').disabled = mode === 'api' || !me;
+      $('join').disabled = mode === 'api' ? !sharedView.online || !room?.media || joined : !me || joined;
+      $('leave').disabled = !joined;
+      $('refresh-room').disabled = mode === 'api' ? !me?.roomId : !me;
+      $('retry-command').disabled = mode !== 'api' || sharedView.busy || !sharedView.online;
+      if (mode === 'api' && (!sharedView.online || sharedView.busy)) {
+        $('switch-provider').disabled = true; $('fallback-player').disabled = true;
+      }
       $('chat-form').querySelector('button').disabled = mode === 'api' ? !me?.roomId : !joined;
     }
     // The only HTTP function. Change endpoint paths here or in the callers below.
@@ -368,7 +404,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       });
       if (response.status === 204) return null;
       const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || `HTTP ${response.status}`);
+      if (!response.ok) {
+        const error = new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || `HTTP ${response.status}`);
+        if (response.status === 409 && data?.state) error.state = data.state;
+        throw error;
+      }
       if (data === null) throw new Error('Expected JSON from the backend.');
       return data;
     }
@@ -527,7 +567,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       article.prepend(poster);
       article.append(button('Details', () => showDetails(title)));
       if (!item) article.append(button('Add to our list', () => add(title)));
-      article.append(button('Watch (this browser)', async () => {
+      article.append(button(mode === 'api' ? 'Watch together' : 'Watch (this browser)', async () => {
         if (!me) throw new Error('Connect and sign in first.');
         const media = { mediaType: title.mediaType, tmdbId: title.tmdbId, title: title.title };
         if (title.mediaType === 'tv') {
@@ -539,14 +579,18 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           media.season = Number($('season').value); media.episode = Number($('episode').value);
           if ($('episode').disabled || !selectedEpisodes.some(episode => episode.episodeNumber === media.episode)) throw new Error('Choose an available episode in Details first.');
         }
-        embeddedPlayer.load(media);
+        if (mode === 'api') await sharedPlayback.watch(media);
+        else embeddedPlayer.load(media);
         location.hash = 'room';
-        say('CinemaOS opened. Use Try VidLink fallback if it cannot play this title.');
+        say(mode === 'api' ? 'Room title selected. Your partner can click Join playback. Use shared controls when CinemaOS is ready.' : 'CinemaOS opened. Use Try VidLink fallback if it cannot play this title.');
       }));
       if (item && item.status !== 'watched') article.append(button('Remove', () => removeListItem(item.id)));
       return article;
     }
-    async function command(action, extra = {}) { apply(await request(`/api/rooms/${me.roomId}/commands`, 'POST', { commandId: uuid(), sessionId: room.sessionId, action, ...extra })); }
+    async function command(action, extra = {}) {
+      if (mode === 'api') return sharedPlayback.command(action, extra);
+      apply(await request(`/api/rooms/${me.roomId}/commands`, 'POST', { commandId: uuid(), sessionId: room.sessionId, action, ...extra }));
+    }
     async function chat() {
       if (!me || !me.roomId) throw new Error('Connect and select a room first.');
       const selectedRoomId = me.roomId, selectedUserId = me.userId, version = ++chatRequestVersion;
@@ -629,15 +673,16 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     $('season').onchange = () => act(loadSeason);
     $('episode').onchange = showEpisode;
     bind('retry-season', loadSeason);
-    bind('join', async () => { const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); await chat(); });
-    bind('leave', async () => { await request(`/api/rooms/${me.roomId}/leave`, 'POST', {}); joined = false; unload(); apply(await request(`/api/rooms/${me.roomId}/state`)); });
-    bind('refresh-room', async () => { if (!me) throw new Error('Connect first.'); apply(await request(`/api/rooms/${me.roomId}/state`)); });
+    bind('join', async () => { if (mode === 'api') return sharedPlayback.join(); const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); await chat(); });
+    bind('leave', async () => { if (mode === 'api') return sharedPlayback.leave(); await request(`/api/rooms/${me.roomId}/leave`, 'POST', {}); joined = false; unload(); apply(await request(`/api/rooms/${me.roomId}/state`)); });
+    bind('refresh-room', async () => { if (mode === 'api') return sharedPlayback.refresh(); if (!me) throw new Error('Connect first.'); apply(await request(`/api/rooms/${me.roomId}/state`)); });
+    bind('retry-command', () => sharedPlayback.retryCommand());
     bind('play', () => command('play')); bind('pause', () => command('pause'));
     bind('seek', () => { const seconds = Number($('position').value); if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Enter a valid position.'); return command('seek', { targetPositionMs: Math.round(seconds * 1000) }); });
-    bind('switch-provider', () => embeddedPlayer.switchProvider($('provider').value));
-    bind('load-player', () => embeddedPlayer.retry());
-    bind('fallback-player', () => embeddedPlayer.switchProvider('vidlink'));
-    bind('stop-player', unload);
+    bind('switch-provider', () => mode === 'api' ? sharedPlayback.command('provider', { provider: $('provider').value }) : embeddedPlayer.switchProvider($('provider').value));
+    bind('load-player', () => mode === 'api' ? sharedPlayback.retryPlayer() : embeddedPlayer.retry());
+    bind('fallback-player', () => mode === 'api' ? sharedPlayback.command('provider', { provider: 'vidlink' }) : embeddedPlayer.switchProvider('vidlink'));
+    bind('stop-player', () => mode === 'api' ? sharedPlayback.leave() : unload());
     bind('refresh-chat', chat);
     form('chat-form', async () => { const body = $('message').value.trim(); if (!body || (mode === 'api' ? !me?.roomId : !joined)) throw new Error('Select a room and enter a message.'); await request(`/api/rooms/${me.roomId}/messages`, 'POST', { clientMessageId: uuid(), body }); $('message').value = ''; await chat(); });
     form('profile-form', async () => { if (!me) throw new Error('Connect first.'); const displayName = $('display-name').value.trim(); if (!displayName) throw new Error('Enter your name.'); const result = await request('/api/me/profile', 'PATCH', { displayName, avatarKey: $('avatar').value }); me.profile = result.profile; say('Profile saved.'); });

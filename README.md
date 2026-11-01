@@ -2,7 +2,7 @@
 
 A watch-together app for couples. Many couples can use the system; each private room has **at most two members**. User IDs are added through room creation and invitation, never hard-coded in the schema. An account can currently belong to multiple rooms.
 
-This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, TMDB discovery, and shared room lists are implemented. Movies and selected TV episodes can now open in CinemaOS with VidLink fallback in the current browser. Playback synchronization, watched tracking, and calls are still being built.
+This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, TMDB discovery, and shared room lists are implemented. Movies and selected TV episodes can now open in CinemaOS with VidLink fallback in the current browser. Shared playback state and CinemaOS synchronization are implemented; real two-browser stream validation, watched tracking, and calls remain outstanding.
 
 Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target design](#complete-target-design--planned-features) · [Local setup](#setup-from-a-fresh-clone) · [Implemented APIs](#implemented-http-api) · [Remaining work](#remaining-work-and-suggested-order)
 
@@ -22,8 +22,8 @@ The intended experience lets both partners control playback, maintain a shared m
 | Live chat | Done | Room-filtered Supabase Postgres Changes events trigger message reloads; manual refresh remains available. |
 | TMDB browsing/search | Steps 1–3 implemented | Browsing/search, posters, pagination, title details, season/episode selection, and loading/error states. Playback remains separate work. |
 | Shared movie/show list | Implemented; live database validation pending | Room-scoped add/read/remove, duplicate protection, canonical TMDB snapshots, and member-only live updates. |
-| Shared playback | Pending | No persisted session/command API or verified player synchronization. Both members should have control. |
-| Embedded playback | Implemented; live playback validation pending | CinemaOS primary, VidLink fallback, movie/TV selection, reload/close, local provider switching. Shared controls disabled. |
+| Shared playback | Implemented; live validation pending | Persisted sessions, member commands, safe retries, Realtime, polling, and CinemaOS drift correction. |
+| Embedded playback | Implemented; streams unconfirmed | CinemaOS shared controls after video readiness; VidLink fallback with manual controls. |
 | Watched completion | Pending | Needs both-member confirmation, episode progress, and undo. |
 | Voice/video | Pending | No WebRTC signaling or STUN/TURN setup. |
 | Public signup/recovery | Pending | Only sign-in UI exists; create test accounts in Supabase Dashboard. Check project signup settings separately. |
@@ -48,7 +48,7 @@ flowchart LR
 - **Database:** Supabase PostgreSQL. Node forwards the user's token to REST/RPC calls, so Row Level Security (RLS) applies. This implementation does not use a service-role/secret key.
 - **Realtime:** Browser subscriptions listen for inserts in the selected room. Events cause an authenticated API reload; PostgreSQL retains the messages. RLS controls readable records.
 - **Catalog:** Node proxies TMDB popular movie/TV lists, search, title details, and TV seasons/episodes with a server-only token. Browse renders posters, pagination, and a details panel.
-- **Planned:** Playback sessions, external-player adapters, and WebRTC calls.
+- **Playback:** PostgreSQL stores room state; shared-playback.js applies updates through player.js. WebRTC calls remain planned.
 
 ### Main flows
 
@@ -66,8 +66,8 @@ Think of the app as three connected pieces: **a catalog to choose something, a p
 | --- | --- | --- |
 | Find and describe a title | TMDB, through our Node API | Search for a title, read its details, and choose a TV season/episode |
 | Save the couple's choices and activity | Supabase PostgreSQL | Shared list, chat, membership, playback session, completion confirmations |
-| Show the video | CinemaOS primary and VidLink fallback | Embed a selected movie/episode in the current browser; joint synchronization is pending |
-| Keep both partners coordinated | Our backend, database, Realtime, and player adapter — planned | Accept Pause, update room state, tell both controllable players to pause |
+| Show the video | CinemaOS primary and VidLink fallback | Each browser loads its own stream |
+| Keep both partners coordinated | Backend, database, Realtime, and player adapter | Commit room state and apply it to CinemaOS players |
 | Carry a voice/video call | Browser WebRTC — planned | Camera/microphone between the two partners |
 
 ### What TMDB gives the frontend
@@ -82,7 +82,7 @@ TMDB is our chosen catalog source, not a requirement of Node, Supabase, or synch
 
 TMDB is not our movie streaming server. Its catalog does not make a full movie playable, establish streaming rights, guarantee an external provider has a matching video, or synchronize two players. Video-related metadata and trailers must not be mistaken for full-film hosting. The goal of broad movie coverage means searching the available catalog; we cannot promise literally every title or playable availability for every result.
 
-CinemaOS is the primary embed provider; VidLink is the fallback. The integration uses the published [CinemaOS embed routes](https://cinemaos.tech/embed) and [VidLink documentation](https://vidlink.pro/). Watch opens the selected movie/episode locally without creating a shared playback session. The old experimental outgoing postMessage commands have been removed; shared controls stay disabled until room synchronization and provider control behavior are verified.
+CinemaOS is the primary embed provider; VidLink is the fallback. In Backend API mode, Watch creates a shared room session. CinemaOS receives documented play/pause/seek/getStatus commands. Shared controls wait for video status; VidLink supports manual playback only. See the playback acceptance check below.
 
 ### TMDB request flow
 
@@ -90,17 +90,17 @@ CinemaOS is the primary embed provider; VidLink is the fallback. The integration
 2. Node validates parameters and calls TMDB with `TMDB_READ_ACCESS_TOKEN` from its environment. The token is never sent to browser code.
 3. Node normalizes TMDB's movie/TV response fields to our title shape: ID, type, title, year, overview, poster reference, and pagination information.
 4. The frontend renders title cards, posters, page navigation, and details. Adding a title now saves its identity and a small metadata snapshot in the selected room's list; the catalog is not copied into Supabase.
-5. Watch opens CinemaOS for that title/episode in this browser. VidLink can replace it locally. Creating/updating a persisted room playback session remains planned.
+5. Watch saves the title/episode to the selected room and opens CinemaOS. The partner clicks Join playback. Provider changes apply to both joined clients.
 
 Step 1 implements catalog/search, parameter validation, a 10-second upstream timeout, safe error messages, upstream rate-limit handling, and a 60-second in-memory metadata cache capped at 100 entries. Authentication runs before cache reads. No arbitrary upstream URLs are accepted.
 
 Step 2 adds poster rendering and Previous/Next navigation to Browse. Images load lazily from TMDB's image CDN at `w185`, following [TMDB's image URL format](https://developer.themoviedb.org/docs/image-basics); missing/failed images show “Poster unavailable.” Search submission starts at page 1. Navigation keeps the last submitted type/query even if the inputs have been edited. Buttons are disabled while loading and at page boundaries. Loading, empty, and error states appear beside Browse. Failed requests keep previous results; older responses cannot replace a newer search or results after reconnect/sign-out. Local demo stays available with its existing single-page samples. The required TMDB notice is displayed; an approved TMDB logo is still needed before publishing.
 
-To check step 2, hard-refresh `http://127.0.0.1:3000/`, sign in, choose Backend API, leave Backend origin blank, and Connect. Submit an empty Movie search to browse popular titles, use Next/Previous, then search for a movie or TV show and confirm the page resets to 1. Verify posters, page boundaries, and no-result searches. Switch to Local demo and confirm sample browsing still works. Add uses the shared list; Watch opens the local embedded player.
+To check step 2, hard-refresh `http://127.0.0.1:3000/`, sign in, choose Backend API, leave Backend origin blank, and Connect. Submit an empty Movie search to browse popular titles, use Next/Previous, then search for a movie or TV show and confirm the page resets to 1. Verify posters, page boundaries, and no-result searches. Switch to Local demo and confirm sample browsing still works. Add uses the shared list; Watch creates a shared session in Backend API mode.
 
 Step 3 adds a Details button to every title card. The panel shows the overview, genres, release year, status, and movie runtime. TV titles load seasons from TMDB, including specials (season 0); selecting a season fetches its episodes. Episode selection shows the name, summary, air date, and runtime when available. Metadata can include future episodes and does not guarantee playable availability. Opening another title, closing details, reconnecting, or signing out invalidates pending responses. Failed season requests have a Retry button. Episode selection belongs to the opened show; Watch together on another show opens that show's details first. Local demo uses explicitly labelled sample seasons/episodes.
 
-To check step 3, restart Node and hard-refresh the page. Connect in Backend API mode, search for a movie, and open Details. Then search TV for Breaking Bad, open Details, switch seasons, and select an episode. Confirm the episode text changes. Try switching titles/seasons while requests load, closing details, and Local demo. Selection is local to this browser; the shared list now persists separately, while playback sessions are still pending. No database migration is needed.
+To check step 3, restart Node and hard-refresh the page. Connect in Backend API mode, search for a movie, and open Details. Then search TV for Breaking Bad, open Details, switch seasons, and select an episode. Confirm the episode text changes. Try switching titles/seasons while requests load, closing details, and Local demo. Detail selection stays local until Watch is clicked. The catalog needs no migration; shared playback requires backend/playback.sql.
 
 TMDB's developer API is free for noncommercial use with attribution; commercial use needs separate arrangements. Before publishing, include an approved TMDB logo and the required notice: “This product uses the TMDB API but is not endorsed or certified by TMDB.” Review current terms if the app starts generating revenue. [TMDB FAQ and attribution requirements](https://developer.themoviedb.org/docs/faq)
 
@@ -118,7 +118,7 @@ This section explains the intended end-to-end system. The implementation table a
 | Durable state | Supabase PostgreSQL with RLS | Transactions, room membership, saved lists, messages, progress, and authoritative playback snapshots. |
 | Change delivery | Supabase Realtime | Notify the selected room's clients about committed state changes. It does not replace persistent state. |
 | Catalog | TMDB through Node | Browsing, search, posters, title details, season/episode selection, and consistent title IDs. |
-| Playback | Controllable external-player adapter — planned/unverified | Each browser plays its own stream; our backend coordinates controls instead of relaying the film. |
+| Playback | CinemaOS adapter implemented; live verification pending | Each browser plays its own stream; the backend coordinates controls |
 | Calls | Native WebRTC and authenticated signaling — planned | A two-person room can use one peer connection; add STUN/TURN connectivity as needed. |
 | Source collaboration | GitHub/GitHub Desktop | Share code and documentation. Git synchronization does not migrate a Supabase database or copy local environment files. |
 
@@ -160,7 +160,7 @@ For a TV show, store per-episode progress separately using show ID, season, and 
 
 Both partners have equal play/pause/seek/provider control. The backend/database is the authority for room state. Realtime messages notify clients of accepted state; clients must not treat an unauthenticated browser message as authority.
 
-A proposed playback snapshot contains room ID, session ID, media identity, season/episode if applicable, provider, playing/paused status, position at an anchor time, server anchor timestamp, and an increasing revision. Presence/readiness and connection state should be modeled separately from the saved list and membership.
+The implemented playback snapshot contains room ID, session ID, media identity, season/episode if applicable, provider, playing/paused status, position at an anchor time, server anchor timestamp, and an increasing revision. Presence/readiness and connection state should be modeled separately from the saved list and membership.
 
 1. A partner chooses a title/episode or presses a shared control.
 2. Browser sends a command ID, session ID, expected revision where appropriate, action, and validated arguments.
@@ -243,7 +243,12 @@ The frontend developer can design in Local demo without the API running. Backend
 
 ```text
 index.html                 HTML UI, demo/mock backend, auth and Realtime client
-player.js                  Provider URL builders, iframe lifecycle, fallback, validated VidLink events
+player.js                  Provider URLs, iframe lifecycle, commands and validated events
+shared-playback.js         Room state, subscriptions, retries and drift correction
+backend/playback.js        Authenticated state/media/command API
+backend/playback.sql       Playback tables, transactional RPC, RLS and Realtime
+backend/playback-db.test.js PostgreSQL permissions, revision and retry checks
+backend/shared-playback.test.js Simulated two-client synchronization checks
 backend/server.js          HTTP server, root page, profile and room APIs
 backend/chat.js            Chat API, membership checks and validation
 backend/watchlist.js       Room-scoped list API and TMDB snapshots
@@ -277,7 +282,7 @@ Use `.env.example` as the configuration template. For TMDB, copy the **API Read 
 
 A fresh clone does not include the previous checkout's .env or installed dependencies. Keep local configuration in the checkout you actually run.
 
-1. Run the full backend/schema.sql in Supabase SQL Editor.
+1. Run the full `backend/schema.sql`, then `backend/playback.sql`, in Supabase SQL Editor. The playback migration was confirmed applied for this development project.
 2. Create test email/password accounts under Supabase Authentication → Users. They must be able to sign in under the project's email-confirmation settings.
 3. Start Node from the repository root:
 
@@ -295,13 +300,13 @@ The schema supports reapplication during development through IF NOT EXISTS and p
 ### Local demo and Backend API
 
 - **Local demo:** core mock workflows use in-memory samples without Node. The page still loads the Supabase SDK from a CDN; real sign-in checks require the backend.
-- **Backend API:** real profiles, rooms, and messages. Connect saves mode/origin preferences. Movie/list/player demo controls do not become real APIs in this mode.
+- **Backend API:** real profiles, rooms, chat, TMDB, shared lists, and playback sessions. Connect saves mode/origin preferences.
 - The supported setup serves HTML and API from the same Node origin. Despite the Backend origin input, CORS/OPTIONS support is not implemented. The sign-in check also assumes localhost/127.0.0.1 on port 3000.
 - 127.0.0.1 refers to the browser's machine. A partner on another computer cannot reach this local server without deployment or deliberate network and URL changes.
 
 ## Implemented HTTP API
 
-Except for /, /player.js, and /api/health, send:
+Except for /, /player.js, /shared-playback.js, and /api/health, send:
 
 ```http
 Authorization: Bearer <Supabase user access token>
@@ -331,6 +336,17 @@ Content-Type is needed for JSON bodies. Errors use an object with an error strin
 | POST | /api/rooms/{roomId}/list | {mediaType,tmdbId} | 201 {item} for new title; 200 for existing/restored title |
 | DELETE | /api/rooms/{roomId}/list/{itemId} | — | 204, or 404 if item does not belong to this room |
 
+Playback routes (all require room membership):
+
+| Method | Path | Request / result |
+| --- | --- | --- |
+| GET | `/shared-playback.js` | Public browser synchronization script; no authentication required |
+| GET | `/api/rooms/{roomId}/state` | Current snapshot; empty rooms have revision 0 and null media/session |
+| POST | `/api/rooms/{roomId}/media` | `{commandId,expectedRevision,mediaType,tmdbId,season?,episode?}`; creates session using canonical TMDB metadata |
+| POST | `/api/rooms/{roomId}/commands` | `{commandId,expectedRevision,sessionId,action,targetPositionMs?,provider?}`; action is play/pause/seek/provider |
+
+Snapshots contain `{roomId,sessionId,media,provider,status,positionMs,anchorAt,revision,serverTime}`. Command IDs are UUIDs; seek positions are integer milliseconds from 0 to 604800000. Missing migration returns 503 with setup instructions; stale commands return 409 with `{error,state}`. Provider changes pause the session.
+
 Profile names are trimmed and limited to 1–40 characters. Avatar keys: moon, sun, star, heart. Messages are trimmed and limited to 1–2000 characters; client message IDs must be UUIDs. Chat reads return the latest 100 messages in chronological order, without older-message pagination.
 
 Catalog uses TMDB's popular lists; search uses its movie/TV search endpoints. Both require sign-in but no room membership. `page` defaults to 1 and accepts integers from 1 to 500. Results use English (`en-US`); `year` is a string (empty when unknown), and `posterPath` is a TMDB image reference or null. Search excludes adult titles. Errors: 400 invalid parameters, 401 invalid session, 503 missing TMDB configuration, 429 upstream rate limit, 502 upstream failure, 504 upstream timeout. TMDB response bodies and credentials are never returned to the browser.
@@ -341,7 +357,7 @@ Contract caveats:
 
 - /api/me still returns null groupId/roomId placeholders. Choose a room using /api/rooms.
 - The join response's createdBy currently contains the requesting user's ID, not necessarily the creator. Correct it before relying on that field for ownership.
-- The Backend contract block inside index.html contains proposed routes and some outdated response shapes. The table above describes actual routes. Legacy group-list APIs, room state/media/commands/presence, and session-completion APIs are **not implemented** and return 404. Add/Remove use room-list APIs. Watch opens a local embed without calling the proposed playback routes.
+- Legacy group-list APIs, server presence, and session-completion APIs are not implemented. Join/Leave playback are local opt-in actions; membership is unchanged.
 
 ## Database model and access
 
@@ -353,6 +369,9 @@ Contract caveats:
 | watch_room_members | Room/user membership and join time; members can read membership in their room |
 | watch_room_messages | Text, sender ID/name snapshot, client message ID, room ID, timestamp; member-only reads and self-sender member inserts |
 | watch_room_list_items | Unique room/media-type/TMDB-ID title snapshot; removed_at hides removed titles and supports live UPDATE events. Members may update only removed_at. |
+| watch_room_playback | Authoritative session snapshot; member-only SELECT |
+| watch_playback_commands | Private command deduplication ledger |
+| watch_playback(...) | Member-authorized transactional state/command RPC |
 | create_watch_room(text) | Authenticated RPC for room and creator membership |
 | join_watch_room(text) | Authenticated RPC to join by code |
 | is_room_member(uuid) | Membership helper for RLS |
@@ -386,33 +405,57 @@ Removal is a soft deletion: removed_at is set, active reads exclude that row, an
 
 All items currently return status planned. Playback and joint completion will introduce Watching/Watched later; there is no client endpoint to mark a title watched in this increment. Active list reads currently rely on the Supabase project's default REST row cap; list pagination is a future task for large lists. The unique identity includes media type so equal movie/TV IDs do not collide. Test results from mocked services do not establish live database RLS or publication correctness.
 
-## Embedded player step: CinemaOS primary, VidLink fallback
+## Shared playback: CinemaOS primary, VidLink fallback
 
-Every Browse/Our list card now has **Watch (this browser)**. Movies open immediately in CinemaOS. For TV, open Details, select a season/episode, then click Watch on that show. Watch can also open Details first when that show has not been selected. The same flow works in Backend API mode and Local demo. Watching does not add a list item, mutate list status, or create a shared session; Add remains a separate action.
+### What happens after Watch
 
-The adapter in `player.js` builds only these provider URLs using validated numeric IDs:
+1. Sign in, connect in **Backend API** mode, and select your room. Click **Watch together** on a movie, or select a TV season/episode in Details first.
+2. The server checks membership and TMDB metadata, then creates a paused CinemaOS session at zero. Your iframe opens; your partner sees the selected room title.
+3. Your partner clicks **Join playback**. Each browser loads its own stream. If necessary, press the native Play button inside each iframe to initialize video and satisfy browser autoplay restrictions.
+4. Once CinemaOS reports video status, the app's **Play / Pause / Seek** controls become available. Use these shared controls: native iframe controls are local and will be corrected to the saved room state.
+5. **Try VidLink fallback** switches the room provider for both joined clients and pauses the shared state. VidLink playback controls are manual; its documented events do not provide an incoming play/pause/seek API. Switch back to CinemaOS to resume shared controls.
 
-| Provider | Movie | TV episode |
+Local demo opens only a local player. Watch does not add a watchlist item or mark it Watched. Join/Leave playback do not change room membership. Close player stops watching locally; room changes and sign-out clear the iframe and subscriptions.
+
+### Synchronization and provider behavior
+
+`backend/playback.sql` stores the session, title/episode, provider, position, server time anchor, and revision. Both members may issue commands. The RPC locks the room, checks membership/session/revision, and deduplicates command UUIDs. Conflicts return HTTP 409 with current state. Retry last command reuses the exact original body and UUID after a transport failure.
+
+Realtime INSERT/UPDATE events trigger authenticated state reloads, with a three-second polling fallback. CinemaOS status is requested every two seconds; drift over two seconds triggers a seek. Server clock offset is estimated using the request midpoint. Old room responses and older revisions are ignored. Connection failures disable shared controls and attempt a local CinemaOS pause. Presence, synchronized buffering, and latency guarantees are not implemented.
+
+The adapter sends `{command:'play'}`, `{command:'pause'}`, `{command:'seek', time:120}`, and `{command:'getStatus'}` to the exact `https://cinemaos.tech` origin. Incoming events must match the current iframe and provider origin. The current CinemaOS parser expects `{type:'PLAYER_EVENT', data:{event,currentTime,duration,paused?}}`, also accepting `playing`/`isPlaying`. Command objects and event names were provided from the provider documentation; the live CinemaOS event envelope and status fields remain unverified. Controls stay disabled if no valid video status arrives.
+
+| Provider | Movie route | TV route |
 | --- | --- | --- |
-| [CinemaOS](https://cinemaos.tech/embed), primary | `https://cinemaos.tech/player/{tmdbId}` | `https://cinemaos.tech/player/{tmdbId}/{season}/{episode}` |
-| [VidLink](https://vidlink.pro/), fallback | `https://vidlink.pro/movie/{tmdbId}` | `https://vidlink.pro/tv/{tmdbId}/{season}/{episode}` |
+| [CinemaOS](https://cinemaos.tech/embed) | `/player/{tmdbId}` | `/player/{tmdbId}/{season}/{episode}` |
+| [VidLink](https://vidlink.pro/) | `/movie/{tmdbId}` | `/tv/{tmdbId}/{season}/{episode}` |
 
-Each new title starts with CinemaOS. **Try VidLink fallback** switches the current browser to the same movie/episode; the provider selector can switch back. Reload player retries the selected provider. Close player removes the iframe. Room changes, reconnects, and sign-out also remove it. CinemaOS receives `autoPlay=false`/`autoNext=false`; VidLink receives `autoplay=false`/`nextbutton=false`. Use the iframe's native Play button. Fullscreen and picture-in-picture permissions are enabled, while iframe sandboxing disallows popups and top-page navigation. Provider behavior under this sandbox still needs real playback validation.
+Autoplay and automatic next episode are disabled through provider URL parameters. VidLink receives the room position through `startAt`; its own saved progress may override it. Video readiness requires a valid positive duration or timestamp, not iframe `load`. After 20 seconds without video status, the UI suggests retry/fallback. Browser error events can trigger one CinemaOS-to-VidLink fallback; navigation timeouts are not reliably reported for cross-origin iframes.
 
-If the browser fires an iframe error for CinemaOS, the adapter tries VidLink once. Browsers often do not report cross-origin iframe failures, and a loaded iframe does not establish stream availability. The manual fallback button is always available while CinemaOS is selected. After 20 seconds without a frame-load confirmation, a message suggests retry/fallback; it does not switch away from a potentially working player just because no event arrived. VidLink errors stop at the fallback and offer reload, with no provider loop.
+VidLink rejected the sandboxed iframe with "Please Disable Sandbox." The iframe now uses the provider's unsandboxed configuration. The cross-origin boundary still separates its DOM from this app, but sandbox popup/navigation restrictions no longer apply.
 
-VidLink playback events are accepted only from the active iframe, exact `https://vidlink.pro` origin, matching title/type/season/episode, supported event names, and finite time values. These update local progress/status only. Reloading VidLink sends its last reported position through `startAt`; VidLink documents that saved provider progress can override this parameter. CinemaOS position reporting/control payloads have not been verified, so its progress is unknown and no speculative `startTime` or postMessage commands are sent. Switching from CinemaOS starts VidLink at zero/provider-saved progress. `ended` does not update Watched or confirm completion.
+### Validation and two-account acceptance check
 
-No new credentials, database schema, or authenticated playback endpoints are required for this embedding step. Shared Play/Pause/Seek stay disabled for both providers; provider switches affect this browser only. Persisted room sessions, partner readiness, remote controls, drift correction, and two-person completion remain future work.
+Automated checks cover provider URLs/events/commands, two simulated clients, delayed responses, drift correction, safe retries, and PostgreSQL RLS/revision/session checks. Database tests use PGlite with simulated Supabase roles and apply the migration twice; they do not establish live Supabase Realtime delivery. Run `npm --prefix backend test`.
 
-Validation: `npm --prefix backend test` passed all 15 player/watchlist checks. A temporary headless Chrome session loaded the app and exercised movie Watch, TV season/episode selection, CinemaOS URLs, VidLink switching, closing the player, and disabled shared controls. These checks confirm application wiring, not playable streams or two-device synchronization. To check live playback, restart Node, hard-refresh the page, connect, choose a movie, click Watch, and press Play inside CinemaOS. Try VidLink, reload, and close; repeat for a selected TV episode. Confirm switching rooms/signing out closes the embed. Availability must be checked with the providers in your actual browser.
+During the headless Chrome stream check, CinemaOS timed out (`ERR_CONNECTION_TIMED_OUT`). VidLink displayed video controls after the sandbox fix, but after Play it still had no video source, duration, or advancing timestamp. **Real stream playback and two-browser provider synchronization have not been confirmed.** A rendered player is not evidence of successful streaming.
+
+The developer confirmed `backend/playback.sql` succeeded in Supabase. To finish live acceptance:
+
+1. Hard-refresh two browser profiles, sign into separate accounts, connect in Backend API mode, and select the same room.
+2. Click Watch together in the first profile and Join playback in the second. Confirm the same title/episode appears.
+3. Initialize both CinemaOS players using native Play if required. Confirm video time advances and shared controls become enabled.
+4. Use the app's Pause, Play, and Seek in each profile. Confirm the other player follows; wait a few seconds to observe drift correction.
+5. Switch to VidLink and confirm both load the same title with manual controls. Reload, reconnect, and switch rooms to check recovery/isolation.
+
+If CinemaOS plays but shared controls remain disabled, its actual `PLAYER_EVENT` object is needed to verify the event parser. No additional token is required.
 
 ## Remaining work and suggested order
 
 1. **TMDB — steps 1–3 implemented:** catalog/search, posters, pagination, title details, and season/episode selection. Token requests returned HTTP 200 for popular movies and TV search; the user confirmed real browsing works. Check the new details flow in the browser. The room-scoped shared list is implemented; apply its schema and verify two-account behavior next. Complete required TMDB attribution with an approved logo before publishing.
 2. **Room-scoped shared list — implemented:** apply the updated schema, verify adds/removals in two accounts, persistence, and room isolation. The backend uses room IDs; group-based list routes remain only in Local demo. Watching/Watched transitions are not part of this increment.
-3. **Playback sessions:** persist title/episode, status, position/time anchor and revision. Authorize both members, validate commands, handle duplicate/stale commands, and recover on reconnect.
-4. **Player adapters — local embedding implemented:** CinemaOS primary and VidLink fallback use published movie/TV routes. Verify real playback in the browser, then verify provider control/readiness APIs before connecting shared state. Cross-client synchronization and drift correction are pending. Metadata does not guarantee a playable title.
+3. **Playback sessions - implemented:** verify the applied migration and real two-account updates. Add presence, buffering coordination, and command-ledger retention later.
+4. **Player adapters - synchronization implemented, live validation pending:** verify CinemaOS event payloads and two-browser play/pause/seek on a playable stream. VidLink remains a manual fallback.
 5. **Watched progress:** require both partners' confirmation, track episodes separately from whole series, and support undo.
 6. **Voice/video:** WebRTC plus authenticated signaling, permissions, connection recovery and STUN/TURN. No call backend exists; free relay capacity is not guaranteed.
 7. **Product/operations:** frontend design, signup/confirmation/password reset, invite rotation/expiry, room departure/deletion, rate limits, deployment, configuration, monitoring and service quota checks.

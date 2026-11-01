@@ -6,5 +6,8 @@
     "start": "node --env-file=../.env server.js",
     "dev": "node --watch --env-file=../.env server.js",
     "test": "node --test"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14"
   }
 }
