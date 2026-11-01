@@ -63,7 +63,7 @@
         <button id="catalog-next" type="button" disabled>Next</button>
       </nav>
       <section id="title-details" aria-labelledby="details-heading" hidden>
-        <h3 id="details-heading">Title details</h3>
+        <h3 id="details-heading" tabindex="-1">Title details</h3>
         <button id="close-details" type="button">Close details</button>
         <p id="details-status" role="status" aria-live="polite"></p>
         <div id="details-content"></div>
@@ -411,6 +411,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('title-details').hidden = false;
       $('details-heading').textContent = title.title;
       $('details-status').textContent = 'Loading details…';
+      $('title-details').scrollIntoView({ block: 'start' });
+      $('details-heading').focus({ preventScroll: true });
       $('details-content').replaceChildren(); $('episode-content').replaceChildren();
       $('episode-picker').hidden = true;
       try {
