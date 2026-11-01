@@ -154,6 +154,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Qed9LYz9rBBnUK3sMhrQwg_OzznRQO6";
     const authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     let authSession = null;
+    authClient.auth.onAuthStateChange((_event, session) => {
+      authSession = session;
+      $('sign-out').disabled = !session;
+      if (!session) $('auth-status').textContent = 'Not signed in.';
+    });
     async function checkBackendIdentity(session) {
       const host = location.hostname;
       if (!['127.0.0.1', 'localhost', '::1'].includes(host) || location.port !== '3000') {
@@ -187,17 +192,19 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if(mode === 'demo') return mock(path,method,body);
       const headers = {};
       if (body !== undefined) headers['Content-Type'] = 'application/json';
-      if (authSession) {
-        headers.Authorization = `Bearer ${authSession.access_token}`;
-        headers.apikey = SUPABASE_PUBLISHABLE_KEY;
-      }
+      const { data: sessionData, error: sessionError } = await authClient.auth.getSession();
+      if (sessionError) throw new Error(sessionError.message);
+      authSession = sessionData.session;
+      if (!authSession) throw new Error('Sign in before connecting to the backend.');
+      headers.Authorization = `Bearer ${authSession.access_token}`;
+      headers.apikey = SUPABASE_PUBLISHABLE_KEY;
       const response = await fetch(base + path, {
         method,headers,signal:AbortSignal.timeout(12000),
         ...(body === undefined ? {} : {body:JSON.stringify(body)})
       });
       if(response.status === 204) return null;
       const data = await response.json().catch(() => null);
-      if(!response.ok) throw new Error(data?.error?.message || `HTTP ${response.status}`);
+      if(!response.ok) throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || `HTTP ${response.status}`);
       if(data === null) throw new Error('Expected JSON from the backend.');
       return data;
     }
@@ -255,6 +262,10 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       me = null; room = null; joined = false; unload(); controls();
       $('catalog').replaceChildren(); $('list-items').replaceChildren(); $('messages').replaceChildren();
       me = await request('/api/me'); $('display-name').value = me.profile.displayName; $('avatar').value = me.profile.avatarKey;
+      if (mode === 'api') {
+        say('Backend connected. Profile loaded. Movie lists and rooms are still being built.');
+        return;
+      }
       await catalog(); await list(); apply(await request(`/api/rooms/${me.roomId}/state`));
       say(mode === 'demo' ? 'Local demo ready. Changes reset on reload; no backend is running.' : 'Backend connected.');
     }
