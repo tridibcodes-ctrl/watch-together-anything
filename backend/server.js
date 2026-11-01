@@ -58,8 +58,70 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
+      const userId = data.userClaims.id;
+      const supabaseUrl = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+      const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+      const authorization = request.headers.authorization;
+
+      if (!supabaseUrl || !publishableKey || !authorization) {
+        sendJson(response, 500, { error: "Supabase profile configuration is incomplete" });
+        return;
+      }
+
+      const profileUrl = `${supabaseUrl}/rest/v1/profiles`;
+      const profileHeaders = {
+        apikey: publishableKey,
+        Authorization: authorization,
+      };
+      const selectUrl = `${profileUrl}?user_id=eq.${encodeURIComponent(userId)}&select=user_id,display_name,avatar_key`;
+      let profileResponse = await fetch(selectUrl, { headers: profileHeaders });
+
+      if (!profileResponse.ok) {
+        console.error("Profile lookup failed with HTTP", profileResponse.status);
+        sendJson(response, 502, { error: "Could not load profile from Supabase" });
+        return;
+      }
+
+      let profiles = await profileResponse.json();
+      let profile = profiles[0];
+
+      if (!profile) {
+        profileResponse = await fetch(profileUrl, {
+          method: "POST",
+          headers: {
+            ...profileHeaders,
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+          },
+          body: JSON.stringify({ user_id: userId }),
+        });
+
+        if (profileResponse.ok) {
+          profiles = await profileResponse.json();
+          profile = profiles[0];
+        } else if (profileResponse.status === 409) {
+          profileResponse = await fetch(selectUrl, { headers: profileHeaders });
+          if (profileResponse.ok) {
+            profiles = await profileResponse.json();
+            profile = profiles[0];
+          }
+        }
+      }
+
+      if (!profile) {
+        console.error("Profile creation or lookup failed");
+        sendJson(response, 502, { error: "Could not create or load profile" });
+        return;
+      }
+
       sendJson(response, 200, {
-        userId: data.userClaims.id,
+        userId,
+        profile: {
+          displayName: profile.display_name,
+          avatarKey: profile.avatar_key,
+        },
+        groupId: null,
+        roomId: null,
       });
     } catch (error) {
       console.error("Auth check failed:", error.message);
