@@ -15,7 +15,7 @@
     body > header h1 { margin: 0; letter-spacing: -.04em; }
     body > header p { margin: 4px 0 0; color: #9da3b5; }
     .side-nav { position: fixed; z-index: 10; inset: 0 auto 0 0; width: 80px; padding: 22px 12px; background: #11141e; border-right: 1px solid #282d3c; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-    .side-nav a { width: 52px; height: 52px; display: grid; place-items: center; color: #a9b0c1; border-radius: 14px; text-decoration: none; transition: background .15s, color .15s; }
+    .side-nav a { position: relative; width: 52px; height: 52px; display: grid; place-items: center; color: #a9b0c1; border-radius: 14px; text-decoration: none; transition: background .15s, color .15s; }
     .side-nav a:hover, .side-nav a:focus-visible, .side-nav a[aria-current="page"] { color: #fff; background: #333052; outline: none; }
     .side-nav svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .side-nav .nav-brand { color: #a89cff; font-size: 25px; font-weight: 800; margin-bottom: 22px; }
@@ -39,9 +39,12 @@
     body.playback-expanded { overflow: hidden; }
     .playback-stage:fullscreen #player, .playback-stage.is-expanded #player { flex: 1; min-height: 0; width: 100%; }
     .playback-stage:fullscreen #player iframe, .playback-stage.is-expanded #player iframe { display: block; height: 100%; width: 100%; border: 0; }
-    .playback-stage:fullscreen .chat-toggle, .playback-stage.is-expanded .chat-toggle { position: static; margin: 0 0 0 auto; width: 44px; height: 44px; }
+    .playback-stage:fullscreen .chat-toggle, .playback-stage.is-expanded .chat-toggle { position: relative; inset: auto; margin: 0 0 0 auto; width: 44px; height: 44px; }
     .playback-stage:fullscreen .chat-panel, .playback-stage.is-expanded .chat-panel { position: absolute; inset: 72px 16px 16px auto; width: min(360px, calc(100% - 32px)); height: auto; max-height: calc(100% - 88px); }
     .chat-toggle { position: fixed; z-index: 19; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 50%; box-shadow: 0 10px 30px #0009; font-size: 23px; }
+    .chat-badge { position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: #fb5478; color: #fff; border: 2px solid #151924; font-size: 11px; font-weight: 700; line-height: 1; pointer-events: none; }
+    .chat-badge[hidden] { display: none; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
     .chat-panel { position: fixed; z-index: 20; right: 24px; bottom: 92px; width: min(380px, calc(100vw - 112px)); height: min(520px, calc(100vh - 120px)); display: flex; flex-direction: column; background: #1b2030; border: 1px solid #504b79; border-radius: 18px; box-shadow: 0 20px 60px #000b; padding: 16px; }
     .chat-panel[hidden] { display: none; }
     .chat-panel-header { display: flex; justify-content: space-between; align-items: center; }
@@ -73,7 +76,7 @@
     <a href="#browse" aria-label="Discover" title="Discover"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg></a>
     <a href="#list" aria-label="Watchlist" title="Watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-7-4-7 4z"/></svg></a>
     <a href="#room" aria-label="Room" title="Room"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg></a>
-    <a href="#chat" aria-label="Chat" title="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/><path d="M8 10h8M8 13h5"/></svg></a>
+    <a id="chat-nav" href="#chat" aria-label="Chat" title="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/><path d="M8 10h8M8 13h5"/></svg><span id="chat-nav-badge" class="chat-badge" aria-hidden="true" hidden></span></a>
     <a class="nav-profile" href="#profile" aria-label="Profile" title="Profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3-7 8-7s8 3 8 7"/></svg></a>
   </nav>
 
@@ -172,7 +175,8 @@
       <div id="playback-stage" class="playback-stage">
         <div class="playback-toolbar">
           <button id="fullscreen-player" type="button" aria-controls="playback-stage" aria-pressed="false" disabled>Fullscreen with chat</button>
-          <button id="chat-toggle" class="chat-toggle" type="button" aria-label="Open chat" aria-controls="chat-panel" aria-expanded="false" title="Open chat"><svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/><path d="M8 10h8M8 13h5"/></svg></button>
+          <button id="chat-toggle" class="chat-toggle" type="button" aria-label="Open chat" aria-controls="chat-panel" aria-expanded="false" title="Open chat"><svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/><path d="M8 10h8M8 13h5"/></svg><span id="chat-badge" class="chat-badge" aria-hidden="true" hidden></span></button>
+          <span id="chat-alert" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></span>
         </div>
         <div id="player"></div>
         <aside id="chat-panel" class="chat-panel" aria-labelledby="chat" hidden>
@@ -340,7 +344,44 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     let authSession = null;
     let chatChannel = null, chatGeneration = 0, chatTimer = null, chatRequestVersion = 0;
     let listVersion = 0, listTimer = null;
+    let chatNotifications = { roomId: null, userId: null, seen: null, unread: new Set() };
+    function renderChatNotifications() {
+      const count = chatNotifications.unread.size;
+      const suffix = count ? `, ${count} unread message${count === 1 ? '' : 's'}` : '';
+      for (const id of ['chat-badge', 'chat-nav-badge']) {
+        $(id).hidden = count === 0;
+        $(id).textContent = count > 99 ? '99+' : String(count);
+      }
+      const label = ($('chat-panel').hidden ? 'Open chat' : 'Close chat') + suffix;
+      $('chat-toggle').setAttribute('aria-label', label);
+      $('chat-toggle').title = label;
+      $('chat-nav').setAttribute('aria-label', 'Chat' + suffix);
+      $('chat-nav').title = 'Chat' + suffix;
+      const announcement = count ? `${count} unread message${count === 1 ? '' : 's'}. Open chat to read.` : '';
+      if ($('chat-alert').textContent !== announcement) $('chat-alert').textContent = announcement;
+    }
+    function resetChatNotifications() {
+      chatNotifications = { roomId: null, userId: null, seen: null, unread: new Set() };
+      renderChatNotifications();
+    }
+    function updateChatNotifications(items, roomId, userId) {
+      if (chatNotifications.roomId !== roomId || chatNotifications.userId !== userId) {
+        chatNotifications = { roomId, userId, seen: null, unread: new Set() };
+      }
+      // The first successful history load establishes a baseline, not unread messages.
+      if (chatNotifications.seen) {
+        for (const message of items) {
+          if (message.id && !chatNotifications.seen.has(message.id) && message.senderId !== userId && $('chat-panel').hidden) {
+            chatNotifications.unread.add(message.id);
+          }
+        }
+      } else chatNotifications.seen = new Set();
+      for (const message of items) if (message.id) chatNotifications.seen.add(message.id);
+      if (!$('chat-panel').hidden) chatNotifications.unread.clear();
+      renderChatNotifications();
+    }
     function stopLiveChat() {
+      resetChatNotifications();
       if (typeof sharedPlayback !== 'undefined') sharedPlayback.selectRoom(null);
       listVersion++; clearTimeout(listTimer); listTimer = null;
       chatGeneration++; chatRequestVersion++;
@@ -671,6 +712,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const selectedRoomId = me.roomId, selectedUserId = me.userId, version = ++chatRequestVersion;
       const data = await request('/api/rooms/' + selectedRoomId + '/messages');
       if (me?.roomId !== selectedRoomId || me?.userId !== selectedUserId || version !== chatRequestVersion) return;
+      updateChatNotifications(data.items, selectedRoomId, selectedUserId || me.profile?.userId);
       const messages = $('messages');
       const wasAtBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
       messages.replaceChildren(...data.items.map(m => node('li', m.senderName + ': ' + m.body)));
@@ -797,8 +839,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function setChatOpen(open) {
       $('chat-panel').hidden = !open;
       $('chat-toggle').setAttribute('aria-expanded', String(open));
-      $('chat-toggle').setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
-      $('chat-toggle').title = open ? 'Close chat' : 'Open chat';
+      if (open) chatNotifications.unread.clear();
+      renderChatNotifications();
       if (open) {
         $('messages').scrollTop = $('messages').scrollHeight;
         $('close-chat').focus({ preventScroll: true });
@@ -838,7 +880,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (method === 'POST') { let item = demo.list.find(i => i.title.tmdbId === body.tmdbId && i.title.mediaType === body.mediaType); if (!item) { const title = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); if (!title) throw new Error('Unknown demo title.'); item = { id: uuid(), title, status: 'planned' }; demo.list.push(item); } return { item }; }
         return { items: demo.list };
       }
-      if (path.endsWith('/messages')) { if (method === 'POST') { const message = { id: body.clientMessageId, senderName: demo.profile.displayName, body: body.body, createdAt: new Date().toISOString() }; if (!demo.messages.some(m => m.id === message.id)) demo.messages.push(message); return { message }; } return { items: demo.messages }; }
+      if (path.endsWith('/messages')) { if (method === 'POST') { const message = { id: body.clientMessageId, senderId: demo.profile.userId, senderName: demo.profile.displayName, body: body.body, createdAt: new Date().toISOString() }; if (!demo.messages.some(m => m.id === message.id)) demo.messages.push(message); return { message }; } return { items: demo.messages }; }
       if (path.endsWith('/media')) { const t = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); demo.room = { ...demo.room, sessionId: uuid(), media: { ...body, title: t.title }, provider: 'vidspark', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: demo.room.revision + 1 }; const item = demo.list.find(i => i.title.tmdbId === t.tmdbId && i.title.mediaType === t.mediaType); if (item.status !== 'watched') item.status = 'watching'; return snapshot(); }
       if (path.endsWith('/commands')) { if (body.sessionId !== demo.room.sessionId) throw new Error('Stale session.'); demo.room.positionMs = body.action === 'seek' ? body.targetPositionMs : position(demo.room); if (body.action === 'play' || body.action === 'pause') demo.room.status = body.action === 'play' ? 'playing' : 'paused'; if (body.action === 'provider') { demo.room.provider = body.provider; demo.room.status = 'paused'; } demo.room.anchorAt = new Date().toISOString(); demo.room.revision++; return snapshot(); }
       if (path.endsWith('/complete') || path.endsWith('/undo-completion')) { const completed = path.endsWith('/complete'); if (demo.room.media?.mediaType === 'movie') demo.list.filter(i => i.title.tmdbId === demo.room.media.tmdbId && i.title.mediaType === 'movie').forEach(i => i.status = completed ? 'watched' : 'watching'); return { completed, message: 'Demo updated. Your backend must verify shared completion; TV updates only the selected episode.' }; }

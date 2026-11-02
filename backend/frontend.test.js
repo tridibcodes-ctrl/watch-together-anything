@@ -124,3 +124,55 @@ test('unsupported or rejected fullscreen uses a reversible expanded player', asy
     assert.equal(app.document.body.classList.contains('playback-expanded'), false);
   }
 });
+
+function notifications() {
+  const nodes = {};
+  const context = vm.createContext({ $: id => nodes[id] ??= {
+    hidden: true, textContent: '', setAttribute(name, value) { this[name] = value; },
+    focus() {}, scrollHeight: 100, scrollTop: 0
+  } });
+  vm.runInContext(source.slice(source.indexOf('    let chatNotifications ='), source.indexOf('    function stopLiveChat()')), context);
+  vm.runInContext(source.slice(source.indexOf('    function setChatOpen('), source.indexOf("    $('chat-toggle').addEventListener")), context);
+  return { context, nodes, update: (items, room = 'room') => context.updateChatNotifications(items, room, 'me') };
+}
+
+test('chat badges ignore history, outgoing messages, and duplicate live reloads', () => {
+  const app = notifications();
+  const history = { id: 'history', senderId: 'partner' };
+  app.update([history]);
+  assert.equal(app.nodes['chat-badge'].hidden, true);
+  const incoming = { id: 'incoming', senderId: 'partner' };
+  const outgoing = { id: 'outgoing', senderId: 'me' };
+  app.update([history, incoming, outgoing]);
+  app.update([history, incoming, outgoing]);
+  assert.equal(app.nodes['chat-badge'].textContent, '1');
+  assert.equal(app.nodes['chat-nav-badge'].textContent, '1');
+  assert.equal(app.nodes['chat-badge'].hidden, false);
+  assert.match(app.nodes['chat-toggle']['aria-label'], /1 unread message/);
+});
+
+test('opening chat clears badges and incoming texts while open stay read', () => {
+  const app = notifications();
+  app.update([]);
+  app.update([{ id: 'first', senderId: 'partner' }]);
+  app.context.setChatOpen(true);
+  assert.equal(app.nodes['chat-badge'].hidden, true);
+  app.update([{ id: 'first', senderId: 'partner' }, { id: 'second', senderId: 'partner' }]);
+  app.context.setChatOpen(false);
+  assert.equal(app.nodes['chat-nav-badge'].hidden, true);
+  app.update([{ id: 'first', senderId: 'partner' }, { id: 'second', senderId: 'partner' }, { id: 'third', senderId: 'partner' }]);
+  assert.equal(app.nodes['chat-badge'].textContent, '1');
+});
+
+test('switching rooms or signing out cannot carry unread counts into another room', () => {
+  const app = notifications();
+  app.update([]);
+  app.update([{ id: 'first', senderId: 'partner' }]);
+  app.update([{ id: 'other-history', senderId: 'other-partner' }], 'other-room');
+  assert.equal(app.nodes['chat-badge'].hidden, true);
+  app.update([{ id: 'new', senderId: 'other-partner' }], 'other-room');
+  assert.equal(app.nodes['chat-badge'].textContent, '1');
+  app.context.resetChatNotifications();
+  assert.equal(app.nodes['chat-badge'].hidden, true);
+  assert.equal(app.nodes['chat-alert'].textContent, '');
+});
