@@ -33,13 +33,20 @@
     #catalog, #list-items { display: flex; flex-wrap: wrap; gap: 16px; }
     #player { max-width: 100%; }
     .playback-stage { position: relative; background: #090b11; border-radius: 12px; }
-    .playback-toolbar { display: flex; align-items: center; min-height: 64px; padding: 8px 12px; }
+    .playback-toolbar { display: flex; align-items: center; gap: 6px; min-height: 54px; padding: 8px 12px; border-bottom: 1px solid #ffffff10; background: linear-gradient(120deg, #1b1c2b, #10121c); border-radius: 12px 12px 0 0; }
+    .playback-caption { flex: 1; min-width: 0; padding-left: 4px; font-size: 12px; font-weight: 600; letter-spacing: .06em; color: #b9b3d3; }
+    .playback-toolbar .player-tool { display: inline-grid; place-items: center; width: 38px; height: 38px; padding: 8px; margin: 0; border: 1px solid #ffffff12; border-radius: 10px; background: #ffffff06; color: #dfdbee; transition: background .15s, border-color .15s; }
+    .playback-toolbar .player-tool:hover:not(:disabled) { background: #a89cff20; border-color: #a89cff66; }
+    .player-tool svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .player-tool[aria-pressed="false"] .exit-icon, .player-tool[aria-pressed="true"] .enter-icon { display: none; }
+    #player iframe { display: block; border: 0; }
     .playback-stage:fullscreen, .playback-stage.is-expanded { width: 100%; height: 100dvh; display: flex; flex-direction: column; border-radius: 0; background: #090b11; }
     .playback-stage.is-expanded { position: fixed; inset: 0; z-index: 100; }
     body.playback-expanded { overflow: hidden; }
     .playback-stage:fullscreen #player, .playback-stage.is-expanded #player { flex: 1; min-height: 0; width: 100%; }
     .playback-stage:fullscreen #player iframe, .playback-stage.is-expanded #player iframe { display: block; height: 100%; width: 100%; border: 0; }
-    .playback-stage:fullscreen .chat-toggle, .playback-stage.is-expanded .chat-toggle { position: relative; inset: auto; margin: 0 0 0 auto; width: 44px; height: 44px; }
+    .playback-stage:fullscreen .chat-toggle, .playback-stage.is-expanded .chat-toggle { position: relative; inset: auto; margin: 0 0 0 4px; width: 38px; height: 38px; border-radius: 10px; box-shadow: none; }
+    .playback-stage:fullscreen .playback-toolbar, .playback-stage.is-expanded .playback-toolbar { border-radius: 0; }
     .playback-stage:fullscreen .chat-panel, .playback-stage.is-expanded .chat-panel { position: absolute; inset: 72px 16px 16px auto; width: min(360px, calc(100% - 32px)); height: auto; max-height: calc(100% - 88px); }
     .chat-toggle { position: fixed; z-index: 19; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 50%; box-shadow: 0 10px 30px #0009; font-size: 23px; }
     .chat-badge { position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: #fb5478; color: #fff; border: 2px solid #151924; font-size: 11px; font-weight: 700; line-height: 1; pointer-events: none; }
@@ -172,10 +179,12 @@
       <p id="sync-status" role="status" aria-live="polite">Select a room to share playback.</p>
       <button id="retry-command" type="button">Retry last playback command</button>
       <h3 id="player-title">Player</h3>
-      <p id="player-status" role="status" aria-live="polite">Choose Watch on a movie or TV episode to open VidSpark.</p>
+      <p id="player-status" role="status" aria-live="polite">Choose Watch on a movie or TV episode to open VidRift.</p>
       <div id="playback-stage" class="playback-stage">
         <div class="playback-toolbar">
-          <button id="fullscreen-player" type="button" aria-controls="playback-stage" aria-pressed="false" disabled>Fullscreen with chat</button>
+          <span class="playback-caption">WATCH TOGETHER</span>
+          <button id="load-player" class="player-tool" type="button" aria-label="Reload player" title="Reload player" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19.5 12a8 8 0 1 0-2.2 5.5M20 12l-3-4"/></svg></button>
+          <button id="fullscreen-player" class="player-tool" type="button" aria-label="Enter fullscreen with chat" title="Enter fullscreen with chat" aria-controls="playback-stage" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path class="enter-icon" d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><path class="exit-icon" d="M3 8h5V3m13 5h-5V3M8 21v-5H3m13 5v-5h5"/></svg></button>
           <button id="chat-toggle" class="chat-toggle" type="button" aria-label="Open chat" aria-controls="chat-panel" aria-expanded="false" title="Open chat"><svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/><path d="M8 10h8M8 13h5"/></svg><span id="chat-badge" class="chat-badge" aria-hidden="true" hidden></span></button>
           <span id="chat-alert" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></span>
         </div>
@@ -184,7 +193,6 @@
           <div class="chat-panel-header"><h3 id="chat">Text chat</h3><button id="close-chat" type="button" aria-label="Close chat">&#215;</button></div>
           <p id="chat-status" role="status" aria-live="polite">Live chat is off in Local demo.</p>
           <p id="chat-playback-status" role="status" aria-live="polite" hidden></p>
-          <button id="refresh-chat" type="button">Refresh chat</button>
           <ol id="messages"></ol>
           <form id="chat-form">
             <label>Message <input id="message" maxlength="2000" required></label>
@@ -192,8 +200,6 @@
           </form>
         </aside>
       </div>
-      <button id="load-player" type="button" disabled>Reload player</button>
-      <button id="fallback-player" type="button" disabled>Try VidLink fallback</button>
       <button id="stop-player" type="button" disabled>Close player</button>
       <button id="play" type="button">Play together</button>
       <button id="pause" type="button">Pause together</button>
@@ -201,19 +207,18 @@
       <button id="seek" type="button">Seek together</button>
       <p>
         <label>Provider <select id="provider">
-            <option value="vidspark">VidSpark (primary)</option>
-            <option value="vidrift">VidRift</option>
+            <option value="vidrift">VidRift (primary)</option>
+            <option value="vidspark">VidSpark</option>
             <option value="vidbolt">VidBolt</option>
             <option value="cinesrc">CineSrc</option>
             <option value="cinemaos">CinemaOS</option>
-            <option value="vidlink">VidLink</option>
           </select></label>
         <button id="switch-provider" type="button" disabled>Switch provider</button>
       </p>
       <p>In Backend API mode, both partners join playback. Play, pause, and seek inside VidSpark, VidRift,
         VidBolt, CineSrc, or CinemaOS to control the room; the shared buttons also remain available.
         Press native Play once in each player if needed to load its video. Playback waits for both partners
-        and pauses during detected buffering. VidLink playback is manual. Provider changes apply to both partners.
+        and pauses during detected buffering. Provider changes apply to both partners.
         Choose episodes here in the app so both players keep the same episode.</p>
       <button id="complete" type="button">We finished together</button>
       <button id="undo" type="button">Undo completion</button>
@@ -278,9 +283,8 @@ Shared-list status: planned | watching | watched.
 Serialize playback commands and deduplicate UUIDs on the backend.
 Completion must verify both users' confirmations; one request is not proof.
 TV completion applies to an episode, not automatically the entire series.</pre>
-      <p>This page uses manual refresh for room state and chat. Add authenticated realtime subscriptions when your
-        backend is ready. External playback, readiness, drift correction, automatic completion, and call
-        integration require further work.</p>
+      <p>Room playback and chat use authenticated live updates with automatic checks for missed updates.
+        Completion tracking remains planned.</p>
     </details>
   </main>
 
@@ -305,9 +309,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (!state.media || previousProvider !== state.provider) $('provider').value = state.provider;
       controls();
       if (mode === 'api') sharedPlayback.playerEvent(state);
-    }, onFallback() {
-      if (mode === 'api' && sharedView.joined) act(() => sharedPlayback.command('provider', { provider: 'vidlink' }));
-      else embeddedPlayer.switchProvider('vidlink');
     } });
     const sharedPlayback = MultiplaySync.createRoomSync({ request, player: embeddedPlayer,
       subscribe(roomId, refresh) {
@@ -325,7 +326,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         $('chat-playback-status').textContent = waiting;
         $('chat-playback-status').hidden = !waiting;
         $('room-status').textContent = room?.media ? `${room.media.title} · ${room.provider} · ${room.status} · revision ${room.revision}` : 'No shared title selected.';
-        $('sync-status').textContent = !view.roomId ? 'Select a room to share playback.' : !view.online ? 'Connecting to room playback…' : !room?.media ? 'Choose Watch on a title to share it with this room.' : !joined ? 'A room title is selected. Click Join playback to load it.' : room.provider === 'vidlink' ? 'VidLink fallback: title/provider shared; play, pause and seek are manual.' : room.waitingForReady ? 'Paused: ' + room.readiness.readyCount + '/2 partners ready. ' + (view.localReady ? 'Waiting for your partner.' : 'Preparing your player; use native Play once if needed.') + (room.playRequested ? ' Playback will resume when both are ready.' : ' Press Play in the player or Play together to request playback.') : view.canControl ? 'Shared controls ready for ' + MultiplayPlayer.PROVIDERS[room.provider].name + '. Both partners can control the room.' : 'Waiting for ' + MultiplayPlayer.PROVIDERS[room.provider].name + ' video status. Press its native Play button if needed. VidLink fallback is manual.';
+        $('sync-status').textContent = !view.roomId ? 'Select a room to share playback.' : !view.online ? 'Connecting to room playback…' : !room?.media ? 'Choose Watch on a title to share it with this room.' : !joined ? 'A room title is selected. Click Join playback to load it.' : room.waitingForReady ? 'Paused: ' + room.readiness.readyCount + '/2 partners ready. ' + (view.localReady ? 'Waiting for your partner.' : 'Preparing your player; use native Play once if needed.') + (room.playRequested ? ' Playback will resume when both are ready.' : ' Press Play in the player or Play together to request playback.') : view.canControl ? 'Shared controls ready for ' + MultiplayPlayer.PROVIDERS[room.provider].name + '. Both partners can control the room.' : 'Waiting for ' + MultiplayPlayer.PROVIDERS[room.provider].name + ' video status. Press its native Play button if needed.';
         controls();
       },
       onError(message) { $('sync-status').textContent = message; }
@@ -340,14 +341,14 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     ];
     const demo = {
       profile: { userId: 'demo-user', displayName: 'Your name', avatarKey: 'moon' }, list: [], messages: [],
-      room: { roomId: 'demo-room', sessionId: null, media: null, provider: 'vidspark', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: 0 }
+      room: { roomId: 'demo-room', sessionId: null, media: null, provider: 'vidrift', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: 0 }
     };
     const uuid = () => crypto.randomUUID();
     const SUPABASE_URL = "https://hxfqojvwfsytqergqywt.supabase.co";
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Qed9LYz9rBBnUK3sMhrQwg_OzznRQO6";
     const authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     let authSession = null;
-    let chatChannel = null, chatGeneration = 0, chatTimer = null, chatRequestVersion = 0;
+    let chatChannel = null, chatGeneration = 0, chatTimer = null, chatPoll = null, chatRequestVersion = 0;
     let listVersion = 0, listTimer = null;
     let chatNotifications = { roomId: null, userId: null, seen: null, unread: new Set() };
     function renderChatNotifications() {
@@ -393,6 +394,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       listVersion++; clearTimeout(listTimer); listTimer = null;
       chatGeneration++; chatRequestVersion++;
       clearTimeout(chatTimer); chatTimer = null;
+      clearTimeout(chatPoll); chatPoll = null;
       const previous = chatChannel; chatChannel = null;
       if (previous) authClient.removeChannel(previous).catch(() => { });
     }
@@ -413,7 +415,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         clearTimeout(chatTimer);
         chatTimer = setTimeout(() => {
           if (current()) chat().catch(() => {
-            if (current()) $('chat-status').textContent = 'Could not load messages. Use Refresh chat to retry.';
+            if (current()) $('chat-status').textContent = 'Could not load messages. Retrying automatically…';
           });
         }, 80);
       };
@@ -430,7 +432,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
             $('chat-status').textContent = 'Live chat ready. Database listener confirmed.';
             reload(); reloadList();
           } else {
-            $('chat-status').textContent = 'Database live updates unavailable: ' + (payload.message || payload.status) + '. Use Refresh chat.';
+            $('chat-status').textContent = 'Database live updates unavailable. Checking for messages automatically…';
           }
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'watch_room_messages', filter: 'room_id=eq.' + roomId }, () => {
@@ -447,10 +449,18 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           $('chat-status').textContent = 'Channel connected; waiting for the database listener.';
           reload(); reloadList();
         } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
-          $('chat-status').textContent = 'Live chat disconnected. Use Refresh chat or reconnect.';
+          $('chat-status').textContent = 'Live chat reconnecting. Checking for messages automatically…';
         }
       });
-      reload(); reloadList();
+      function pollChat() {
+        chatPoll = setTimeout(async () => {
+          if (!current()) return;
+          try { await chat(); }
+          catch { if (current()) $('chat-status').textContent = 'Could not load messages. Retrying automatically…'; }
+          finally { if (current()) pollChat(); }
+        }, 8000);
+      }
+      pollChat(); reload(); reloadList();
     }
     authClient.auth.onAuthStateChange((_event, session) => {
       authSession = session;
@@ -497,7 +507,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('catalog-next').disabled = catalogLoading || !catalogState?.hasMore;
       const active = !!(joined && room?.sessionId);
       for (const id of ['load-player', 'switch-provider', 'stop-player']) $(id).disabled = !localPlayback;
-      $('fallback-player').disabled = !localPlayback || localPlayback.provider === 'vidlink';
       $('provider').disabled = !localPlayback;
       for (const id of ['play', 'pause', 'seek']) $(id).disabled = mode !== 'api' || !sharedView.canControl;
       for (const id of ['complete', 'undo']) $(id).disabled = mode === 'api' || !active;
@@ -506,7 +515,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('refresh-room').disabled = mode === 'api' ? !me?.roomId : !me;
       $('retry-command').disabled = mode !== 'api' || sharedView.busy || !sharedView.online;
       if (mode === 'api' && (!sharedView.online || sharedView.busy)) {
-        $('switch-provider').disabled = true; $('fallback-player').disabled = true;
+        $('switch-provider').disabled = true;
       }
       $('chat-form').querySelector('button').disabled = mode === 'api' ? !me?.roomId : !joined;
     }
@@ -705,7 +714,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (mode === 'api') await sharedPlayback.watch(media);
         else embeddedPlayer.load(media);
         location.hash = 'room';
-        say(mode === 'api' ? 'Room title selected. Your partner can click Join playback. Use shared controls when the selected player is ready.' : 'CineSrc opened. Use Try VidLink fallback if it cannot play this title.');
+        say(mode === 'api' ? 'Room title selected. Your partner can click Join playback. Use shared controls when the selected player is ready.' : 'VidRift opened. Choose another provider if it cannot play this title.');
       }));
       if (item && item.status !== 'watched') article.append(button('Remove', () => removeListItem(item.id)));
       return article;
@@ -724,6 +733,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const selectedRoomId = me.roomId, selectedUserId = me.userId, version = ++chatRequestVersion;
       const data = await request('/api/rooms/' + selectedRoomId + '/messages');
       if (me?.roomId !== selectedRoomId || me?.userId !== selectedUserId || version !== chatRequestVersion) return;
+      if ($('chat-status').textContent?.startsWith('Could not load messages.')) $('chat-status').textContent = 'Messages are up to date.';
       updateChatNotifications(data.items, selectedRoomId, selectedUserId || me.profile?.userId);
       const messages = $('messages');
       const wasAtBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
@@ -823,14 +833,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     bind('seek', () => { const seconds = Number($('position').value); if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Enter a valid position.'); return command('seek', { targetPositionMs: Math.round(seconds * 1000) }); });
     bind('switch-provider', () => mode === 'api' ? sharedPlayback.command('provider', { provider: $('provider').value }) : embeddedPlayer.switchProvider($('provider').value));
     bind('load-player', () => mode === 'api' ? sharedPlayback.retryPlayer() : embeddedPlayer.retry());
-    bind('fallback-player', () => mode === 'api' ? sharedPlayback.command('provider', { provider: 'vidlink' }) : embeddedPlayer.switchProvider('vidlink'));
     bind('stop-player', () => mode === 'api' ? sharedPlayback.leave() : unload());
     function isPlaybackExpanded() {
       return document.fullscreenElement === $('playback-stage') || $('playback-stage').classList.contains('is-expanded');
     }
     function updateFullscreenControls() {
       const expanded = isPlaybackExpanded();
-      $('fullscreen-player').textContent = expanded ? 'Exit fullscreen' : 'Fullscreen with chat';
+      const label = expanded ? 'Exit fullscreen' : 'Enter fullscreen with chat';
+      $('fullscreen-player').setAttribute('aria-label', label);
+      $('fullscreen-player').title = label;
       $('fullscreen-player').setAttribute('aria-pressed', String(expanded));
       $('fullscreen-player').disabled = !localPlayback && !expanded;
       document.body.classList.toggle('playback-expanded', expanded);
@@ -852,7 +863,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     bind('fullscreen-player', togglePlaybackFullscreen);
     document.addEventListener('fullscreenchange', updateFullscreenControls);
-    bind('refresh-chat', chat);
     function setChatOpen(open) {
       $('chat-panel').hidden = !open;
       $('chat-toggle').setAttribute('aria-expanded', String(open));
@@ -898,7 +908,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         return { items: demo.list };
       }
       if (path.endsWith('/messages')) { if (method === 'POST') { const message = { id: body.clientMessageId, senderId: demo.profile.userId, senderName: demo.profile.displayName, body: body.body, createdAt: new Date().toISOString() }; if (!demo.messages.some(m => m.id === message.id)) demo.messages.push(message); return { message }; } return { items: demo.messages }; }
-      if (path.endsWith('/media')) { const t = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); demo.room = { ...demo.room, sessionId: uuid(), media: { ...body, title: t.title }, provider: 'vidspark', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: demo.room.revision + 1 }; const item = demo.list.find(i => i.title.tmdbId === t.tmdbId && i.title.mediaType === t.mediaType); if (item.status !== 'watched') item.status = 'watching'; return snapshot(); }
+      if (path.endsWith('/media')) { const t = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); demo.room = { ...demo.room, sessionId: uuid(), media: { ...body, title: t.title }, provider: 'vidrift', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: demo.room.revision + 1 }; const item = demo.list.find(i => i.title.tmdbId === t.tmdbId && i.title.mediaType === t.mediaType); if (item.status !== 'watched') item.status = 'watching'; return snapshot(); }
       if (path.endsWith('/commands')) { if (body.sessionId !== demo.room.sessionId) throw new Error('Stale session.'); demo.room.positionMs = body.action === 'seek' ? body.targetPositionMs : position(demo.room); if (body.action === 'play' || body.action === 'pause') demo.room.status = body.action === 'play' ? 'playing' : 'paused'; if (body.action === 'provider') { demo.room.provider = body.provider; demo.room.status = 'paused'; } demo.room.anchorAt = new Date().toISOString(); demo.room.revision++; return snapshot(); }
       if (path.endsWith('/complete') || path.endsWith('/undo-completion')) { const completed = path.endsWith('/complete'); if (demo.room.media?.mediaType === 'movie') demo.list.filter(i => i.title.tmdbId === demo.room.media.tmdbId && i.title.mediaType === 'movie').forEach(i => i.status = completed ? 'watched' : 'watching'); return { completed, message: 'Demo updated. Your backend must verify shared completion; TV updates only the selected episode.' }; }
       if (path.endsWith('/leave')) return null;

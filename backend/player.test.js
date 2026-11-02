@@ -11,20 +11,15 @@ test('provider URLs retain the exact movie or episode and use provider-specific 
   assert.equal(cinema.searchParams.get('autoPlay'), 'false');
   assert.equal(cinema.searchParams.has('startTime'), false);
   assert.equal(new URL(embedUrl(tv, 'cinemaos')).pathname, '/player/1396/0/1');
-  const fallback = new URL(embedUrl(tv, 'vidlink', 65.7));
-  assert.equal(fallback.pathname, '/tv/1396/0/1');
-  assert.equal(fallback.searchParams.get('startAt'), '65');
-  assert.equal(fallback.searchParams.get('autoplay'), 'false');
-  assert.equal(fallback.searchParams.get('nextbutton'), 'false');
-  assert.equal(new URL(embedUrl(movie, 'vidlink', Infinity)).searchParams.get('startAt'), '0');
+  assert.throws(() => embedUrl(tv, 'vidlink'), /Unknown player provider/);
   for (const media of [{ ...movie, tmdbId: '155' }, { ...movie, mediaType: 'person' }, { ...tv, episode: 0 }, { ...tv, season: -1 }]) assert.throws(() => embedUrl(media, 'cinemaos'));
   assert.throws(() => embedUrl(movie, 'https://evil.test'));
 });
 
-test('VidLink events require active frame, exact origin, media identity and finite position', () => {
+test('removed provider messages are ignored even from their former iframe', () => {
   const frame = { contentWindow: {} };
   const event = { origin: 'https://vidlink.pro', source: frame.contentWindow, data: { type: 'PLAYER_EVENT', data: { event: 'timeupdate', mtmdbId: 1396, mediaType: 'tv', season: 0, episode: 1, currentTime: 90 } } };
-  assert.deepEqual(playbackEvent(event, frame, tv, 'vidlink'), { event: 'timeupdate', seconds: 90, duration: 0, playing: undefined });
+  assert.equal(playbackEvent(event, frame, tv, 'vidlink'), null);
   for (const changed of [
     { origin: 'https://vidlink.pro.evil.test' }, { source: {} }, { data: 'bad json' },
     ...[{ mtmdbId: 155 }, { mediaType: 'movie' }, { episode: 2 }, { currentTime: Infinity }, { currentTime: -1 }, { currentTime: '90' }, { event: 'error' }].map(data => ({ data: { type: 'PLAYER_EVENT', data: { ...event.data.data, ...data } } }))
@@ -46,26 +41,24 @@ function harness({ now } = {}) {
 
 test('embedded providers cannot replace the fullscreen stage and hide its chat', () => {
   const app = harness();
-  for (const provider of ['vidspark', 'vidrift', 'vidbolt', 'cinesrc', 'cinemaos', 'vidlink']) {
+  for (const provider of ['vidspark', 'vidrift', 'vidbolt', 'cinesrc', 'cinemaos']) {
     app.player.load(movie, provider);
     assert.equal(app.frames.at(-1).allowFullscreen, false);
     assert.match(app.frames.at(-1).allow, /fullscreen 'none'/);
   }
 });
 
-test('new selection starts primary; explicit or reported load failure falls back once', () => {
+test('VidRift is primary and failed loading offers an explicit retry without changing providers', () => {
   const app = harness();
-  app.player.load(tv, 'cinemaos');
-  assert.equal(app.states.at(-1).provider, 'cinemaos');
+  app.player.load(tv);
+  assert.equal(app.states.at(-1).provider, 'vidrift');
   app.frames[0].onerror();
-  assert.equal(app.states.at(-1).provider, 'vidlink');
-  assert.equal(new URL(app.frames[1].src).pathname, '/tv/1396/0/1');
-  app.frames[1].onerror();
-  assert.equal(app.frames.length, 2);
+  assert.equal(app.states.at(-1).provider, 'vidrift');
+  assert.equal(app.frames.length, 1);
   assert.equal(app.states.at(-1).status, 'error');
   app.player.load(movie, 'cinemaos');
   assert.equal(app.states.at(-1).provider, 'cinemaos');
-  app.player.switchProvider('vidlink');
+  app.player.switchProvider('vidbolt');
   assert.equal(new URL(app.frames.at(-1).src).pathname, '/movie/155');
   assert.equal(app.container.children.length, 1);
 });
@@ -94,22 +87,22 @@ test('CinemaOS controls wait for status and always target the exact provider ori
   assert.equal(app.player.command('seek', { time: -1 }), false);
   assert.deepEqual(app.frames[0].commands.at(-2), { message: { command: 'seek', time: 120 }, origin: 'https://cinemaos.tech' });
   assert.deepEqual(app.frames[0].commands.at(-1), { message: { command: 'play' }, origin: 'https://cinemaos.tech' });
-  app.player.switchProvider('vidlink');
+  app.player.switchProvider('vidrift');
   assert.equal(app.player.command('play'), false);
   assert.equal(app.player.getStatus().ready, false);
 });
 
-test('verified VidLink progress resumes on retry; old frames and late load events are ignored', () => {
+test('verified progress resumes on retry; old frames and late load events are ignored', () => {
   const app = harness(); app.player.load(tv, 'cinemaos');
   const staleLoad = app.frames[0].onload;
-  app.player.switchProvider('vidlink');
+  app.player.switchProvider('vidspark');
   const receive = app.listeners.get('message');
-  receive({ origin: 'https://vidlink.pro', source: app.frames[1].contentWindow, data: { type: 'PLAYER_EVENT', data: { event: 'pause', mtmdbId: 1396, mediaType: 'tv', season: 0, episode: 1, currentTime: 70 } } });
+  receive({ origin: 'https://vidspark.to', source: app.frames[1].contentWindow, data: { source: 'vidspark-player', event: 'pause', currentTime: 70, duration: 1200 } });
   assert.equal(app.states.at(-1).seconds, 70);
   app.player.retry();
-  assert.equal(new URL(app.frames[2].src).searchParams.get('startAt'), '70');
+  assert.equal(new URL(app.frames[2].src).searchParams.get('t'), '70');
   const count = app.states.length; staleLoad();
-  receive({ origin: 'https://vidlink.pro', source: app.frames[1].contentWindow, data: { type: 'PLAYER_EVENT', data: { event: 'ended', mtmdbId: 1396, mediaType: 'tv', season: 0, episode: 1, currentTime: 900 } } });
+  receive({ origin: 'https://vidspark.to', source: app.frames[1].contentWindow, data: { source: 'vidspark-player', event: 'ended', currentTime: 900, duration: 1200 } });
   assert.equal(app.states.length, count);
   app.player.clear();
   assert.equal(app.container.children.length, 0);
@@ -222,7 +215,7 @@ test('new provider URLs and parsers enforce exact frames, origins, positions and
   assert.equal(playbackEvent({source:frame.contentWindow,origin:spec.origin,data:{...spec.message('timeupdate'),episode:2}},frame,tv,'vidrift').event,'mismatch');
   assert.equal(new URL(embedUrl(tv,'vidrift')).searchParams.get('autoplay'),'0');
   assert.equal(new URL(embedUrl(tv,'vidspark',30)).searchParams.get('t'),'30');
-  const app=harness();app.player.load(tv);assert.equal(new URL(app.frames[0].src).origin,newProviders.vidspark.origin);
+  const app=harness();app.player.load(tv);assert.equal(new URL(app.frames[0].src).origin,newProviders.vidrift.origin);
 });
 
 test('new provider commands use their documented envelopes and do not echo acknowledgements',()=>{

@@ -9,7 +9,7 @@ create table if not exists public.watch_room_playback (
   room_id uuid primary key references public.watch_rooms(id) on delete cascade,
   session_id uuid not null,
   media jsonb not null,
-  provider text not null check (provider in ('vidspark','vidrift','vidbolt','cinesrc','cinemaos','vidlink')),
+  provider text not null check (provider in ('vidrift','vidspark','vidbolt','cinesrc','cinemaos')),
   status text not null check (status in ('playing', 'paused')),
   position_ms bigint not null check (position_ms between 0 and 604800000),
   anchor_at timestamptz not null,
@@ -17,8 +17,6 @@ create table if not exists public.watch_room_playback (
 );
 -- Upgrade existing rooms without deleting state or changing their selected provider.
 alter table public.watch_room_playback drop constraint if exists watch_room_playback_provider_check;
-alter table public.watch_room_playback add constraint watch_room_playback_provider_check
-  check (provider in ('vidspark','vidrift','vidbolt','cinesrc','cinemaos','vidlink'));
 create table if not exists public.watch_playback_commands (
   room_id uuid not null references public.watch_rooms(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -41,6 +39,14 @@ update public.watch_room_playback set play_requested = (status = 'playing') wher
 alter table public.watch_room_playback alter column play_requested set default false;
 alter table public.watch_room_playback alter column play_requested set not null;
 alter table public.watch_room_playback add column if not exists ready_epoch bigint not null default 1;
+-- Retire the removed provider without deleting rooms, media, or saved progress.
+update public.watch_room_playback set provider='vidrift',status='paused',play_requested=false,
+  position_ms=least(604800000,greatest(0,position_ms + case when status='playing'
+    then floor(extract(epoch from (pg_catalog.clock_timestamp()-anchor_at))*1000)::bigint else 0 end)),
+  anchor_at=pg_catalog.clock_timestamp(),ready_epoch=ready_epoch+1,revision=revision+1
+where provider='vidlink';
+alter table public.watch_room_playback add constraint watch_room_playback_provider_check
+  check (provider in ('vidrift','vidspark','vidbolt','cinesrc','cinemaos'));
 create table if not exists public.watch_playback_readiness (
   room_id uuid not null references public.watch_rooms(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -122,7 +128,7 @@ begin
   select * into state from public.watch_room_playback where room_id=p_room_id;
   summary := public.watch_readiness_summary(p_room_id);
   return pg_catalog.jsonb_build_object('roomId',p_room_id,'sessionId',state.session_id,
-    'media',state.media,'provider',coalesce(state.provider,'vidspark'),'status',coalesce(state.status,'paused'),
+    'media',state.media,'provider',coalesce(state.provider,'vidrift'),'status',coalesce(state.status,'paused'),
     'positionMs',coalesce(state.position_ms,0),'anchorAt',coalesce(state.anchor_at,stamp),
     'revision',coalesce(state.revision,0),'serverTime',stamp,'readyEpoch',coalesce(state.ready_epoch,1),
     'playRequested',coalesce(state.play_requested,false),'readiness',summary,
@@ -195,12 +201,12 @@ begin
           raise exception using errcode = '22023', message = 'Invalid TV episode';
         end if;
         insert into public.watch_room_playback(room_id,session_id,media,provider,status,position_ms,anchor_at,revision,play_requested,ready_epoch)
-        values(p_room_id,pg_catalog.gen_random_uuid(),p_media,'vidspark','paused',0,stamp,coalesce(state.revision,0)+1,false,coalesce(state.ready_epoch,0)+1)
+        values(p_room_id,pg_catalog.gen_random_uuid(),p_media,'vidrift','paused',0,stamp,coalesce(state.revision,0)+1,false,coalesce(state.ready_epoch,0)+1)
         on conflict (room_id) do update set session_id=excluded.session_id, media=excluded.media,
           provider=excluded.provider,status=excluded.status,position_ms=0,anchor_at=excluded.anchor_at,revision=excluded.revision,play_requested=false,ready_epoch=excluded.ready_epoch
         returning * into state;
       else
-        if p_action = 'provider' and (p_provider is null or p_provider not in ('vidspark','vidrift','vidbolt','cinesrc','cinemaos','vidlink')) then
+        if p_action = 'provider' and (p_provider is null or p_provider not in ('vidrift','vidspark','vidbolt','cinesrc','cinemaos')) then
           raise exception using errcode = '22023', message = 'Invalid provider';
         end if;
         if p_action = 'seek' and (p_position_ms is null or p_position_ms not between 0 and 604800000) then

@@ -71,7 +71,7 @@ test('conflicts apply the authoritative snapshot without reissuing stale command
   c.sync.destroy();
 });
 
-test('CineSrc room commands apply on both joined clients; fallback stays manual',async()=>{
+test('CineSrc room commands apply on both joined clients; switching preserves controls',async()=>{
   let state={...initial,provider:'cinesrc'};
   const request=async(path,method,body)=>{
     if(method==='POST' && !path.endsWith('/readiness')) state={...state,revision:state.revision+1,readyEpoch:state.readyEpoch+(['seek','pause','provider'].includes(body.action)?1:0),status:body.action==='play'?'playing':'paused',positionMs:body.targetPositionMs??state.positionMs};
@@ -83,7 +83,7 @@ test('CineSrc room commands apply on both joined clients; fallback stays manual'
   await a.sync.command('play');await b.sync.refresh();assert.equal(b.commands.at(-1).action,'play');
   await b.sync.command('seek',{targetPositionMs:120000});await a.sync.refresh();assert.ok(a.commands.some(c=>c.action==='seek'&&c.params.time===120));
   await a.sync.command('pause');await b.sync.refresh();assert.equal(b.player.getStatus().playing,false);
-  state={...state,provider:'vidlink',revision:state.revision+1};await b.sync.refresh();assert.equal(b.events.at(-1).canControl,false);
+  state={...state,provider:'vidrift',revision:state.revision+1};await b.sync.refresh();assert.equal(b.events.at(-1).canControl,true);
   a.sync.destroy();b.sync.destroy();
 });
 

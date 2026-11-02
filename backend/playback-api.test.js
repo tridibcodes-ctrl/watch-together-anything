@@ -20,7 +20,7 @@ test('API allows new providers in commands/readiness and rejects unknown or manu
     assert.equal((await request('commands',provider)).status,200);assert.equal(calls.at(-1).body.p_provider,provider);
     assert.equal((await request('readiness',provider)).status,200);assert.ok(calls.at(-1).url.endsWith('/watch_report_readiness'));
   }
-  assert.equal((await request('commands','vidlink')).status,200);
+  assert.equal((await request('commands','vidlink')).status,400);
   const before=calls.length;
   for(const provider of ['vidlink','__proto__','https://evil.test',null])assert.equal((await request('readiness',provider)).status,400);
   for(const provider of ['__proto__','https://evil.test',null])assert.equal((await request('commands',provider)).status,400);

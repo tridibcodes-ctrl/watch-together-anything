@@ -97,11 +97,13 @@ test('fullscreen expands the shared stage and restores controls after browser ex
   await app.context.togglePlaybackFullscreen();
   assert.equal(app.document.fullscreenElement, app.stage);
   assert.equal(app.button['aria-pressed'], 'true');
+  assert.equal(app.button['aria-label'], 'Exit fullscreen');
   assert.equal(app.document.body.classList.contains('playback-expanded'), true);
   // Escape can exit fullscreen without clicking the app button.
   app.document.fullscreenElement = null;
   app.context.updateFullscreenControls();
   assert.equal(app.button['aria-pressed'], 'false');
+  assert.equal(app.button['aria-label'], 'Enter fullscreen with chat');
   assert.equal(app.document.body.classList.contains('playback-expanded'), false);
 });
 

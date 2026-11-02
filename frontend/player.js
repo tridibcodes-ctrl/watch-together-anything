@@ -5,8 +5,7 @@
     vidrift: { name: 'VidRift', origin: 'https://embed.vidrift.net', controls: true },
     vidbolt: { name: 'VidBolt', origin: 'https://vidbolt.pro', controls: true, pushOnly: true },
     cinesrc: { name: 'CineSrc', origin: 'https://cinesrc.st', controls: true },
-    cinemaos: { name: 'CinemaOS', origin: 'https://cinemaos.tech', controls: true },
-    vidlink: { name: 'VidLink', origin: 'https://vidlink.pro', controls: false }
+    cinemaos: { name: 'CinemaOS', origin: 'https://cinemaos.tech', controls: true }
   });
   const position = n => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 604800;
   function validateMedia(media) {
@@ -32,13 +31,8 @@
       return url.href;
     }
     const suffix = media.mediaType === 'tv' ? `/${media.season}/${media.episode}` : '';
-    const path = provider === 'cinemaos' ? `/player/${media.tmdbId}${suffix}` : `/${media.mediaType}/${media.tmdbId}${suffix}`;
-    const url = new URL(path, PROVIDERS[provider].origin);
-    if (provider === 'cinemaos') {
-      url.searchParams.set('autoPlay', 'false'); url.searchParams.set('autoNext', 'false');
-    } else {
-      url.searchParams.set('autoplay', 'false'); url.searchParams.set('nextbutton', 'false'); url.searchParams.set('startAt', String(start));
-    }
+    const url = new URL(`/player/${media.tmdbId}${suffix}`, PROVIDERS.cinemaos.origin);
+    url.searchParams.set('autoPlay', 'false'); url.searchParams.set('autoNext', 'false');
     return url.href;
   }
   function playbackEvent(event, frame, media, provider) {
@@ -95,16 +89,16 @@
     const data = payload?.data;
     if (payload?.type !== 'PLAYER_EVENT' || !data || !['play', 'pause', 'seeking', 'seeked', 'ended', 'timeupdate', 'playerstatus'].includes(data.event)) return null;
     const id = data.mtmdbId ?? data.tmdbId;
-    if ((provider === 'vidlink' || id !== undefined) && Number(id) !== media.tmdbId) return null;
-    if ((provider === 'vidlink' || data.mediaType !== undefined) && data.mediaType !== media.mediaType) return null;
-    if (media.mediaType === 'tv' && ((provider === 'vidlink' || data.season !== undefined) && Number(data.season) !== media.season || (provider === 'vidlink' || data.episode !== undefined) && Number(data.episode) !== media.episode)) return null;
+    if (id !== undefined && Number(id) !== media.tmdbId) return null;
+    if (data.mediaType !== undefined && data.mediaType !== media.mediaType) return null;
+    if (media.mediaType === 'tv' && (data.season !== undefined && Number(data.season) !== media.season || data.episode !== undefined && Number(data.episode) !== media.episode)) return null;
     if (!position(data.currentTime)) return null;
     return { event: data.event, seconds: data.currentTime,
       duration: typeof data.duration === 'number' && Number.isFinite(data.duration) ? data.duration : 0,
       playing: typeof data.paused === 'boolean' ? !data.paused : typeof data.playing === 'boolean' ? data.playing : typeof data.isPlaying === 'boolean' ? data.isPlaying : undefined };
   }
-  function createPlayer({ container, onState = () => {}, onFallback, windowImpl = window, documentImpl = document, setTimer = setTimeout, clearTimer = clearTimeout, now = Date.now }) {
-    let frame = null, media = null, provider = 'vidspark', seconds = 0, timer = null, generation = 0, ready = false, playing = false, measuredAt = now(), mediaMismatch = false;
+  function createPlayer({ container, onState = () => {}, windowImpl = window, documentImpl = document, setTimer = setTimeout, clearTimer = clearTimeout, now = Date.now }) {
+    let frame = null, media = null, provider = 'vidrift', seconds = 0, timer = null, generation = 0, ready = false, playing = false, measuredAt = now(), mediaMismatch = false;
     let playable = false, pendingSeek = null, lastAdvanceAt = now(), lastStatusAt = now(), playAttemptAt = null, playBlocked = false, lastProgressSeconds = 0;
     let expectedPlayback = [], seekEcho = null, sample = null, nativeSeek = null, seekTimer = null, duration = 0, activatedAt = null;
     const emit = (status, message, nativeIntent) => onState({ media, provider, seconds, ready, playing, playable, status, message, ...(nativeIntent ? { nativeIntent } : {}) });
@@ -136,12 +130,12 @@
       if (frame) { frame.onload = null; frame.onerror = null; }
       frame = null; container.replaceChildren();
     }
-    function load(nextMedia, nextProvider = 'vidspark', startSeconds = 0) {
+    function load(nextMedia, nextProvider = 'vidrift', startSeconds = 0) {
       const src = embedUrl(nextMedia, nextProvider, startSeconds);
       removeFrame(); media = { ...nextMedia }; provider = nextProvider;
       ready = false; playing = false; playable = false; pendingSeek = null; mediaMismatch = false; measuredAt = now(); lastStatusAt = now(); lastAdvanceAt = now(); playAttemptAt = null; playBlocked = false;
       expectedPlayback = []; seekEcho = null; sample = null; duration = 0; activatedAt = null;
-      seconds = ['cinesrc','vidspark','vidlink'].includes(provider) && position(startSeconds) ? startSeconds : 0;
+      seconds = ['cinesrc','vidspark'].includes(provider) && position(startSeconds) ? startSeconds : 0;
       lastProgressSeconds = seconds;
       const version = generation;
       frame = documentImpl.createElement('iframe');
@@ -157,14 +151,12 @@
       };
       frame.onerror = () => {
         if (version !== generation) return;
-        if (provider !== 'vidlink') {
-          if (onFallback) { clearTimer(timer); timer = null; onFallback(); return; }
-          load(media, 'vidlink', seconds); emit('loading', 'Player could not load. Trying VidLink with manual controls.');
-        } else { clearTimer(timer); timer = null; emit('error', 'VidLink could not load. Retry or choose another title.'); }
+        clearTimer(timer); timer = null; ready = false; playable = false;
+        emit('error', `${PROVIDERS[provider].name} could not load. Reload the player or choose another provider.`);
       };
       frame.src = src; emit('loading', `Loading ${PROVIDERS[provider].name}…`);
       timer = setTimer(() => {
-        if (version === generation && !ready) emit('unconfirmed', `No video status from ${PROVIDERS[provider].name}. Press native Play, reload, or choose another provider. VidLink fallback is manual.`);
+        if (version === generation && !ready) emit('unconfirmed', `No video status from ${PROVIDERS[provider].name}. Press native Play, reload, or choose another provider.`);
       }, 20000);
       container.append(frame);
     }
@@ -245,7 +237,7 @@
       },
       switchProvider(next) { if (!media) throw new Error('Choose a title first.'); load(media, next, seconds); },
       retry() { if (media) load(media, provider, seconds); },
-      clear() { removeFrame(); media = null; seconds = 0; ready = false; playing = false; playable = false; pendingSeek = null; playAttemptAt = null; playBlocked = false; expectedPlayback = []; seekEcho = null; sample = null; duration = 0; activatedAt = null; provider = 'vidspark'; emit('idle', 'Choose Watch on a movie or TV episode to open VidSpark.'); },
+      clear() { removeFrame(); media = null; seconds = 0; ready = false; playing = false; playable = false; pendingSeek = null; playAttemptAt = null; playBlocked = false; expectedPlayback = []; seekEcho = null; sample = null; duration = 0; activatedAt = null; provider = 'vidrift'; emit('idle', 'Choose Watch on a movie or TV episode to open VidRift.'); },
       destroy() { this.clear(); windowImpl.removeEventListener('message', receive); }
     };
   }

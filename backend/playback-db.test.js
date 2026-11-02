@@ -35,15 +35,15 @@ test('PostgreSQL playback transactions enforce membership, revisions, sessions, 
     const media = {mediaType:'movie',tmdbId:155,title:'Movie'};
     const first = await call({action:'media',id,revision:0,media});
     assert.equal(first.state.revision,1);
-    assert.equal(first.state.provider,'vidspark');
+    assert.equal(first.state.provider,'vidrift');
     assert.equal(first.state.status,'paused');
     const session = first.state.sessionId;
     assert.equal((await call({action:'media',id,revision:0,media})).outcome,'duplicate');
     assert.equal((await call({action:'media',id,revision:0,media:{...media,tmdbId:27205}})).outcome,'conflict');
     const clients = [randomUUID(),randomUUID()];
-    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'vidspark',first.state.readyEpoch,clients[0],true,true]);
+    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'vidrift',first.state.readyEpoch,clients[0],true,true]);
     await as(b);
-    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'vidspark',first.state.readyEpoch,clients[1],true,true]);
+    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'vidrift',first.state.readyEpoch,clients[1],true,true]);
     const play = await call({action:'play',id:randomUUID(),revision:1,session});
     assert.equal(play.state.status,'playing');
     assert.equal(play.state.revision,2);
@@ -51,7 +51,7 @@ test('PostgreSQL playback transactions enforce membership, revisions, sessions, 
     assert.equal(competing.outcome,'conflict'); assert.equal(competing.state.status,'playing');
     const seek = await call({action:'seek',id:randomUUID(),revision:2,session,position:120000});
     assert.equal(seek.state.positionMs,120000);
-    const switched = await call({action:'provider',id:randomUUID(),revision:3,session,provider:'vidlink'});
+    const switched = await call({action:'provider',id:randomUUID(),revision:3,session,provider:'vidbolt'});
     assert.equal(switched.state.status,'paused'); assert.ok(switched.state.positionMs>=120000);
     assert.equal((await call({action:'pause',id:randomUUID(),revision:4,session:randomUUID()})).outcome,'conflict');
     await assert.rejects(call({action:'seek',id:randomUUID(),revision:4,session,position:-1}),/Invalid seek/);
@@ -105,6 +105,22 @@ async function readinessFixture() {
   await action('media',{media:{mediaType:'movie',tmdbId:155,title:'Movie'}});
   return {db,a,b,outsider,room,as,action,report,state:()=>state};
 }
+
+test('upgrade retires old VidLink rooms to paused VidRift and is safe to reapply',async()=>{
+  const f=await readinessFixture();
+  try{
+    const before=f.state();
+    await f.db.exec('reset role');
+    await f.db.exec('alter table watch_room_playback drop constraint watch_room_playback_provider_check');
+    await f.db.query("update watch_room_playback set provider='vidlink',position_ms=120000,play_requested=true where room_id=$1",[f.room]);
+    const migration=fs.readFileSync(path.join(__dirname,'playback.sql'),'utf8');
+    await f.db.exec(migration);await f.db.exec(migration);
+    await f.db.exec('set role authenticated');await f.action();
+    assert.equal(f.state().provider,'vidrift');assert.equal(f.state().positionMs,120000);assert.equal(f.state().status,'paused');assert.equal(f.state().playRequested,false);
+    assert.equal(f.state().sessionId,before.sessionId);assert.equal(f.state().revision,before.revision+1);
+    await assert.rejects(f.action('provider',{provider:'vidlink'}),/Invalid provider/);
+  }finally{await f.db.close();}
+});
 
 test('named readiness and server-authored playback notices survive retries without attributing automatic holds',async()=>{
   const f=await readinessFixture();
