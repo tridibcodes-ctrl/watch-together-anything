@@ -47,7 +47,7 @@ flowchart LR
 - **Database:** Supabase PostgreSQL. Node forwards the user's token to REST/RPC calls, so Row Level Security (RLS) applies. This implementation does not use a service-role/secret key.
 - **Realtime:** Browser subscriptions listen for inserts in the selected room. Events cause an authenticated API reload; PostgreSQL retains the messages. RLS controls readable records.
 - **Catalog:** Node proxies TMDB popular movie/TV lists, search, title details, and TV seasons/episodes with a server-only token. Browse renders posters, pagination, and a details panel.
-- **Playback:** PostgreSQL stores room state; frontend/shared-playback.js applies updates through frontend/player.js.
+- **Playback:** PostgreSQL stores room state; frontend/shared-playback.js applies updates through frontend/player.js. Use **Fullscreen with chat** above the player to expand the video and keep the chat icon at the upper right. The message panel opens beneath the icon without reloading the video. Browsers without Fullscreen API support use an expanded page view. Embedded providers cannot enter their own separate fullscreen view, which would hide the app's chat.
 
 ### Main flows
 

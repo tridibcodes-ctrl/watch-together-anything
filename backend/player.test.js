@@ -44,6 +44,15 @@ function harness({ now } = {}) {
   return { player, states, frames, timers, listeners, container };
 }
 
+test('embedded providers cannot replace the fullscreen stage and hide its chat', () => {
+  const app = harness();
+  for (const provider of ['vidspark', 'vidrift', 'vidbolt', 'cinesrc', 'cinemaos', 'vidlink']) {
+    app.player.load(movie, provider);
+    assert.equal(app.frames.at(-1).allowFullscreen, false);
+    assert.match(app.frames.at(-1).allow, /fullscreen 'none'/);
+  }
+});
+
 test('new selection starts primary; explicit or reported load failure falls back once', () => {
   const app = harness();
   app.player.load(tv, 'cinemaos');

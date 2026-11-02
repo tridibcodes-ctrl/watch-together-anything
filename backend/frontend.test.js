@@ -77,3 +77,50 @@ test('refreshing rooms selects and remembers the newly joined room', async () =>
   assert.equal(saved.get('multiplay.room.user'), 'new');
   assert.equal(subscriptions, 1);
 });
+
+function fullscreen({ supported = true, rejected = false } = {}) {
+  function classes() {
+    const values = new Set();
+    return { contains: value => values.has(value), add: value => values.add(value), remove: value => values.delete(value), toggle(value, enabled) { if (enabled) values.add(value); else values.delete(value); } };
+  }
+  const stage = { classList: classes() }, button = { setAttribute(name, value) { this[name] = value; } };
+  const document = { fullscreenEnabled: supported, fullscreenElement: null, body: { classList: classes() } };
+  if (supported) stage.requestFullscreen = async () => { if (rejected) throw new Error('Unavailable'); document.fullscreenElement = stage; };
+  document.exitFullscreen = async () => { document.fullscreenElement = null; };
+  const context = vm.createContext({ document, localPlayback: {}, $: id => id === 'playback-stage' ? stage : button });
+  vm.runInContext(source.slice(source.indexOf('    function isPlaybackExpanded('), source.indexOf("    bind('fullscreen-player'")), context);
+  return { context, stage, button, document };
+}
+
+test('fullscreen expands the shared stage and restores controls after browser exit', async () => {
+  const app = fullscreen();
+  await app.context.togglePlaybackFullscreen();
+  assert.equal(app.document.fullscreenElement, app.stage);
+  assert.equal(app.button['aria-pressed'], 'true');
+  assert.equal(app.document.body.classList.contains('playback-expanded'), true);
+  // Escape can exit fullscreen without clicking the app button.
+  app.document.fullscreenElement = null;
+  app.context.updateFullscreenControls();
+  assert.equal(app.button['aria-pressed'], 'false');
+  assert.equal(app.document.body.classList.contains('playback-expanded'), false);
+});
+
+test('fullscreen can be closed using the app button', async () => {
+  const app = fullscreen();
+  await app.context.togglePlaybackFullscreen();
+  await app.context.togglePlaybackFullscreen();
+  assert.equal(app.document.fullscreenElement, null);
+  assert.equal(app.context.isPlaybackExpanded(), false);
+});
+
+test('unsupported or rejected fullscreen uses a reversible expanded player', async () => {
+  for (const options of [{ supported: false }, { rejected: true }]) {
+    const app = fullscreen(options);
+    await app.context.togglePlaybackFullscreen();
+    assert.equal(app.stage.classList.contains('is-expanded'), true);
+    assert.equal(app.button['aria-pressed'], 'true');
+    await app.context.togglePlaybackFullscreen();
+    assert.equal(app.context.isPlaybackExpanded(), false);
+    assert.equal(app.document.body.classList.contains('playback-expanded'), false);
+  }
+});

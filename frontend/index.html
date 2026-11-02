@@ -32,6 +32,15 @@
     form { margin: 12px 0; }
     #catalog, #list-items { display: flex; flex-wrap: wrap; gap: 16px; }
     #player { max-width: 100%; }
+    .playback-stage { position: relative; background: #090b11; border-radius: 12px; }
+    .playback-toolbar { display: flex; align-items: center; min-height: 64px; padding: 8px 12px; }
+    .playback-stage:fullscreen, .playback-stage.is-expanded { width: 100%; height: 100dvh; display: flex; flex-direction: column; border-radius: 0; background: #090b11; }
+    .playback-stage.is-expanded { position: fixed; inset: 0; z-index: 100; }
+    body.playback-expanded { overflow: hidden; }
+    .playback-stage:fullscreen #player, .playback-stage.is-expanded #player { flex: 1; min-height: 0; width: 100%; }
+    .playback-stage:fullscreen #player iframe, .playback-stage.is-expanded #player iframe { display: block; height: 100%; width: 100%; border: 0; }
+    .playback-stage:fullscreen .chat-toggle, .playback-stage.is-expanded .chat-toggle { position: static; margin: 0 0 0 auto; width: 44px; height: 44px; }
+    .playback-stage:fullscreen .chat-panel, .playback-stage.is-expanded .chat-panel { position: absolute; inset: 72px 16px 16px auto; width: min(360px, calc(100% - 32px)); height: auto; max-height: calc(100% - 88px); }
     .chat-toggle { position: fixed; z-index: 19; right: 24px; bottom: 24px; width: 56px; height: 56px; border-radius: 50%; box-shadow: 0 10px 30px #0009; font-size: 23px; }
     .chat-panel { position: fixed; z-index: 20; right: 24px; bottom: 92px; width: min(380px, calc(100vw - 112px)); height: min(520px, calc(100vh - 120px)); display: flex; flex-direction: column; background: #1b2030; border: 1px solid #504b79; border-radius: 18px; box-shadow: 0 20px 60px #000b; padding: 16px; }
     .chat-panel[hidden] { display: none; }
@@ -160,7 +169,23 @@
       <button id="retry-command" type="button">Retry last playback command</button>
       <h3 id="player-title">Player</h3>
       <p id="player-status" role="status" aria-live="polite">Choose Watch on a movie or TV episode to open VidSpark.</p>
-      <div id="player"></div>
+      <div id="playback-stage" class="playback-stage">
+        <div class="playback-toolbar">
+          <button id="fullscreen-player" type="button" aria-controls="playback-stage" aria-pressed="false" disabled>Fullscreen with chat</button>
+          <button id="chat-toggle" class="chat-toggle" type="button" aria-label="Open chat" aria-controls="chat-panel" aria-expanded="false" title="Open chat"><svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/><path d="M8 10h8M8 13h5"/></svg></button>
+        </div>
+        <div id="player"></div>
+        <aside id="chat-panel" class="chat-panel" aria-labelledby="chat" hidden>
+          <div class="chat-panel-header"><h3 id="chat">Text chat</h3><button id="close-chat" type="button" aria-label="Close chat">&#215;</button></div>
+          <p id="chat-status" role="status" aria-live="polite">Live chat is off in Local demo.</p>
+          <button id="refresh-chat" type="button">Refresh chat</button>
+          <ol id="messages"></ol>
+          <form id="chat-form">
+            <label>Message <input id="message" maxlength="2000" required></label>
+            <button>Send</button>
+          </form>
+        </aside>
+      </div>
       <button id="load-player" type="button" disabled>Reload player</button>
       <button id="fallback-player" type="button" disabled>Try VidLink fallback</button>
       <button id="stop-player" type="button" disabled>Close player</button>
@@ -189,18 +214,6 @@
       <p>Voice/video needs WebRTC signaling from the backend; it is not implemented in this HTML starter.</p>
 
     </section>
-
-    <button id="chat-toggle" class="chat-toggle" type="button" aria-label="Open chat" aria-controls="chat-panel" aria-expanded="false" title="Open chat"><svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/><path d="M8 10h8M8 13h5"/></svg></button>
-    <aside id="chat-panel" class="chat-panel" aria-labelledby="chat" hidden>
-      <div class="chat-panel-header"><h3 id="chat">Text chat</h3><button id="close-chat" type="button" aria-label="Close chat">✕</button></div>
-      <p id="chat-status" role="status" aria-live="polite">Live chat is off in Local demo.</p>
-      <button id="refresh-chat" type="button">Refresh chat</button>
-      <ol id="messages"></ol>
-      <form id="chat-form">
-        <label>Message <input id="message" maxlength="2000" required></label>
-        <button>Send</button>
-      </form>
-    </aside>
 
     <section id="profile" aria-labelledby="profile-heading">
       <h2 id="profile-heading">Profile</h2>
@@ -431,6 +444,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function button(text, fn) { const b = node('button', text); b.type = 'button'; b.onclick = () => act(fn, b); return b; }
     async function act(fn, b) { if (b) b.disabled = true; try { await fn(); } catch (e) { say(e.message); } finally { if (b) b.disabled = false; controls(); } }
     function controls() {
+      $('fullscreen-player').disabled = !localPlayback && !isPlaybackExpanded();
       $('catalog-previous').disabled = catalogLoading || !catalogState || catalogState.page <= 1;
       $('catalog-next').disabled = catalogLoading || !catalogState?.hasMore;
       const active = !!(joined && room?.sessionId);
@@ -752,6 +766,33 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     bind('load-player', () => mode === 'api' ? sharedPlayback.retryPlayer() : embeddedPlayer.retry());
     bind('fallback-player', () => mode === 'api' ? sharedPlayback.command('provider', { provider: 'vidlink' }) : embeddedPlayer.switchProvider('vidlink'));
     bind('stop-player', () => mode === 'api' ? sharedPlayback.leave() : unload());
+    function isPlaybackExpanded() {
+      return document.fullscreenElement === $('playback-stage') || $('playback-stage').classList.contains('is-expanded');
+    }
+    function updateFullscreenControls() {
+      const expanded = isPlaybackExpanded();
+      $('fullscreen-player').textContent = expanded ? 'Exit fullscreen' : 'Fullscreen with chat';
+      $('fullscreen-player').setAttribute('aria-pressed', String(expanded));
+      $('fullscreen-player').disabled = !localPlayback && !expanded;
+      document.body.classList.toggle('playback-expanded', expanded);
+    }
+    async function togglePlaybackFullscreen() {
+      const stage = $('playback-stage');
+      if (document.fullscreenElement === stage) {
+        await document.exitFullscreen();
+      } else if (stage.classList.contains('is-expanded')) {
+        stage.classList.remove('is-expanded');
+      } else {
+        if (!localPlayback) return;
+        if (stage.requestFullscreen && document.fullscreenEnabled !== false) {
+          try { await stage.requestFullscreen(); }
+          catch { stage.classList.add('is-expanded'); }
+        } else stage.classList.add('is-expanded');
+      }
+      updateFullscreenControls();
+    }
+    bind('fullscreen-player', togglePlaybackFullscreen);
+    document.addEventListener('fullscreenchange', updateFullscreenControls);
     bind('refresh-chat', chat);
     function setChatOpen(open) {
       $('chat-panel').hidden = !open;
@@ -766,7 +807,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     $('chat-toggle').addEventListener('click', () => setChatOpen($('chat-panel').hidden));
     $('close-chat').addEventListener('click', () => setChatOpen(false));
     document.querySelector('.side-nav a[href="#chat"]').addEventListener('click', event => { event.preventDefault(); setChatOpen(true); });
-    document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('chat-panel').hidden) setChatOpen(false); });
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape') return;
+      if (!$('chat-panel').hidden) setChatOpen(false);
+      else if ($('playback-stage').classList.contains('is-expanded')) act(togglePlaybackFullscreen);
+    });
     form('chat-form', async () => { const body = $('message').value.trim(); if (!body || (mode === 'api' ? !me?.roomId : !joined)) throw new Error('Select a room and enter a message.'); await request(`/api/rooms/${me.roomId}/messages`, 'POST', { clientMessageId: uuid(), body }); $('message').value = ''; await chat(); });
     form('profile-form', async () => { if (!me) throw new Error('Connect first.'); const displayName = $('display-name').value.trim(); if (!displayName) throw new Error('Enter your name.'); const result = await request('/api/me/profile', 'PATCH', { displayName, avatarKey: $('avatar').value }); me.profile = result.profile; say('Profile saved.'); });
     bind('complete', async () => { const result = await request(`/api/sessions/${room.sessionId}/complete`, 'POST', { commandId: uuid(), confirmed: true }); say(result.message || (result.completed ? 'Moved to Watched.' : 'Waiting for your partner.')); await list(); });

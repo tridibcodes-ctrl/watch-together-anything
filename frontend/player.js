@@ -146,8 +146,9 @@
       const version = generation;
       frame = documentImpl.createElement('iframe');
       frame.title = `${media.title || 'Selected title'} — ${PROVIDERS[provider].name}`;
-      frame.width = '100%'; frame.height = '360'; frame.allow = 'autoplay; fullscreen; picture-in-picture; encrypted-media';
-      frame.allowFullscreen = true; frame.referrerPolicy = 'strict-origin-when-cross-origin';
+      // Fullscreen belongs to the parent stage so its chat overlay stays visible.
+      frame.width = '100%'; frame.height = '360'; frame.allow = "autoplay; fullscreen 'none'; picture-in-picture; encrypted-media";
+      frame.allowFullscreen = false; frame.referrerPolicy = 'strict-origin-when-cross-origin';
       frame.onload = () => {
         if (version !== generation) return;
         emit('loaded', `${PROVIDERS[provider].name} frame loaded; video playback is not confirmed. Press Play inside the player if needed.`);
