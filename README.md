@@ -12,7 +12,7 @@ The intended experience lets both partners control playback, maintain a shared m
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| Plain HTML starter | Done | No CSS or build step; visual design is left to the frontend developer. |
+| HTML frontend | In progress | Dark theme, icon navigation, and floating chat; no build step yet. |
 | Local demo | Done | In-memory catalog, list, room state, and chat for frontend work with Node off; resets on reload. |
 | Email/password sign-in | Done | Supabase session restoration/refresh; Node verifies access tokens. |
 | Editable profiles | Done | Display name and avatar persist in PostgreSQL. |
@@ -110,7 +110,7 @@ This section explains the intended end-to-end system. The implementation table a
 
 | Layer | Choice | Why it fits |
 | --- | --- | --- |
-| Frontend | Plain HTML/JavaScript starter now; final styling owned by the frontend developer | Easy to inspect and use API endpoints without a build pipeline. No CSS has been supplied intentionally. |
+| Frontend | HTML/JavaScript with a dark theme, icon navigation, and floating chat | Uses the existing API endpoints without a build pipeline. |
 | HTTP API | Node.js native HTTP server | Small backend, already running; validates requests and coordinates authenticated database/provider calls. |
 | Identity | Supabase Auth | Account/session lifecycle; each person has their own identity. |
 | Durable state | Supabase PostgreSQL with RLS | Transactions, room membership, saved lists, messages, progress, and authoritative playback snapshots. |
@@ -280,7 +280,7 @@ A fresh clone does not include the previous checkout's .env or installed depende
    npm --prefix backend run dev
    ```
 
-4. Open [http://127.0.0.1:3000/](http://127.0.0.1:3000/), sign in, select **Backend API**, leave Backend origin blank, and Connect.
+4. Open [http://127.0.0.1:3000/](http://127.0.0.1:3000/) and sign in. Successful sign-in verifies the account, switches to **Backend API**, and loads rooms and the catalog automatically. Local demo remains available from the connection selector. The Node server needs outbound network access to Supabase to verify tokens and load database records.
 5. Create a room. In a second browser/profile, sign into a second account and join by code.
 
 The dev command uses Node watch mode to reload imported backend files when edited. Restart it after .env edits. Use `npm --prefix backend start` for a run without automatic reload. Hard-refresh after HTML changes; Node reads the file for each page request. Keep a consistent origin: localhost and 127.0.0.1 have separate browser session/preference storage.
@@ -479,12 +479,12 @@ Acceptance check: join one account first and queue Play; verify the room remains
 
 - Watchlist tests are committed and run with `npm --prefix backend test`; they cover mocked backend/auth/TMDB behavior, stale frontend responses, demo isolation, and Realtime subscription cleanup. Live Supabase RLS/publication verification is still required. There is no CI workflow or versioned migration history. Prior checks used syntax validation, mocked auth/chat/Realtime checks, and manual two-account flows. The developer reported profiles, rooms, saved chat, and live chat working; recheck against your own Supabase project.
 - Rejoining an already joined full room can hit the BEFORE INSERT capacity trigger before ON CONFLICT DO NOTHING. Handle existing membership explicitly before inserting.
-- Profiles default to avatar_key='default', but the form/save route accepts moon/sun/star/heart. Align defaults. The HTML name input allows 60 characters while the API accepts 40.
-- Newly created/joined rooms set the active ID but do not repopulate the selector until reconnect. Reconnecting chooses a remembered room or the first returned room.
+- Profiles default to avatar_key='default'; the frontend maps that legacy value to Moon for editing. The form and API both limit display names to 40 characters.
+- Creating or joining a room refreshes the selector and remembers that room. Reconnecting chooses a remembered room or the first returned room.
 - Invite codes have no expiry/rotation; there are no application rate limits or room-count limits. Members can read their room's invite code.
 - Supabase configuration is duplicated in .env and browser constants. Authentication and JSON parsing are duplicated across routes and should be extracted as the backend grows.
 - Some controls in the starter call future APIs. A visible control or successful demo action is not proof of a real backend feature.
 
 ## Working agreement
 
-Keep Local demo available for independent frontend work. Preserve element IDs unless updating their JavaScript handlers too. Keep the starter CSS-free until the frontend developer adds the intended design. Work in the actual cloned repository, keep credentials out of Git, and update this README whenever APIs or schema change.
+Keep Local demo available for independent frontend work. Preserve element IDs unless updating their JavaScript handlers too. Keep the frontend in dark mode, with icon navigation and chat accessible during playback. Work in the actual cloned repository, keep credentials out of Git, and update this README whenever APIs or schema change.

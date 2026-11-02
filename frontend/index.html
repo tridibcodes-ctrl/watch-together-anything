@@ -78,8 +78,8 @@
       <label>Backend origin <input id="backend" type="url" placeholder="http://localhost:3000"></label>
       <button>Connect</button>
     </form>
-    <p>Demo uses sample data in memory. For API mode, serve this file using your editor's local server. Enter the
-      backend origin without /api; leave blank for the same origin.</p>
+    <p>Demo uses sample data in memory. For sign-in and API mode, open http://127.0.0.1:3000/ with the backend running.
+      Leave the backend origin blank when using this local site.</p>
     <p id="status" role="status" aria-live="polite"></p>
   </section>
 
@@ -205,7 +205,7 @@
     <section id="profile" aria-labelledby="profile-heading">
       <h2 id="profile-heading">Profile</h2>
       <form id="profile-form">
-        <label>Display name <input id="display-name" maxlength="60" required></label>
+        <label>Display name <input id="display-name" maxlength="40" required></label>
         <label>Avatar <select id="avatar">
             <option value="moon">Moon</option>
             <option value="sun">Sun</option>
@@ -408,6 +408,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       }
     });
     async function checkBackendIdentity(session) {
+      if (!session?.access_token) throw new Error('Sign in before connecting to the backend.');
       const host = location.hostname;
       if (!['127.0.0.1', 'localhost', '::1'].includes(host) || location.port !== '3000') {
         throw new Error('Open this page at http://127.0.0.1:3000/ while the local backend is running.');
@@ -418,10 +419,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           apikey: SUPABASE_PUBLISHABLE_KEY,
         },
         cache: 'no-store',
+        signal: AbortSignal.timeout(12000),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || `Backend returned HTTP ${response.status}`);
-      $('auth-status').textContent = `Signed in. Backend verified user: ${data.userId}`;
+      $('auth-status').textContent = 'Signed in. Account verified.';
       $('sign-out').disabled = false;
     }
     function say(text) { $('status').textContent = text; }
@@ -655,27 +657,37 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const selectedRoomId = me.roomId, selectedUserId = me.userId, version = ++chatRequestVersion;
       const data = await request('/api/rooms/' + selectedRoomId + '/messages');
       if (me?.roomId !== selectedRoomId || me?.userId !== selectedUserId || version !== chatRequestVersion) return;
-      $('messages').replaceChildren(...data.items.map(m => node('li', m.senderName + ': ' + m.body)));
+      const messages = $('messages');
+      const wasAtBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
+      messages.replaceChildren(...data.items.map(m => node('li', m.senderName + ': ' + m.body)));
+      if (wasAtBottom) messages.scrollTop = messages.scrollHeight;
+    }
+    async function loadRooms(preferredRoomId) {
+      const currentUser = me;
+      const roomData = await request('/api/rooms');
+      if (me !== currentUser || mode !== 'api') return;
+      const select = $('room-select');
+      select.replaceChildren(new Option('Choose a room', ''));
+      for (const item of roomData.items) select.add(new Option(item.name, item.roomId));
+      me.rooms = roomData.items;
+      const rememberedRoom = preferredRoomId || preference('multiplay.room.' + me.userId);
+      me.roomId = roomData.items.find(item => item.roomId === rememberedRoom)?.roomId || roomData.items[0]?.roomId || null;
+      select.value = me.roomId || '';
+      preference('multiplay.room.' + me.userId, me.roomId);
+      const selected = roomData.items.find(item => item.roomId === me.roomId);
+      $('room-invite').textContent = selected ? 'Selected ' + selected.name + '. Invite code: ' + selected.inviteCode : 'No room selected.';
+      startLiveChat();
     }
     async function connect() {
       stopLiveChat();
       resetCatalog();
       me = null; room = null; joined = false; unload(); controls();
       $('catalog').replaceChildren(); $('list-items').replaceChildren(); $('messages').replaceChildren();
-      me = await request('/api/me'); $('display-name').value = me.profile.displayName; $('avatar').value = me.profile.avatarKey;
+      me = await request('/api/me'); $('display-name').value = me.profile.displayName; $('avatar').value = me.profile.avatarKey === 'default' ? 'moon' : me.profile.avatarKey;
       if (mode === 'api') {
-        const roomData = await request('/api/rooms');
-        const select = $('room-select');
-        select.replaceChildren(new Option('Choose a room', ''));
-        for (const item of roomData.items) select.add(new Option(item.name, item.roomId));
-        me.rooms = roomData.items;
-        const rememberedRoom = preference('multiplay.room.' + me.userId);
-        me.roomId = roomData.items.find(item => item.roomId === rememberedRoom)?.roomId || roomData.items[0]?.roomId || null;
-        select.value = me.roomId || '';
-        const selected = roomData.items.find(item => item.roomId === me.roomId);
-        $('room-invite').textContent = selected ? 'Selected ' + selected.name + '. Invite code: ' + selected.inviteCode : 'No room selected.';
-        startLiveChat();
-        say(`Backend connected. Profile loaded. ${roomData.items.length} room(s) available.`);
+        await loadRooms();
+        await catalog();
+        say(`Backend connected. Profile loaded. ${me.rooms.length} room(s) available.`);
         return;
       }
       $('chat-status').textContent = 'Live chat is off in Local demo.';
@@ -687,7 +699,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     form('connection-form', async () => {
       const nextBase = $('backend').value.trim().replace(/\/$/, '');
       if (nextBase) { const u = new URL(nextBase); if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.pathname !== '/' || u.search || u.hash) throw new Error('Enter only the backend origin, without /api.'); }
-      if ($('mode').value === 'api' && location.protocol === 'file:') throw new Error('Serve this file using your editor’s local server before using API mode.');
+      if ($('mode').value === 'api' && location.protocol === 'file:') throw new Error('Open http://127.0.0.1:3000/ before using API mode.');
       mode = $('mode').value; base = nextBase;
       preference('multiplay.connection', { mode, base });
       await connect();
@@ -708,8 +720,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (mode !== 'api') throw new Error('Switch to Backend API mode to create a room.');
       const name = $('room-name').value.trim();
       const result = await request('/api/rooms', 'POST', { name });
-      me.roomId = result.roomId;
-      startLiveChat();
+      await loadRooms(result.roomId);
       $('room-invite').textContent = `Room created: ${result.name}. Share this invite code with your partner: ${result.inviteCode}`;
       $('room-status').textContent = `${result.name} · not watching yet`;
       say('Room created. Share the invite code with your partner.');
@@ -719,8 +730,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (mode !== 'api') throw new Error('Switch to Backend API mode to join a room.');
       const inviteCode = $('invite-code').value.trim();
       const result = await request('/api/rooms/join', 'POST', { inviteCode });
-      me.roomId = result.roomId;
-      startLiveChat();
+      await loadRooms(result.roomId);
       $('room-invite').textContent = `Joined ${result.name}.`;
       $('room-status').textContent = `${result.name} · not watching yet`;
       say('Joined your partner’s room.');
@@ -747,7 +757,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('chat-panel').hidden = !open;
       $('chat-toggle').setAttribute('aria-expanded', String(open));
       $('chat-toggle').setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
-      if (open) $('message').focus(); else $('chat-toggle').focus();
+      $('chat-toggle').title = open ? 'Close chat' : 'Open chat';
+      if (open) {
+        $('messages').scrollTop = $('messages').scrollHeight;
+        $('close-chat').focus({ preventScroll: true });
+      } else $('chat-toggle').focus({ preventScroll: true });
     }
     $('chat-toggle').addEventListener('click', () => setChatOpen($('chat-panel').hidden));
     $('close-chat').addEventListener('click', () => setChatOpen(false));
@@ -790,10 +804,24 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     form('sign-in-form', async () => {
       const email = $('auth-email').value.trim();
       const password = $('auth-password').value;
-      const { data, error } = await authClient.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
-      authSession = data.session;
-      await checkBackendIdentity(authSession);
+      $('auth-status').textContent = 'Signing in…';
+      let phase = 'sign-in';
+      try {
+        const { data, error } = await authClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        authSession = data.session;
+        phase = 'verification';
+        await checkBackendIdentity(authSession);
+        $('auth-password').value = '';
+        phase = 'connection';
+        mode = 'api'; base = '';
+        $('mode').value = mode; $('backend').value = base;
+        preference('multiplay.connection', { mode, base });
+        await connect();
+      } catch (error) {
+        $('auth-status').textContent = (phase === 'sign-in' ? 'Sign-in failed: ' : phase === 'verification' ? 'Signed in, but account verification failed: ' : 'Signed in, but the app could not finish connecting: ') + error.message;
+        throw error;
+      }
     });
     bind('sign-out', async () => {
       const { error } = await authClient.auth.signOut();
@@ -804,11 +832,16 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     });
     async function initialize() {
       $('auth-status').textContent = 'Restoring sign-in…';
-      const { data, error } = await authClient.auth.getSession();
-      if (error) throw new Error(error.message);
-      authSession = data.session;
-      if (authSession) await checkBackendIdentity(authSession);
-      else $('auth-status').textContent = 'Not signed in.';
+      try {
+        const { data, error } = await authClient.auth.getSession();
+        if (error) throw error;
+        authSession = data.session;
+        if (authSession) await checkBackendIdentity(authSession);
+        else $('auth-status').textContent = 'Not signed in.';
+      } catch (error) {
+        $('auth-status').textContent = 'Could not restore the connection: ' + error.message;
+        if (mode === 'api') throw error;
+      }
       if (mode === 'api' && !authSession) {
         say('Sign in to reconnect to the backend.');
         return;
