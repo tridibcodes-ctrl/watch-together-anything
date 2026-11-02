@@ -51,7 +51,8 @@
     .chat-panel-header h3 { margin: 0; }
     .chat-panel-header button { margin: 0; }
     #chat-status { font-size: 13px; margin: 10px 0; }
-    #messages { flex: 1; overflow-y: auto; min-height: 0; padding: 8px 8px 8px 28px; background: #111521; border-radius: 10px; }
+    #chat-status, #messages .chat-notice { color: #9da3b5; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; font-style: italic; line-height: 1.5; }
+    #messages { flex: 1; overflow-y: auto; min-height: 0; list-style: none; padding: 12px; background: #111521; border-radius: 10px; }
     #messages li { margin-bottom: 9px; overflow-wrap: anywhere; }
     #chat-form { display: flex; align-items: end; gap: 8px; margin-bottom: 0; }
     #chat-form label { flex: 1; min-width: 0; margin: 0; }
@@ -726,7 +727,12 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       updateChatNotifications(data.items, selectedRoomId, selectedUserId || me.profile?.userId);
       const messages = $('messages');
       const wasAtBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
-      messages.replaceChildren(...data.items.map(m => node('li', m.kind === 'playback' ? m.body : m.senderName + ': ' + m.body)));
+      messages.replaceChildren(...data.items.map(m => {
+        const notice = m.kind && m.kind !== 'message';
+        const item = node('li', notice ? m.body : m.senderName + ': ' + m.body);
+        if (notice) item.className = 'chat-notice';
+        return item;
+      }));
       if (wasAtBottom) messages.scrollTop = messages.scrollHeight;
     }
     async function loadRooms(preferredRoomId) {
