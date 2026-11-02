@@ -182,6 +182,7 @@
         <aside id="chat-panel" class="chat-panel" aria-labelledby="chat" hidden>
           <div class="chat-panel-header"><h3 id="chat">Text chat</h3><button id="close-chat" type="button" aria-label="Close chat">&#215;</button></div>
           <p id="chat-status" role="status" aria-live="polite">Live chat is off in Local demo.</p>
+          <p id="chat-playback-status" role="status" aria-live="polite" hidden></p>
           <button id="refresh-chat" type="button">Refresh chat</button>
           <ol id="messages"></ol>
           <form id="chat-form">
@@ -319,6 +320,9 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         sharedView = view;
         if (mode !== 'api') return;
         room = view.state; joined = view.joined;
+        const waiting = view.online ? MultiplaySync.waitingMessage(room) : '';
+        $('chat-playback-status').textContent = waiting;
+        $('chat-playback-status').hidden = !waiting;
         $('room-status').textContent = room?.media ? `${room.media.title} · ${room.provider} · ${room.status} · revision ${room.revision}` : 'No shared title selected.';
         $('sync-status').textContent = !view.roomId ? 'Select a room to share playback.' : !view.online ? 'Connecting to room playback…' : !room?.media ? 'Choose Watch on a title to share it with this room.' : !joined ? 'A room title is selected. Click Join playback to load it.' : room.provider === 'vidlink' ? 'VidLink fallback: title/provider shared; play, pause and seek are manual.' : room.waitingForReady ? 'Paused: ' + room.readiness.readyCount + '/2 partners ready. ' + (view.localReady ? 'Waiting for your partner.' : 'Preparing your player; use native Play once if needed.') + (room.playRequested ? ' Playback will resume when both are ready.' : ' Press Play in the player or Play together to request playback.') : view.canControl ? 'Shared controls ready for ' + MultiplayPlayer.PROVIDERS[room.provider].name + '. Both partners can control the room.' : 'Waiting for ' + MultiplayPlayer.PROVIDERS[room.provider].name + ' video status. Press its native Play button if needed. VidLink fallback is manual.';
         controls();
@@ -361,6 +365,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if ($('chat-alert').textContent !== announcement) $('chat-alert').textContent = announcement;
     }
     function resetChatNotifications() {
+      $('chat-playback-status').textContent = '';
+      $('chat-playback-status').hidden = true;
       chatNotifications = { roomId: null, userId: null, seen: null, unread: new Set() };
       renderChatNotifications();
     }
@@ -706,6 +712,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     async function command(action, extra = {}) {
       if (mode === 'api') return sharedPlayback.command(action, extra);
       apply(await request(`/api/rooms/${me.roomId}/commands`, 'POST', { commandId: uuid(), sessionId: room.sessionId, action, ...extra }));
+      if (['play','pause'].includes(action)) {
+        demo.messages.push({ id: uuid(), senderId: demo.profile.userId, senderName: demo.profile.displayName,
+          kind: 'playback', body: demo.profile.displayName + (action === 'pause' ? ' has paused.' : ' has started playback.') });
+        await chat();
+      }
     }
     async function chat() {
       if (!me || !me.roomId) throw new Error('Connect and select a room first.');
@@ -715,7 +726,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       updateChatNotifications(data.items, selectedRoomId, selectedUserId || me.profile?.userId);
       const messages = $('messages');
       const wasAtBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
-      messages.replaceChildren(...data.items.map(m => node('li', m.senderName + ': ' + m.body)));
+      messages.replaceChildren(...data.items.map(m => node('li', m.kind === 'playback' ? m.body : m.senderName + ': ' + m.body)));
       if (wasAtBottom) messages.scrollTop = messages.scrollHeight;
     }
     async function loadRooms(preferredRoomId) {

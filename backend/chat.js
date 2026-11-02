@@ -39,10 +39,10 @@ function createChatHandler({ authenticateUser = authenticate, fetchImpl = fetch 
         return true;
       }
       if (request.method === "GET") {
-        const result = await upstream(`/watch_room_messages?room_id=eq.${roomId}&select=id,sender_id,sender_name,body,created_at&order=created_at.desc,id.desc&limit=100`);
+        const result = await upstream(`/watch_room_messages?room_id=eq.${roomId}&select=id,sender_id,sender_name,body,kind,created_at&order=created_at.desc,id.desc&limit=100`);
         if (!result.ok) throw new Error("Message lookup failed");
         const rows = await result.json();
-        sendJson(response, 200, { items: rows.reverse().map(row => ({ id: row.id, senderId: row.sender_id, senderName: row.sender_name, body: row.body, sentAt: row.created_at })) });
+        sendJson(response, 200, { items: rows.reverse().map(row => ({ id: row.id, senderId: row.sender_id, senderName: row.sender_name, body: row.body, kind: row.kind, sentAt: row.created_at })) });
         return true;
       }
       let raw = "";

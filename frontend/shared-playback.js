@@ -2,6 +2,14 @@
   'use strict';
   const MAX_POSITION = 604800000;
   const controllable = provider => ['vidspark', 'vidrift', 'vidbolt', 'cinesrc', 'cinemaos'].includes(provider);
+  function waitingMessage(state) {
+    if (!state?.media || !state.waitingForReady || !controllable(state.provider)) return '';
+    const members = state.readiness?.members;
+    if (!Array.isArray(members)) return 'Waiting for both partners to be ready…';
+    const names = members.filter(member => !member.ready).map(member => member.displayName?.trim() || 'Partner');
+    const waiting = names.length ? `Waiting for ${names.join(' and ')} to be ready…` : '';
+    return [waiting, members.length < 2 ? 'Waiting for your partner to join the room…' : ''].filter(Boolean).join(' ');
+  }
   function intendedPosition(state, now = Date.now()) {
     return Math.min(MAX_POSITION, Math.max(0, state.positionMs + (state.status === 'playing' ? Math.max(0, now + (state.offset || 0) - Date.parse(state.anchorAt)) : 0)));
   }
@@ -203,7 +211,7 @@
       destroy() { selectRoom(null); }
     };
   }
-  const api = { intendedPosition, createRoomSync };
+  const api = { intendedPosition, createRoomSync, waitingMessage };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.MultiplaySync = api;
 })(typeof window !== 'undefined' ? window : globalThis);

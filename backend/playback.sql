@@ -1,5 +1,10 @@
 -- Apply after schema.sql. Safe to reapply; does not remove existing room data.
 begin;
+-- Playback notices share the chat history but can only be authored by the RPC.
+alter table public.watch_room_messages add column if not exists kind text not null default 'message';
+drop policy if exists "Playback notices are server authored" on public.watch_room_messages;
+create policy "Playback notices are server authored" on public.watch_room_messages as restrictive
+for insert to authenticated with check (kind = 'message');
 create table if not exists public.watch_room_playback (
   room_id uuid primary key references public.watch_rooms(id) on delete cascade,
   session_id uuid not null,
@@ -52,12 +57,11 @@ revoke all on public.watch_playback_readiness from anon, authenticated;
 
 create or replace function public.watch_readiness_summary(p_room_id uuid)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare state public.watch_room_playback; members integer; prepared integer;
+declare state public.watch_room_playback; members integer; prepared integer; participants jsonb;
 begin
   select * into state from public.watch_room_playback where room_id = p_room_id;
-  select count(*) into members from public.watch_room_members where room_id = p_room_id;
-  select count(*) into prepared from public.watch_room_members m
-  where m.room_id = p_room_id and exists (
+  with member_readiness as (
+    select m.user_id, coalesce(nullif(trim(p.display_name),''),'Partner') as name, exists (
     select 1 from public.watch_playback_readiness r
     where r.room_id=m.room_id and r.user_id=m.user_id and r.session_id=state.session_id
       and r.provider=state.provider and r.ready_epoch=state.ready_epoch and r.ready
@@ -67,8 +71,14 @@ begin
     where r.room_id=m.room_id and r.user_id=m.user_id and r.session_id=state.session_id
       and r.provider=state.provider and r.ready_epoch=state.ready_epoch and not r.ready
       and r.updated_at > pg_catalog.clock_timestamp() - interval '15 seconds'
-  );
-  return pg_catalog.jsonb_build_object('readyCount',prepared,'requiredCount',2,'bothReady',members=2 and prepared=2);
+  ) as ready
+    from public.watch_room_members m left join public.profiles p on p.user_id=m.user_id
+    where m.room_id=p_room_id
+  )
+  select count(*), count(*) filter (where ready),
+    coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('userId',user_id,'displayName',name,'ready',ready) order by user_id),'[]'::jsonb)
+    into members, prepared, participants from member_readiness;
+  return pg_catalog.jsonb_build_object('readyCount',prepared,'requiredCount',2,'bothReady',members=2 and prepared=2,'members',participants);
 end; $$;
 
 -- Caller holds the room lock. Lease expiry is evaluated by state reads/heartbeats.
@@ -215,6 +225,17 @@ begin
     delete from public.watch_playback_readiness where room_id=p_room_id;
   end if;
   if p_action <> 'get' and outcome='ok' then perform public.watch_apply_ready_gate(p_room_id,false); end if;
+  if p_action in ('play','pause') and outcome='ok' then
+    -- The room lock and command ledger make retries and conflicts notice-safe.
+    select * into state from public.watch_room_playback where room_id=p_room_id;
+    insert into public.watch_room_messages(room_id,sender_id,client_message_id,sender_name,body,kind)
+    select p_room_id,actor,p_command_id,name,
+      name || case when p_action='pause' then ' has paused.'
+        when state.status='playing' then ' has started playback.'
+        else ' has pressed Play. Playback will start when both partners are ready.' end,'playback'
+    from (select coalesce(nullif(trim((select display_name from public.profiles where user_id=actor)),''),'Partner') as name) author
+    on conflict (room_id,sender_id,client_message_id) do nothing;
+  end if;
   snapshot := public.watch_playback_snapshot(p_room_id);
   return pg_catalog.jsonb_build_object('outcome',outcome,'state',snapshot);
 end;

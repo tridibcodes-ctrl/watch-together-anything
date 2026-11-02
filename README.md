@@ -8,6 +8,10 @@ Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target d
 
 ## Requirements and implementation status
 
+Chat includes playback notices: the live notice names unready room members (for example, "Waiting for Tridib to be ready…"). Accepted Play/Pause commands add saved notices using the verified actor's profile name, including native player controls. Play requested during loading says playback will start when both are ready. Automatic buffering holds/resumes do not create actor notices, and command retries do not duplicate them. These notices use the existing chat subscription/unread badges. Local demo previews Play/Pause notices through its shared buttons.
+
+For this upgrade, rerun the complete `backend/playback.sql` in Supabase SQL Editor, restart Node, and refresh both browsers. It adds the chat message `kind` column and named readiness data while preserving existing messages and rooms. Clients may send ordinary text messages; the playback RPC alone authors playback notices. Names default to "Partner" until a display name is saved.
+
 The intended experience lets both partners control playback, maintain a shared movie/show list, chat, and move titles to Watched after finishing together. Episode progress must be distinguished from completing a series. Development aims to use free services; production cost and capacity are not established.
 
 | Feature | Status | Notes |

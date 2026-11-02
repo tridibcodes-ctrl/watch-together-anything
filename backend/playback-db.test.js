@@ -106,6 +106,32 @@ async function readinessFixture() {
   return {db,a,b,outsider,room,as,action,report,state:()=>state};
 }
 
+test('named readiness and server-authored playback notices survive retries without attributing automatic holds',async()=>{
+  const f=await readinessFixture();
+  try {
+    await f.db.exec('reset role');
+    await f.db.exec('grant select,insert on public.watch_room_messages to authenticated');
+    await f.db.query("insert into profiles(user_id,display_name) values($1,'Tridib'),($2,'Partner name')",[f.a,f.b]);
+    await f.db.exec('set role authenticated');
+    await f.report(f.a,true);await f.report(f.b,false);
+    assert.equal(f.state().readiness.members.find(m=>m.userId===f.a).ready,true);
+    assert.deepEqual(f.state().readiness.members.find(m=>m.userId===f.b),{userId:f.b,displayName:'Partner name',ready:false});
+    await f.action('play');
+    let rows=(await f.db.query("select body,kind,sender_id from watch_room_messages where room_id=$1",[f.room])).rows;
+    assert.equal(rows.length,1);assert.equal(rows[0].kind,'playback');assert.equal(rows[0].sender_id,f.a);assert.match(rows[0].body,/Tridib has pressed Play/);
+    await f.report(f.b,true);await f.report(f.b,false); // automatic start and buffering hold
+    assert.equal((await f.db.query('select * from watch_room_messages')).rows.length,1);
+    const id=randomUUID(),before=f.state();await f.as(f.b);
+    const pause=()=>f.db.query('select watch_playback($1,$2,$3,$4,$5) result',[f.room,'pause',id,before.revision,before.sessionId]);
+    assert.equal((await pause()).rows[0].result.outcome,'ok');assert.equal((await pause()).rows[0].result.outcome,'duplicate');
+    rows=(await f.db.query('select body from watch_room_messages order by created_at,id')).rows;
+    assert.equal(rows.length,2);assert.ok(rows.some(row=>row.body==='Partner name has paused.'));
+    await f.action('get');await f.report(f.a,true);await f.report(f.b,true);await f.action('play');
+    assert.ok((await f.db.query('select body from watch_room_messages')).rows.some(row=>row.body==='Tridib has started playback.'));
+    await assert.rejects(f.db.query("insert into watch_room_messages(room_id,sender_id,client_message_id,sender_name,body,kind) values($1,$2,$3,'Forged','Forged notice','playback')",[f.room,f.b,randomUUID()]),/row-level security/i);
+  } finally {await f.db.close();}
+});
+
 test('readiness freezes the room for a slow partner, resumes both, and respects manual pause and epochs',async()=>{
   const f=await readinessFixture();
   try{
