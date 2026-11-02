@@ -42,12 +42,12 @@ flowchart LR
   UI -->|Reload messages| API
 ```
 
-- **Frontend:** index.html with inline JavaScript and the Supabase browser SDK from jsDelivr. Local demo stays available for independent frontend work.
+- **Frontend:** frontend/index.html with inline JavaScript and the Supabase browser SDK from jsDelivr. Local demo stays available for independent frontend work.
 - **Backend:** Node native http, fetch, fs, and path; CommonJS modules. The installed dependency is @supabase/server for token verification. No framework or ORM.
 - **Database:** Supabase PostgreSQL. Node forwards the user's token to REST/RPC calls, so Row Level Security (RLS) applies. This implementation does not use a service-role/secret key.
 - **Realtime:** Browser subscriptions listen for inserts in the selected room. Events cause an authenticated API reload; PostgreSQL retains the messages. RLS controls readable records.
 - **Catalog:** Node proxies TMDB popular movie/TV lists, search, title details, and TV seasons/episodes with a server-only token. Browse renders posters, pagination, and a details panel.
-- **Playback:** PostgreSQL stores room state; shared-playback.js applies updates through player.js.
+- **Playback:** PostgreSQL stores room state; frontend/shared-playback.js applies updates through frontend/player.js.
 
 ### Main flows
 
@@ -232,9 +232,9 @@ The frontend developer can design in Local demo without the API running. Backend
 ## Repository map
 
 ```text
-index.html                 HTML UI, demo/mock backend, auth and Realtime client
-player.js                  Provider URLs, iframe lifecycle, commands and validated events
-shared-playback.js         Room state, subscriptions, retries and drift correction
+frontend/index.html        HTML UI, demo/mock backend, auth and Realtime client
+frontend/player.js         Provider URLs, iframe lifecycle, commands and validated events
+frontend/shared-playback.js Room state, subscriptions, retries and drift correction
 backend/playback.js        Authenticated state/media/command API
 backend/playback.sql       Playback tables, transactional RPC, RLS and Realtime
 backend/playback-db.test.js PostgreSQL permissions, revision and retry checks
@@ -266,7 +266,7 @@ SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 TMDB_READ_ACCESS_TOKEN=YOUR_TMDB_READ_ACCESS_TOKEN
 ```
 
-The browser also has SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY constants in index.html. If using a different Supabase project, update both those constants and .env. A publishable key may be used in browser code. Never put a Supabase secret/service-role key or TMDB token in HTML or commit .env.
+The browser also has SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY constants in frontend/index.html. If using a different Supabase project, update both those constants and .env. A publishable key may be used in browser code. Never put a Supabase secret/service-role key or TMDB token in HTML or commit .env.
 
 Use `.env.example` as the configuration template. For TMDB, copy the **API Read Access Token** from your TMDB account's Settings → API page, not the shorter API key. Node sends it as a Bearer token ([official authentication documentation](https://developer.themoviedb.org/docs/authentication-application)). Restart Node after setting it. No database changes are needed for catalog/search.
 

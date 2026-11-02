@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createRoomSync, intendedPosition } = require('../shared-playback');
+const { createRoomSync, intendedPosition } = require('../frontend/shared-playback');
 const initial = {roomId:'room',sessionId:'session',media:{mediaType:'movie',tmdbId:155,title:'Movie'},revision:1,provider:'cinemaos',status:'paused',positionMs:0,readyEpoch:1,playRequested:false,readiness:{bothReady:true,readyCount:2,requiredCount:2},anchorAt:new Date(10000).toISOString(),serverTime:new Date(10000).toISOString()};
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function client(request, { autoAck = true, loadReady = true } = {}) {

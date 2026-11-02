@@ -83,7 +83,7 @@ test('database failure returns an actionable error', async () => {
   const app = setup({ failRead: true }); assert.equal((await app.request('GET')).status, 502);
 });
 function frontend() {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   const source = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].at(-1)[1];
   new vm.Script(source);
   return source;

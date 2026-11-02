@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { embedUrl, playbackEvent, createPlayer } = require('../player');
+const { embedUrl, playbackEvent, createPlayer } = require('../frontend/player');
 const movie = { mediaType: 'movie', tmdbId: 155, title: 'The Dark Knight' };
 const tv = { mediaType: 'tv', tmdbId: 1396, season: 0, episode: 1, title: 'Breaking Bad' };
 

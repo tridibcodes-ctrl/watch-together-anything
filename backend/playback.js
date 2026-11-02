@@ -1,5 +1,5 @@
 const { createTmdbHandler } = require('./tmdb');
-const { PROVIDERS } = require('../player');
+const { PROVIDERS } = require('../frontend/player');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function authenticate(request) {
   const { verifyAuth } = await import('@supabase/server/core');

@@ -20,7 +20,7 @@ const server = http.createServer(async (request, response) => {
   if (await handleWatchlist(request, response, sendJson)) return;
   if (await handlePlayback(request, response, sendJson)) return;
   if (request.method === "GET" && ["/player.js", "/shared-playback.js"].includes(request.url)) {
-    fs.readFile(path.join(__dirname, "..", request.url.slice(1)), (error, script) => {
+    fs.readFile(path.join(__dirname, "..", "frontend", request.url.slice(1)), (error, script) => {
       if (error) { sendJson(response, 500, { error: "Could not load player integration" }); return; }
       response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store" });
       response.end(script);
@@ -28,7 +28,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   if (request.method === "GET" && request.url === "/") {
-    fs.readFile(path.join(__dirname, "..", "index.html"), (error, html) => {
+    fs.readFile(path.join(__dirname, "..", "frontend", "index.html"), (error, html) => {
       if (error) {
         sendJson(response, 500, { error: "Could not load the frontend" });
         return;
