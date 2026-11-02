@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   const MAX_POSITION = 604800000;
-  const controllable = provider => ['cinesrc', 'cinemaos'].includes(provider);
+  const controllable = provider => ['vidspark', 'vidrift', 'vidbolt', 'cinesrc', 'cinemaos'].includes(provider);
   function intendedPosition(state, now = Date.now()) {
     return Math.min(MAX_POSITION, Math.max(0, state.positionMs + (state.status === 'playing' ? Math.max(0, now + (state.offset || 0) - Date.parse(state.anchorAt)) : 0)));
   }
@@ -10,9 +10,11 @@
     let stopSubscription = () => {}, poll = null, correction = null, loadedKey = null, busy = false, online = false, lastCommandAt = 0;
     let pendingCommand = null, preparationKey = null, pauseIssued = false;
     let clientId = null, reporting = false, reportQueued = false, lastReport = null;
+    let nativeQueue = [], nativeSending = false, nativeBlocked = false;
     const epochKey = () => state ? `${state.sessionId}:${state.provider}:${state.readyEpoch}` : '';
     function localReady() {
       const actual = player.getStatus();
+      if (nativeQueue.length || nativeSending || nativeBlocked) return false;
       return preparationKey === epochKey() && actual.ready && actual.playable !== false && !actual.buffering && !actual.seekPending &&
         (state.status === 'playing' || Math.abs(actual.seconds - intendedPosition(state, now()) / 1000) <= 2);
     }
@@ -29,6 +31,11 @@
       }
       const actual = player.getStatus();
       if (!controllable(state.provider)) { emit(); return; }
+      // Do not correct a native action back to the old anchor while its room command is pending.
+      if (nativeQueue.length || nativeSending || nativeBlocked) {
+        if (actual.playing && actual.playable !== false) safePause();
+        emit(); return;
+      }
       const seconds = intendedPosition(state, now()) / 1000;
       const gated = !online || state.status !== 'playing' || !state.readiness?.bothReady || preparationKey !== epochKey();
       if (gated) {
@@ -68,6 +75,7 @@
     }
     async function reportReadiness(force = false) {
       if (!joined || !online || !clientId || !state?.sessionId || !controllable(state.provider)) return;
+      if (nativeQueue.length || nativeSending) return;
       const body = { clientId, sessionId: state.sessionId, provider: state.provider, epoch: state.readyEpoch, ready: !!localReady(), joined: true };
       const signature = JSON.stringify(body);
       if (!force && lastReport?.signature === signature && now() - lastReport.at < 2000) return;
@@ -109,6 +117,7 @@
       roomId = id || null; state = null; joined = false; loadedKey = null; online = false; busy = false;
       fetching = false; refreshQueued = false; pendingCommand = null; preparationKey = null; pauseIssued = false;
       clientId = null; reporting = false; reportQueued = false; lastReport = null;
+      nativeQueue = []; nativeSending = false; nativeBlocked = false;
       player.clear(); emit();
       if (!roomId) return;
       const version = generation;
@@ -132,14 +141,44 @@
         if (version !== generation) return;
         if (error.state) { pendingCommand = null; accept(error.state, started); }
         throw error;
-      } finally { if (version === generation) { busy = false; emit(); } }
+      } finally { if (version === generation) { busy = false; emit(); void drainNative(); } }
     }
     const commandId = () => root.crypto.randomUUID();
     function ensureJoined() { if (!joined) { clientId = commandId(); lastReport = null; reporting = false; reportQueued = false; } joined = true; }
     async function command(action, extra = {}) {
       if (!joined || !state?.sessionId) throw new Error('Join this playback session first.');
-      if (action !== 'provider' && !controllable(state.provider)) throw new Error('Shared controls require CineSrc or CinemaOS.');
+      if (action !== 'provider' && !controllable(state.provider)) throw new Error('Shared controls require VidSpark, VidRift, VidBolt, CineSrc or CinemaOS.');
+      if (nativeBlocked) throw new Error('Retry the last playback command before sending another action.');
       return send('commands', { commandId: commandId(), expectedRevision: state.revision, sessionId: state.sessionId, action, ...extra });
+    }
+    async function drainNative() {
+      if (nativeSending || nativeBlocked || busy || !online || !joined || !nativeQueue.length) return;
+      const version = generation, connection = clientId;
+      nativeSending = true;
+      try {
+        while (nativeQueue.length && version === generation && connection === clientId && joined) {
+          const intent = nativeQueue.shift();
+          if (intent.sessionId !== state.sessionId || intent.provider !== state.provider) { nativeQueue = []; break; }
+          if (intent.action === 'play' && state.playRequested || intent.action === 'pause' && !state.playRequested) continue;
+          await command(intent.action, intent.action === 'seek' ? { targetPositionMs: Math.round(intent.seconds * 1000) } : {});
+        }
+      } catch (error) {
+        if (version === generation && connection === clientId) {
+          nativeQueue = []; nativeBlocked = !!pendingCommand;
+          safePause(); onError(error.message);
+        }
+      } finally {
+        if (version === generation && connection === clientId) { nativeSending = false; reconcile(); }
+      }
+    }
+    function queueNative(intent) {
+      if (!intent || !['play','pause','seek'].includes(intent.action) || nativeBlocked) return;
+      if (intent.action === 'seek' && (!Number.isFinite(intent.seconds) || intent.seconds < 0 || intent.seconds * 1000 > MAX_POSITION)) return;
+      const next = { action: intent.action, seconds: intent.seconds, sessionId: state.sessionId, provider: state.provider };
+      // Coalesce repeated scrubbing samples; preserve the order of Play / Seek / Pause.
+      if (nativeQueue.at(-1)?.action === next.action) nativeQueue[nativeQueue.length - 1] = next;
+      else if (nativeQueue.length < 32) nativeQueue.push(next);
+      void drainNative();
     }
     return {
       selectRoom, refresh, command,
@@ -148,13 +187,18 @@
         ensureJoined(); emit(); await send('media', { ...media, commandId: commandId(), expectedRevision: state.revision });
       },
       join() { if (!state?.media) throw new Error('Choose a title first.'); ensureJoined(); reconcile(); },
-      leave() { release(); joined = false; clientId = null; reporting = false; reportQueued = false; lastReport = null; loadedKey = null; preparationKey = null; player.clear(); emit(); },
+      leave() { release(); joined = false; clientId = null; reporting = false; reportQueued = false; lastReport = null; nativeQueue = []; nativeSending = false; nativeBlocked = false; loadedKey = null; preparationKey = null; player.clear(); emit(); },
       retryPlayer() { if (joined && state?.media) { loadedKey = null; preparationKey = null; pauseIssued = false; reconcile(); } },
-      async retryCommand() { if (pendingCommand) return send(pendingCommand.route, pendingCommand.body); },
+      async retryCommand() {
+        if (!pendingCommand) return;
+        try { await send(pendingCommand.route, pendingCommand.body); }
+        finally { if (!pendingCommand) nativeBlocked = false; reconcile(); }
+      },
       playerEvent(event) {
         if (!joined || !state || !online) { emit(); return; }
-        // Player acknowledgements report readiness, never echo user control commands.
-        if (controllable(event.provider)) reconcile(); else emit();
+        // Only adapter-classified native actions become commands; acknowledgements only update readiness.
+        if (event.provider !== state.provider) return;
+        if (controllable(event.provider)) { queueNative(event.nativeIntent); reconcile(); } else emit();
       },
       destroy() { selectRoom(null); }
     };

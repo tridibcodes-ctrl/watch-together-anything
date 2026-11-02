@@ -2,7 +2,7 @@
 
 A watch-together app for couples. Many couples can use the system; each private room has **at most two members**. User IDs are added through room creation and invitation, never hard-coded in the schema. An account can currently belong to multiple rooms.
 
-This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, TMDB discovery, and shared room lists are implemented. Movies and selected TV episodes can now open in CineSrc (new primary), CinemaOS, or manual VidLink fallback in the current browser. Shared playback state and controllable-provider adapters are implemented; real two-browser stream validation and watched tracking remain outstanding.
+This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, TMDB discovery, and shared room lists are implemented. Movies and selected TV episodes open in VidSpark (primary), VidRift, VidBolt, CineSrc, CinemaOS, or manual VidLink fallback. Native Play/Pause/Seek actions on controllable providers update the shared room. Both-ready buffering holds remain enabled. Paired stream experiments passed for the three new providers; real two-account/network acceptance and watched tracking remain outstanding.
 
 Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target design](#complete-target-design--planned-features) · [Local setup](#setup-from-a-fresh-clone) · [Implemented APIs](#implemented-http-api) · [Remaining work](#remaining-work-and-suggested-order)
 
@@ -22,8 +22,8 @@ The intended experience lets both partners control playback, maintain a shared m
 | Live chat | Done | Room-filtered Supabase Postgres Changes events trigger message reloads; manual refresh remains available. |
 | TMDB browsing/search | Steps 1–3 implemented | Browsing/search, posters, pagination, title details, season/episode selection, and loading/error states. Playback remains separate work. |
 | Shared movie/show list | Implemented; live database validation pending | Room-scoped add/read/remove, duplicate protection, canonical TMDB snapshots, and member-only live updates. |
-| Shared playback | Implemented; live validation pending | Persisted sessions, member commands, safe retries, Realtime, polling, and CineSrc/CinemaOS drift correction. |
-| Embedded playback | Implemented; streams unconfirmed | CineSrc/CinemaOS controls queue room intent; the clock runs only after both accounts are ready. VidLink stays manual. |
+| Shared playback | Implemented; live validation pending | Persisted sessions, member commands, safe retries, Realtime, polling, native controls, and drift correction on five controllable providers. |
+| Embedded playback | Implemented; two-account acceptance pending | VidSpark/VidRift/VidBolt passed isolated paired stream tests. All controllable providers use the both-ready gate; VidLink stays manual. |
 | Watched completion | Pending | Needs both-member confirmation, episode progress, and undo. |
 | Public signup/recovery | Pending | Only sign-in UI exists; create test accounts in Supabase Dashboard. Check project signup settings separately. |
 | Production deployment | Pending | Node listens only on 127.0.0.1:3000. |
@@ -65,7 +65,7 @@ Think of the app as three connected pieces: **a catalog to choose something, a p
 | --- | --- | --- |
 | Find and describe a title | TMDB, through our Node API | Search for a title, read its details, and choose a TV season/episode |
 | Save the couple's choices and activity | Supabase PostgreSQL | Shared list, chat, membership, playback session, completion confirmations |
-| Show the video | CinemaOS primary and VidLink fallback | Each browser loads its own stream |
+| Show the video | VidSpark primary; VidRift/VidBolt/CineSrc/CinemaOS alternatives; manual VidLink | Each browser loads its own stream |
 | Keep both partners coordinated | Backend, database, Realtime, and player adapter | Commit room state and apply it to CinemaOS players |
 
 ### What TMDB gives the frontend
@@ -80,7 +80,7 @@ TMDB is our chosen catalog source, not a requirement of Node, Supabase, or synch
 
 TMDB is not our movie streaming server. Its catalog does not make a full movie playable, establish streaming rights, guarantee an external provider has a matching video, or synchronize two players. Video-related metadata and trailers must not be mistaken for full-film hosting. The goal of broad movie coverage means searching the available catalog; we cannot promise literally every title or playable availability for every result.
 
-CineSrc is the new primary embed provider. CinemaOS remains selectable; VidLink remains a manual fallback. In Backend API mode, Watch creates a shared room session. CinemaOS receives documented play/pause/seek/getStatus commands. Shared controls wait for video status; VidLink supports manual playback only. See the playback acceptance check below.
+VidSpark is the primary embed provider for new sessions. VidRift, VidBolt, CineSrc, and CinemaOS remain selectable; VidLink is manual. In Backend API mode, Watch creates a shared room session. Original player controls and shared buttons send authenticated room commands. Metadata discovery and actual stream availability are separate. See the playback acceptance check below.
 
 ### TMDB request flow
 
@@ -116,7 +116,7 @@ This section explains the intended end-to-end system. The implementation table a
 | Durable state | Supabase PostgreSQL with RLS | Transactions, room membership, saved lists, messages, progress, and authoritative playback snapshots. |
 | Change delivery | Supabase Realtime | Notify the selected room's clients about committed state changes. It does not replace persistent state. |
 | Catalog | TMDB through Node | Browsing, search, posters, title details, season/episode selection, and consistent title IDs. |
-| Playback | CineSrc/CinemaOS adapters implemented; live verification pending | Each browser plays its own stream; the backend coordinates controls |
+| Playback | VidSpark/VidRift/VidBolt/CineSrc/CinemaOS adapters; manual VidLink | Each browser plays its own stream; the backend coordinates controls |
 | Source collaboration | GitHub/GitHub Desktop | Share code and documentation. Git synchronization does not migrate a Supabase database or copy local environment files. |
 
 No Redis or Kafka is needed for the initial two-person-per-room design. Reassess only when measured requirements justify more infrastructure. Specific hosting providers and production resource sizes have not been chosen.
@@ -158,7 +158,7 @@ Both partners have equal play/pause/seek/provider control. The backend/database 
 
 The implemented playback snapshot contains room ID, session ID, media identity, season/episode if applicable, provider, playing/paused status, position at an anchor time, server anchor timestamp, and an increasing revision. Presence/readiness and connection state should be modeled separately from the saved list and membership.
 
-1. A partner chooses a title/episode or presses a shared control.
+1. A partner chooses a title/episode, uses a native player control, or presses a shared button.
 2. Browser sends a command ID, session ID, expected revision where appropriate, action, and validated arguments.
 3. Backend authenticates the sender, checks room membership/current session, validates the action, and applies it in a database transaction.
 4. A unique command ID makes retries safe. Locking or revision checks serialize simultaneous commands; stale commands are rejected and return the current state rather than changing a newer session.
@@ -401,66 +401,56 @@ All items currently return status planned. Playback and joint completion will in
 ### What happens after Watch
 
 1. Sign in, connect in **Backend API** mode, and select your room. Click **Watch together** on a movie, or select a TV season/episode in Details first.
-2. The server checks membership and TMDB metadata, then creates a paused CinemaOS session at zero. Your iframe opens; your partner sees the selected room title.
-3. Your partner clicks **Join playback**. Each browser loads its own stream. If necessary, press the native Play button inside each iframe to initialize video and satisfy browser autoplay restrictions.
-4. Once CinemaOS reports video status, the app's **Play / Pause / Seek** controls become available. Use these shared controls: native iframe controls are local and will be corrected to the saved room state.
-5. **Try VidLink fallback** switches the room provider for both joined clients and pauses the shared state. VidLink playback controls are manual; its documented events do not provide an incoming play/pause/seek API. Switch back to CinemaOS to resume shared controls.
+2. The server checks membership and TMDB metadata, then creates a paused **VidSpark** session at zero. Existing sessions keep their selected provider.
+3. Your partner clicks **Join playback**. Each browser loads its own stream. Press the original Play button in each iframe if activation is required; this is especially relevant to VidBolt.
+4. Either partner can use the player's original **Play, Pause, and seek bar/skip buttons**. These become authenticated room commands. The app's shared buttons remain available as a backup. Play queues intent; the clock waits for both accounts to be ready. Native Pause cancels play intent, and seeking prepares both at a fixed target before resuming if play was requested.
+5. Select a provider and click **Switch provider** to change it for both partners. This pauses the room. VidLink has manual controls only.
 
-Local demo opens only a local player. Watch does not add a watchlist item or mark it Watched. Join/Leave playback do not change room membership. Close player stops watching locally; room changes and sign-out clear the iframe and subscriptions.
+Local demo opens a local player without shared backend synchronization. Watch does not mark a title Watched. Join/Leave playback do not change room membership. Close player, room changes, and sign-out clear the local iframe and subscriptions. Choose episodes in the app so both partners keep the same episode.
 
-### Synchronization and provider behavior
+### Synchronization and native controls
 
-`backend/playback.sql` stores the session, title/episode, provider, position, server time anchor, and revision. Both members may issue commands. The RPC locks the room, checks membership/session/revision, and deduplicates command UUIDs. Conflicts return HTTP 409 with current state. Retry last command reuses the exact original body and UUID after a transport failure.
+The playback migration stores the session, title/episode, provider, position, server time anchor, revision, play intent, and readiness epoch. Both members may issue commands. The RPC locks the room, checks membership/session/revision, and deduplicates command UUIDs. Conflicts return HTTP 409 with current state. **Retry last playback command** reuses the original body/UUID after a transport failure.
 
-Realtime INSERT/UPDATE events trigger authenticated state reloads, with a three-second polling fallback. The selected controllable player's status is requested every two seconds; drift over two seconds triggers a seek. Server clock offset is estimated using the request midpoint. Old room responses and older revisions are ignored. Connection failures disable shared controls and attempt a local CinemaOS pause. Playback readiness now uses authenticated heartbeats and the shared pause gate described below. General presence and numerical latency guarantees are not implemented.
+Realtime changes trigger authenticated state reloads, with a three-second polling fallback. Providers with a status getter are polled every two seconds. VidBolt has no confirmed getter and uses pushed events instead. Drift over two seconds triggers a correction seek. Server clock offset uses the request midpoint; old room responses and older revisions are ignored. Connection failures attempt a local pause.
 
-The adapter sends `{command:'play'}`, `{command:'pause'}`, `{command:'seek', time:120}`, and `{command:'getStatus'}` to the exact `https://cinemaos.tech` origin. Incoming events must match the current iframe and provider origin. The current CinemaOS parser expects `{type:'PLAYER_EVENT', data:{event,currentTime,duration,paused?}}`, also accepting `playing`/`isPlaying`. Command objects and event names were provided from the provider documentation; the live CinemaOS event envelope and status fields remain unverified. Controls stay disabled if no valid video status arrives.
+Initialize playback once before testing native seeking; startup position restores are deliberately excluded. The adapter checks the exact iframe window and provider origin, validates finite bounded times, and validates media identity where the provider supplies it. It distinguishes expected Play/Pause/Seek acknowledgements from native actions. Programmatic corrections and buffering pauses do not become new room commands. Native actions are serialized through the same command endpoint as shared buttons; repeated scrubbing samples are debounced/coalesced. Pending actions are protected from correction back to the old anchor. A conflict drops stale queued actions; a transport failure retains the exact command for explicit retry.
 
-| Provider | Movie route | TV route |
-| --- | --- | --- |
-| [CineSrc](https://cinesrc.st/docs) | `/embed/movie/{tmdbId}` | `/embed/tv/{tmdbId}?s={season}&e={episode}` |
-| [CinemaOS](https://cinemaos.tech/embed) | `/player/{tmdbId}` | `/player/{tmdbId}/{season}/{episode}` |
-| [VidLink](https://vidlink.pro/) | `/movie/{tmdbId}` | `/tv/{tmdbId}/{season}/{episode}` |
+Not all providers identify human interaction. VidSpark's seek event is based on a time jump; VidRift and VidBolt do not expose a dedicated seek-completed event in their inspected interfaces. Native seeking therefore uses timestamp discontinuities after the player has first played for initialization, excludes outstanding command seeks and detected stalls, and debounces the result. This is best effort: source changes, player bugs, or changes to the external API can require reloading or the shared buttons. Use normal 1x playback and matching video sources/cuts on both devices.
 
-Autoplay and automatic next episode are disabled through provider URL parameters. VidLink receives the room position through `startAt`; its own saved progress may override it. Video readiness requires a valid positive duration or timestamp, not iframe `load`. After 20 seconds without video status, the UI suggests retry/fallback. Browser error events can trigger one CinemaOS-to-VidLink fallback; navigation timeouts are not reliably reported for cross-origin iframes.
+| Provider | Embed origin | Movie route | TV route | Incoming commands / events |
+| --- | --- | --- | --- | --- |
+| [VidSpark](https://vidspark.to/) — primary | https://vidspark.to | /movie/{tmdbId} | /tv/{tmdbId}/{season}/{episode} | action: play/pause/seek/getStatus; source: vidspark-player events |
+| [VidRift](https://vidrift.net/docs/) | https://embed.vidrift.net | /embed/movie/{tmdbId} | /embed/tv/{tmdbId}/{season}/{episode} | vidrift:play/pause/resume/get-state; state/progress/unpaused/paused events |
+| [VidBolt](https://vidbolt.pro/) | https://vidbolt.pro | /movie/{tmdbId} | /tv/{tmdbId}/{season}/{episode} | type: play/pause/seek; ready/durationchange/timeupdate/play/pause events |
+| [CineSrc](https://cinesrc.st/docs) | https://cinesrc.st | /embed/movie/{tmdbId} | /embed/tv/{tmdbId}?s={season}&e={episode} | cinesrc:command with command/args; responses and playback events |
+| [CinemaOS](https://cinemaos.tech/embed) | https://cinemaos.tech | /player/{tmdbId} | /player/{tmdbId}/{season}/{episode} | command: play/pause/seek/getStatus; PLAYER_EVENT envelope |
+| [VidLink](https://vidlink.pro/) — manual | https://vidlink.pro | /movie/{tmdbId} | /tv/{tmdbId}/{season}/{episode} | Progress events only; shared Play/Pause/Seek disabled |
 
-VidLink rejected the sandboxed iframe with "Please Disable Sandbox." The iframe now uses the provider's unsandboxed configuration. The cross-origin boundary still separates its DOM from this app, but sandbox popup/navigation restrictions no longer apply.
+VidSpark receives an explicit t parameter to request the room position. A live test still observed a delayed saved-progress restore; initialization jumps are ignored as native intent and corrected to the frozen room anchor. VidRift uses autoplay=0 and receives nextup-info with next:null to suppress automatic advancement. CineSrc disables autoplay/autonext/autoskip/continueprompt. CinemaOS and VidLink retain their existing autoplay/next settings. VidBolt has no confirmed status getter or autoplay/next query contract; its initial native activation may be necessary. Known episode mismatches reported by CineSrc/VidRift stop readiness until reload. VidSpark/VidBolt do not supply reliable episode identity in their observed messages: use the app to choose episodes.
 
-### Validation and two-account acceptance check
+Iframe load or a provider's ready event alone is insufficient. The adapter requires video metadata/position and subsequent progress or seek acknowledgement for readiness. After 20 seconds without video status, the UI suggests retry or another provider. Iframe errors may offer VidLink; cross-origin navigation failures are not always reported. Provider iframes are unsandboxed because some reject a sandbox; the cross-origin DOM boundary remains, but sandbox popup/navigation restrictions do not apply.
 
-Automated checks cover provider URLs/events/commands, two simulated clients, delayed responses, drift correction, safe retries, and PostgreSQL RLS/revision/session checks. Database tests use PGlite with simulated Supabase roles and apply the migration twice; they do not establish live Supabase Realtime delivery. Run `npm --prefix backend test`.
+### Upgrade and two-account acceptance check
 
-During the headless Chrome stream check, CinemaOS timed out (`ERR_CONNECTION_TIMED_OUT`). VidLink displayed video controls after the sandbox fix, but after Play it still had no video source, duration, or advancing timestamp. **Real stream playback and two-browser provider synchronization have not been confirmed.** A rendered player is not evidence of successful streaming.
+**Required:** run the complete updated backend/playback.sql in Supabase SQL Editor, restart the local server, and hard-refresh both browsers. The migration expands provider constraints, command validation, and the readiness gate, and defaults NEW sessions to VidSpark. It is rerunnable and preserves existing rows, selected providers, media, and room membership. This file has been exercised in PGlite; applying it to the hosted Supabase project is a separate setup step. No extra provider key, package, or paid service is needed.
 
-The developer confirmed `backend/playback.sql` succeeded in Supabase. To finish live acceptance:
+Integrated paired-player tests on **2 November 2026** used the actual player/room-sync adapters and the playback RPC in an isolated PGlite database. Modern Family S1E1 (TMDB 1421) played on VidSpark, VidRift, and VidBolt. Native Play, Pause, and Forward were checked against both actual video elements. VidBolt also demonstrated a fixed-target 1/2-ready hold until the second player was activated. This used two test members and two iframes in one browser, not production Supabase Auth/Realtime or separate computers. Different providers returned different durations/cuts. CinemaOS previously failed on one partner's network; retaining its adapter does not establish availability. A working title today does not guarantee every catalog title or future uptime.
 
-1. Hard-refresh two browser profiles, sign into separate accounts, connect in Backend API mode, and select the same room.
-2. Click Watch together in the first profile and Join playback in the second. Confirm the same title/episode appears.
-3. Initialize both CinemaOS players using native Play if required. Confirm video time advances and shared controls become enabled.
-4. Use the app's Pause, Play, and Seek in each profile. Confirm the other player follows; wait a few seconds to observe drift correction.
-5. Switch to VidLink and confirm both load the same title with manual controls. Reload, reconnect, and switch rooms to check recovery/isolation.
+1. Apply the migration, start Node, and use two browser profiles/accounts in the same room.
+2. Watch a title and Join playback on both. For an existing session select VidSpark and Switch provider. Initialize each native player if needed.
+3. Use original Play in one browser; confirm both actual videos advance once both report ready. Use original Pause in the other; confirm both stop.
+4. Drag the native seek bar and use Forward/Back in each browser; confirm both reach the same scene. Also check the shared buttons.
+5. Slow or interrupt one stream. Verify the clock freezes, the other pauses, and both recover against a fixed timestamp. Pause during a hold and verify recovery does not resume against that choice.
+6. Repeat on VidRift/VidBolt, reload/reconnect, change rooms, and switch to manual VidLink. Separate networks, mobile/autoplay behavior, long sessions, and live Supabase delivery still need acceptance testing.
 
-If CinemaOS plays but shared controls remain disabled, its actual `PLAYER_EVENT` object is needed to verify the event parser. No additional token is required.
-
-## CineSrc controllable-provider setup
-
-CineSrc is a new primary candidate because its official [Player Methods and Events documentation](https://cinesrc.st/docs) specifies both commands and status events. Documentation and passing simulated tests are not proof of stream availability, play/pause acknowledgement, or access from both partners' networks. CinemaOS did not load on one partner's computer; VidLink plays but its published API only reports events, so its shared controls remain disabled.
-
-**Required upgrade:** run the latest backend/playback.sql in Supabase SQL Editor. It extends the provider constraint and RPC validation to accept cinesrc, changes the default for NEW media sessions, and preserves existing room/session state. Existing sessions retain their chosen provider; select CineSrc and click Switch provider to change one. Never remove/recreate the playback table to upgrade.
-
-Hard-refresh both browsers, connect/select the same room, and join playback on both. Select CineSrc for an existing session, or Watch a new title. Press native Play once in each embedded player if browser autoplay rules require it. Shared controls enable after a valid duration/timestamp response. Test Pause from one account, Play from the other, a shared seek, and reconnect. Confirm the actual videos respond in BOTH browsers; a saved database revision alone is insufficient.
-
-The adapter sends messages to the exact https://cinesrc.st origin with the structure {type:'cinesrc:command',command,args}. Commands are play/pause with an empty argument array and seek with [seconds]. It polls getCurrentTime/getDuration/getPaused and handles their cinesrc:response events, loadedmetadata, timeupdate, play, pause, seeked, ended, and error. It verifies the sending iframe/source and origin, bounds time values, and requests status after the provider's ready event. The ready event or iframe load alone does not enable controls. Independent in-player episode navigation disables control until reloading the selected room episode.
-
-URLs disable autoplay, autonext, and autoskip, and use t for initial position. This prevents automatic episode/intro changes from silently diverging from room state. Provider changes pause the room; drift correction uses the existing committed position/time anchor. Native controls are still local and are reconciled to the room state; use the shared buttons for intentional room commands.
-
-No new token is required. If CineSrc fails on either device, leave that playback marked unconfirmed and try another verified provider or a self-controlled video source. VidLink remains useful for manual watching, but is not a synchronized fallback. Do not enable speculative VidLink commands or bypass browser cross-origin restrictions.
+Automated checks cover real PostgreSQL transactions through PGlite, API provider validation, provider envelopes/security, native actions, command echoes, rapid scrubbing, retries, drift, and slow-partner holds. Run npm --prefix backend test from the repository root. These tests do not prove two-device stream access or live Realtime delivery.
 
 ## Both-ready playback and buffering holds
 
 **Apply the updated backend/playback.sql, restart/reload Node, and hard-refresh BOTH browsers.** Old sessions and saved media are preserved. Updated clients refuse unguarded playback snapshots from an old migration instead of continuing without readiness checks.
 
-The room now separates playRequested (user intent) from status (whether the shared clock actually runs). Pressing Play together queues play intent; the actual status stays paused until BOTH member accounts have joined playback and report ready for the current session, provider, and readyEpoch. A room with only one member/ready participant intentionally waits. Manual Pause clears playRequested, so later recovery cannot resume against that choice. VidLink remains manual because the app cannot pause its video remotely.
+The room now separates playRequested (user intent) from status (whether the shared clock actually runs). Pressing native Play or Play together queues play intent; the actual status stays paused until BOTH member accounts have joined playback and report ready for the current session, provider, and readyEpoch. A room with only one member/ready participant intentionally waits. Manual Pause clears playRequested, so later recovery cannot resume against that choice. VidLink remains manual because the app cannot pause its video remotely.
 
 POST /api/rooms/{roomId}/readiness accepts {clientId,sessionId,provider,epoch,ready,joined} and returns the playback snapshot. It uses the authenticated user identity, not a user ID supplied in the body. State snapshots additionally include readyEpoch, playRequested, waitingForReady, and readiness:{readyCount,requiredCount,bothReady}. The UI displays the count and whether it is preparing locally or waiting for the partner. Play/Pause/Seek commands can be requested while loading; the server gate controls actual playback.
 
@@ -472,7 +462,7 @@ On a playing-to-held transition, the database freezes position and advances the 
 
 The player adapter now distinguishes metadata readiness, observed playback/seek acknowledgement, an outstanding seek, and suspected buffering. It never issues another correction seek while one remains unacknowledged. Initial preparation and recovery seek to a fixed anchor. Once the player confirms it can play at that anchor, it reports ready. Native Play may still be required once for autoplay permission; blocked start attempts keep the gate waiting until a successful gesture.
 
-CineSrc's documented interface exposes timestamps and paused state, not buffered ranges or a guaranteed canplay/waiting notification. Ongoing stalls are inferred when a playing video's observed timestamp does not advance for about four seconds; stalled seeks and stale status also hold readiness. Repeated identical status samples do not count as progress, and the adapter stops extrapolating time during a suspected stall. Detection plus network/polling takes time; this is not an instantaneous or full-movie-download guarantee. If a provider never confirms the fixed seek, Reload player is an explicit retry instead of an endless stream of moving seeks. See [CineSrc events and getters](https://cinesrc.st/docs).
+These provider interfaces do not expose reliable buffered ranges or a guaranteed canplay/waiting notification. VidBolt has no confirmed status getter, so a quiet paused player is not treated as stale simply for emitting no events. Ongoing stalls are inferred when a playing video's observed timestamp does not advance for about four seconds; stalled seeks and stale status also hold readiness. Repeated identical status samples do not count as progress, and the adapter stops extrapolating time during a suspected stall. Detection plus network/polling takes time; this is not an instantaneous or full-movie-download guarantee. If a provider never confirms the fixed seek, Reload player is an explicit retry instead of an endless stream of moving seeks. See [CineSrc events and getters](https://cinesrc.st/docs).
 
 Acceptance check: join one account first and queue Play; verify the room remains paused at 0/2 or 1/2. Join the second account with a slow-loading player and confirm the target stays fixed and no repeated seeking occurs. After both prepare, verify both videos resume. Then interrupt one stream, restore it, explicitly Pause during another hold, seek while waiting, change provider, reload one browser, and leave playback. Manual Pause must survive recovery; expired/old-context reports must not restart the room. Live two-device/network validation is still required in addition to the committed PostgreSQL and mocked-player tests.
 
@@ -480,8 +470,8 @@ Acceptance check: join one account first and queue Play; verify the room remains
 
 1. **TMDB — steps 1–3 implemented:** catalog/search, posters, pagination, title details, and season/episode selection. Token requests returned HTTP 200 for popular movies and TV search; the user confirmed real browsing works. Check the new details flow in the browser. The room-scoped shared list is implemented; apply its schema and verify two-account behavior next. Complete required TMDB attribution with an approved logo before publishing.
 2. **Room-scoped shared list — implemented:** apply the updated schema, verify adds/removals in two accounts, persistence, and room isolation. The backend uses room IDs; group-based list routes remain only in Local demo. Watching/Watched transitions are not part of this increment.
-3. **Playback sessions - implemented:** verify the applied migration and real two-account updates. Add presence, buffering coordination, and command-ledger retention later.
-4. **Player adapters - synchronization implemented, live validation pending:** verify CineSrc playback and two-browser play/pause/seek on a playable stream; CinemaOS remains an optional provider. VidLink remains a manual fallback.
+3. **Playback sessions - implemented:** verify the applied migration and real two-account updates. Buffering coordination is implemented; general presence and command-ledger retention remain.
+4. **Player adapters - synchronization implemented, live validation pending:** validate native controls and buffering recovery with two accounts/devices on VidSpark, VidRift, and VidBolt. CineSrc/CinemaOS remain optional; VidLink remains manual.
 5. **Watched progress:** require both partners' confirmation, track episodes separately from whole series, and support undo.
 6. **Product/operations:** frontend design, signup/confirmation/password reset, invite rotation/expiry, room departure/deletion, rate limits, deployment, configuration, monitoring and service quota checks.
 

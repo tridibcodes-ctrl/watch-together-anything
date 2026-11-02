@@ -4,7 +4,7 @@ create table if not exists public.watch_room_playback (
   room_id uuid primary key references public.watch_rooms(id) on delete cascade,
   session_id uuid not null,
   media jsonb not null,
-  provider text not null check (provider in ('cinesrc', 'cinemaos', 'vidlink')),
+  provider text not null check (provider in ('vidspark','vidrift','vidbolt','cinesrc','cinemaos','vidlink')),
   status text not null check (status in ('playing', 'paused')),
   position_ms bigint not null check (position_ms between 0 and 604800000),
   anchor_at timestamptz not null,
@@ -13,7 +13,7 @@ create table if not exists public.watch_room_playback (
 -- Upgrade existing rooms without deleting state or changing their selected provider.
 alter table public.watch_room_playback drop constraint if exists watch_room_playback_provider_check;
 alter table public.watch_room_playback add constraint watch_room_playback_provider_check
-  check (provider in ('cinesrc', 'cinemaos', 'vidlink'));
+  check (provider in ('vidspark','vidrift','vidbolt','cinesrc','cinemaos','vidlink'));
 create table if not exists public.watch_playback_commands (
   room_id uuid not null references public.watch_rooms(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -78,7 +78,7 @@ declare state public.watch_room_playback; summary jsonb; target_status text;
   stamp timestamptz := pg_catalog.clock_timestamp(); freeze_at timestamptz; next_position bigint;
 begin
   select * into state from public.watch_room_playback where room_id=p_room_id;
-  if state.session_id is null or state.provider not in ('cinesrc','cinemaos') then return; end if;
+  if state.session_id is null or state.provider not in ('vidspark','vidrift','vidbolt','cinesrc','cinemaos') then return; end if;
   summary := public.watch_readiness_summary(p_room_id);
   target_status := case when state.play_requested and (summary->>'bothReady')::boolean then 'playing' else 'paused' end;
   if state.status = target_status then return; end if;
@@ -112,11 +112,11 @@ begin
   select * into state from public.watch_room_playback where room_id=p_room_id;
   summary := public.watch_readiness_summary(p_room_id);
   return pg_catalog.jsonb_build_object('roomId',p_room_id,'sessionId',state.session_id,
-    'media',state.media,'provider',coalesce(state.provider,'cinesrc'),'status',coalesce(state.status,'paused'),
+    'media',state.media,'provider',coalesce(state.provider,'vidspark'),'status',coalesce(state.status,'paused'),
     'positionMs',coalesce(state.position_ms,0),'anchorAt',coalesce(state.anchor_at,stamp),
     'revision',coalesce(state.revision,0),'serverTime',stamp,'readyEpoch',coalesce(state.ready_epoch,1),
     'playRequested',coalesce(state.play_requested,false),'readiness',summary,
-    'waitingForReady',state.session_id is not null and state.provider in ('cinesrc','cinemaos') and not (summary->>'bothReady')::boolean);
+    'waitingForReady',state.session_id is not null and state.provider in ('vidspark','vidrift','vidbolt','cinesrc','cinemaos') and not (summary->>'bothReady')::boolean);
 end; $$;
 revoke all on function public.watch_readiness_summary(uuid), public.watch_apply_ready_gate(uuid,boolean), public.watch_playback_snapshot(uuid) from public, anon, authenticated;
 
@@ -185,12 +185,12 @@ begin
           raise exception using errcode = '22023', message = 'Invalid TV episode';
         end if;
         insert into public.watch_room_playback(room_id,session_id,media,provider,status,position_ms,anchor_at,revision,play_requested,ready_epoch)
-        values(p_room_id,pg_catalog.gen_random_uuid(),p_media,'cinesrc','paused',0,stamp,coalesce(state.revision,0)+1,false,coalesce(state.ready_epoch,0)+1)
+        values(p_room_id,pg_catalog.gen_random_uuid(),p_media,'vidspark','paused',0,stamp,coalesce(state.revision,0)+1,false,coalesce(state.ready_epoch,0)+1)
         on conflict (room_id) do update set session_id=excluded.session_id, media=excluded.media,
           provider=excluded.provider,status=excluded.status,position_ms=0,anchor_at=excluded.anchor_at,revision=excluded.revision,play_requested=false,ready_epoch=excluded.ready_epoch
         returning * into state;
       else
-        if p_action = 'provider' and (p_provider is null or p_provider not in ('cinesrc','cinemaos','vidlink')) then
+        if p_action = 'provider' and (p_provider is null or p_provider not in ('vidspark','vidrift','vidbolt','cinesrc','cinemaos','vidlink')) then
           raise exception using errcode = '22023', message = 'Invalid provider';
         end if;
         if p_action = 'seek' and (p_position_ms is null or p_position_ms not between 0 and 604800000) then
@@ -232,7 +232,7 @@ begin
     raise exception using errcode='42501',message='Room membership required';
   end if;
   if p_client_id is null or p_session_id is null or p_ready is null or p_joined is null or p_epoch is null or p_epoch < 1
-     or p_provider is null or p_provider not in ('cinesrc','cinemaos') then
+     or p_provider is null or p_provider not in ('vidspark','vidrift','vidbolt','cinesrc','cinemaos') then
     raise exception using errcode='22023',message='Invalid readiness report';
   end if;
   perform 1 from public.watch_rooms where id=p_room_id for update;

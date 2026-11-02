@@ -35,15 +35,15 @@ test('PostgreSQL playback transactions enforce membership, revisions, sessions, 
     const media = {mediaType:'movie',tmdbId:155,title:'Movie'};
     const first = await call({action:'media',id,revision:0,media});
     assert.equal(first.state.revision,1);
-    assert.equal(first.state.provider,'cinesrc');
+    assert.equal(first.state.provider,'vidspark');
     assert.equal(first.state.status,'paused');
     const session = first.state.sessionId;
     assert.equal((await call({action:'media',id,revision:0,media})).outcome,'duplicate');
     assert.equal((await call({action:'media',id,revision:0,media:{...media,tmdbId:27205}})).outcome,'conflict');
     const clients = [randomUUID(),randomUUID()];
-    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'cinesrc',first.state.readyEpoch,clients[0],true,true]);
+    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'vidspark',first.state.readyEpoch,clients[0],true,true]);
     await as(b);
-    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'cinesrc',first.state.readyEpoch,clients[1],true,true]);
+    await db.query('select public.watch_report_readiness($1,$2,$3,$4,$5,$6,$7)',[room,session,'vidspark',first.state.readyEpoch,clients[1],true,true]);
     const play = await call({action:'play',id:randomUUID(),revision:1,session});
     assert.equal(play.state.status,'playing');
     assert.equal(play.state.revision,2);
@@ -141,5 +141,21 @@ test('expired readiness leases pause at lease expiry and leaving pauses the part
     const held=f.state().positionMs;await f.action();assert.equal(f.state().positionMs,held);
     await f.report(f.a,true);await f.report(f.b,true);assert.equal(f.state().status,'playing');
     await f.report(f.b,false,f.state(),false);assert.equal(f.state().status,'paused');assert.equal(f.state().playRequested,true);
+  }finally{await f.db.close();}
+});
+
+test('each added provider uses the two-account gate and survives migration reapplication',async()=>{
+  const f=await readinessFixture();
+  try{
+    for(const provider of ['vidspark','vidrift','vidbolt']){
+      await f.action('provider',{provider});assert.equal(f.state().provider,provider);assert.equal(f.state().status,'paused');
+      await f.action('play');await f.report(f.a,true);await f.report(f.b,false);assert.equal(f.state().status,'paused');
+      await f.report(f.b,true);assert.equal(f.state().status,'playing');
+      await f.report(f.b,false);assert.equal(f.state().status,'paused');assert.equal(f.state().playRequested,true);
+      const saved=f.state();await f.db.exec('reset role');await f.db.exec(fs.readFileSync(path.join(__dirname,'playback.sql'),'utf8'));await f.db.exec('set role authenticated');await f.action();
+      assert.equal(f.state().provider,provider);assert.equal(f.state().sessionId,saved.sessionId);assert.equal(f.state().positionMs,saved.positionMs);
+      await f.report(f.a,true);await f.report(f.b,true);assert.equal(f.state().status,'playing');
+      await f.action('pause');await f.report(f.a,true);await f.report(f.b,true);assert.equal(f.state().status,'paused');assert.equal(f.state().playRequested,false);
+    }
   }finally{await f.db.close();}
 });

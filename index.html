@@ -110,7 +110,7 @@
       <p id="sync-status" role="status" aria-live="polite">Select a room to share playback.</p>
       <button id="retry-command" type="button">Retry last playback command</button>
       <h3 id="player-title">Player</h3>
-      <p id="player-status" role="status" aria-live="polite">Choose Watch on a movie or TV episode to open CineSrc.</p>
+      <p id="player-status" role="status" aria-live="polite">Choose Watch on a movie or TV episode to open VidSpark.</p>
       <div id="player"></div>
       <button id="load-player" type="button" disabled>Reload player</button>
       <button id="fallback-player" type="button" disabled>Try VidLink fallback</button>
@@ -121,16 +121,20 @@
       <button id="seek" type="button">Seek together</button>
       <p>
         <label>Provider <select id="provider">
-            <option value="cinesrc">CineSrc (primary)</option>
+            <option value="vidspark">VidSpark (primary)</option>
+            <option value="vidrift">VidRift</option>
+            <option value="vidbolt">VidBolt</option>
+            <option value="cinesrc">CineSrc</option>
             <option value="cinemaos">CinemaOS</option>
             <option value="vidlink">VidLink</option>
           </select></label>
         <button id="switch-provider" type="button" disabled>Switch provider</button>
       </p>
-      <p>In Backend API mode, Watch selects the room's title. Both partners join playback, then use Play/Pause/Seek
-        together once CineSrc or CinemaOS reports video status. Use the native Play button once if your browser requires it.
-        Native controls are local and are corrected to the room state. VidLink cannot receive shared controls;
-        its fallback playback is manual. Provider changes apply to the room.</p>
+      <p>In Backend API mode, both partners join playback. Play, pause, and seek inside VidSpark, VidRift,
+        VidBolt, CineSrc, or CinemaOS to control the room; the shared buttons also remain available.
+        Press native Play once in each player if needed to load its video. Playback waits for both partners
+        and pauses during detected buffering. VidLink playback is manual. Provider changes apply to both partners.
+        Choose episodes here in the app so both players keep the same episode.</p>
       <button id="complete" type="button">We finished together</button>
       <button id="undo" type="button">Undo completion</button>
       <p>Voice/video needs WebRTC signaling from the backend; it is not implemented in this HTML starter.</p>
@@ -222,10 +226,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     let localPlayback = null;
     let sharedView = { state: null, joined: false, busy: false, canControl: false, online: false };
     const embeddedPlayer = MultiplayPlayer.createPlayer({ container: $('player'), onState(state) {
+      const previousProvider = localPlayback?.provider;
       localPlayback = state.media ? state : null;
       $('player-title').textContent = state.media ? `${state.media.title}${state.media.mediaType === 'tv' ? ' · S' + state.media.season + ' E' + state.media.episode : ''}` : 'Player';
       $('player-status').textContent = state.message;
-      $('provider').value = state.provider;
+      if (!state.media || previousProvider !== state.provider) $('provider').value = state.provider;
       controls();
       if (mode === 'api') sharedPlayback.playerEvent(state);
     }, onFallback() {
@@ -245,7 +250,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (mode !== 'api') return;
         room = view.state; joined = view.joined;
         $('room-status').textContent = room?.media ? `${room.media.title} · ${room.provider} · ${room.status} · revision ${room.revision}` : 'No shared title selected.';
-        $('sync-status').textContent = !view.roomId ? 'Select a room to share playback.' : !view.online ? 'Connecting to room playback…' : !room?.media ? 'Choose Watch on a title to share it with this room.' : !joined ? 'A room title is selected. Click Join playback to load it.' : room.provider === 'vidlink' ? 'VidLink fallback: title/provider shared; play, pause and seek are manual.' : room.waitingForReady ? 'Paused: ' + room.readiness.readyCount + '/2 partners ready. ' + (view.localReady ? 'Waiting for your partner.' : 'Preparing your player; use native Play once if needed.') + (room.playRequested ? ' Playback will resume when both are ready.' : ' Press Play together to request playback.') : view.canControl ? 'Shared controls ready for ' + MultiplayPlayer.PROVIDERS[room.provider].name + '. Both partners can control the room.' : 'Waiting for ' + MultiplayPlayer.PROVIDERS[room.provider].name + ' video status. Press its native Play button if needed. VidLink fallback is manual.';
+        $('sync-status').textContent = !view.roomId ? 'Select a room to share playback.' : !view.online ? 'Connecting to room playback…' : !room?.media ? 'Choose Watch on a title to share it with this room.' : !joined ? 'A room title is selected. Click Join playback to load it.' : room.provider === 'vidlink' ? 'VidLink fallback: title/provider shared; play, pause and seek are manual.' : room.waitingForReady ? 'Paused: ' + room.readiness.readyCount + '/2 partners ready. ' + (view.localReady ? 'Waiting for your partner.' : 'Preparing your player; use native Play once if needed.') + (room.playRequested ? ' Playback will resume when both are ready.' : ' Press Play in the player or Play together to request playback.') : view.canControl ? 'Shared controls ready for ' + MultiplayPlayer.PROVIDERS[room.provider].name + '. Both partners can control the room.' : 'Waiting for ' + MultiplayPlayer.PROVIDERS[room.provider].name + ' video status. Press its native Play button if needed. VidLink fallback is manual.';
         controls();
       },
       onError(message) { $('sync-status').textContent = message; }
@@ -260,7 +265,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     ];
     const demo = {
       profile: { userId: 'demo-user', displayName: 'Your name', avatarKey: 'moon' }, list: [], messages: [],
-      room: { roomId: 'demo-room', sessionId: null, media: null, provider: 'cinemaos', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: 0 }
+      room: { roomId: 'demo-room', sessionId: null, media: null, provider: 'vidspark', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: 0 }
     };
     const uuid = () => crypto.randomUUID();
     const SUPABASE_URL = "https://hxfqojvwfsytqergqywt.supabase.co";
@@ -712,7 +717,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         return { items: demo.list };
       }
       if (path.endsWith('/messages')) { if (method === 'POST') { const message = { id: body.clientMessageId, senderName: demo.profile.displayName, body: body.body, createdAt: new Date().toISOString() }; if (!demo.messages.some(m => m.id === message.id)) demo.messages.push(message); return { message }; } return { items: demo.messages }; }
-      if (path.endsWith('/media')) { const t = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); demo.room = { ...demo.room, sessionId: uuid(), media: { ...body, title: t.title }, provider: 'cinemaos', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: demo.room.revision + 1 }; const item = demo.list.find(i => i.title.tmdbId === t.tmdbId && i.title.mediaType === t.mediaType); if (item.status !== 'watched') item.status = 'watching'; return snapshot(); }
+      if (path.endsWith('/media')) { const t = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); demo.room = { ...demo.room, sessionId: uuid(), media: { ...body, title: t.title }, provider: 'vidspark', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: demo.room.revision + 1 }; const item = demo.list.find(i => i.title.tmdbId === t.tmdbId && i.title.mediaType === t.mediaType); if (item.status !== 'watched') item.status = 'watching'; return snapshot(); }
       if (path.endsWith('/commands')) { if (body.sessionId !== demo.room.sessionId) throw new Error('Stale session.'); demo.room.positionMs = body.action === 'seek' ? body.targetPositionMs : position(demo.room); if (body.action === 'play' || body.action === 'pause') demo.room.status = body.action === 'play' ? 'playing' : 'paused'; if (body.action === 'provider') { demo.room.provider = body.provider; demo.room.status = 'paused'; } demo.room.anchorAt = new Date().toISOString(); demo.room.revision++; return snapshot(); }
       if (path.endsWith('/complete') || path.endsWith('/undo-completion')) { const completed = path.endsWith('/complete'); if (demo.room.media?.mediaType === 'movie') demo.list.filter(i => i.title.tmdbId === demo.room.media.tmdbId && i.title.mediaType === 'movie').forEach(i => i.status = completed ? 'watched' : 'watching'); return { completed, message: 'Demo updated. Your backend must verify shared completion; TV updates only the selected episode.' }; }
       if (path.endsWith('/leave')) return null;

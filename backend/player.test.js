@@ -115,7 +115,7 @@ test('CineSrc primary uses TV query parameters and prevents automatic episode ch
   assert.equal(url.searchParams.get('s'), '0'); assert.equal(url.searchParams.get('e'), '1');
   for (const key of ['autoplay','autonext','autoskip','continueprompt']) assert.equal(url.searchParams.get(key), 'false');
   assert.equal(url.searchParams.get('t'), '75');
-  const app = harness(); app.player.load(movie);
+  const app = harness(); app.player.load(movie, 'cinesrc');
   assert.equal(new URL(app.frames[0].src).origin, 'https://cinesrc.st');
 });
 
@@ -182,4 +182,98 @@ test('frequent small time advances count as progress instead of false buffering'
   receive({type:'cinesrc:loadedmetadata',duration:1200});app.player.command('seek',{time:0});receive({type:'cinesrc:seeked',currentTime:0,duration:1200});receive({type:'cinesrc:play'});
   for(time=25;time<=6000;time+=25)receive({type:'cinesrc:timeupdate',currentTime:time/1000,duration:1200});
   assert.equal(app.player.getStatus().buffering,false);
+});
+
+const newProviders = {
+  vidspark: { origin:'https://vidspark.to', message:(kind,time=0)=>({source:'vidspark-player',event:kind,currentTime:time,duration:1200, ...(kind==='playerstatus'?{paused:true}:{})}) },
+  vidrift: { origin:'https://embed.vidrift.net', message:(kind,time=0)=>({type:({play:'vidrift:unpaused',pause:'vidrift:paused',timeupdate:'vidrift:progress',playerstatus:'vidrift:state'})[kind],currentTime:time,duration:1200,tmdbId:1396,mediaType:'tv',season:0,episode:1,...(kind==='playerstatus'?{paused:true}:{})}) },
+  vidbolt: { origin:'https://vidbolt.pro', message:(kind,time=0)=>kind==='playerstatus'?{type:'durationchange',duration:1200}:{type:kind,time} }
+};
+function providerHarness(provider) {
+  let time=0;
+  const app=harness({now:()=>time});app.player.load(tv,provider);
+  const frame=app.frames[0], spec=newProviders[provider];
+  const receive=(kind,seconds=0)=>app.listeners.get('message')({origin:spec.origin,source:frame.contentWindow,data:spec.message(kind,seconds)});
+  const settleSeek=()=>{for(const [id,fn] of [...app.timers]){app.timers.delete(id);fn();}};
+  return {...app,frame,receive,settleSeek,setTime:value=>{time=value;},intents:()=>app.states.filter(s=>s.nativeIntent).map(s=>s.nativeIntent)};
+}
+
+test('new provider URLs and parsers enforce exact frames, origins, positions and available identity',()=>{
+  for(const [provider,spec] of Object.entries(newProviders)){
+    const url=new URL(embedUrl(tv,provider,30));assert.equal(url.origin,spec.origin);
+    assert.equal(url.pathname,`${provider==='vidrift'?'/embed':''}/tv/1396/0/1`);
+    const frame={contentWindow:{}};
+    const event={origin:spec.origin,source:frame.contentWindow,data:spec.message('timeupdate',30)};
+    assert.equal(playbackEvent(event,frame,tv,provider).seconds,30);
+    assert.equal(playbackEvent({...event,source:{}},frame,tv,provider),null);
+    assert.equal(playbackEvent({...event,origin:spec.origin+'.evil.test'},frame,tv,provider),null);
+    assert.equal(playbackEvent({...event,data:spec.message('timeupdate',Infinity)},frame,tv,provider),null);
+  }
+  const frame={contentWindow:{}}, spec=newProviders.vidrift;
+  assert.equal(playbackEvent({source:frame.contentWindow,origin:spec.origin,data:{...spec.message('timeupdate'),episode:2}},frame,tv,'vidrift').event,'mismatch');
+  assert.equal(new URL(embedUrl(tv,'vidrift')).searchParams.get('autoplay'),'0');
+  assert.equal(new URL(embedUrl(tv,'vidspark',30)).searchParams.get('t'),'30');
+  const app=harness();app.player.load(tv);assert.equal(new URL(app.frames[0].src).origin,newProviders.vidspark.origin);
+});
+
+test('new provider commands use their documented envelopes and do not echo acknowledgements',()=>{
+  const expected={
+    vidspark:[{action:'seek',time:120},{action:'play'},{action:'pause'}],
+    vidrift:[{type:'vidrift:resume',currentTime:120},{type:'vidrift:play'},{type:'vidrift:pause'}],
+    vidbolt:[{type:'seek',time:120},{type:'play'},{type:'pause'}]
+  };
+  for(const provider of Object.keys(newProviders)){
+    const a=providerHarness(provider);a.frame.onload();assert.equal(a.player.getStatus().ready,false);
+    a.receive('playerstatus');a.receive('timeupdate');
+    a.player.command('seek',{time:120});a.receive('timeupdate',120);
+    a.player.command('play');a.receive('play',120);a.player.command('pause');a.receive('pause',120);
+    assert.deepEqual(a.frame.commands.filter(c=>c.message.action!=='getStatus'&&c.message.type!=='vidrift:get-state'&&c.message.type!=='vidrift:nextup-info').map(c=>c.message),expected[provider]);
+    assert.ok(a.frame.commands.every(c=>c.origin===newProviders[provider].origin));
+    assert.deepEqual(a.intents(),[]);
+    if(provider==='vidrift')assert.ok(a.frame.commands.some(c=>c.message.type==='vidrift:nextup-info'&&c.message.next===null));
+    if(provider==='vidbolt')assert.equal(a.player.requestStatus(),false);
+  }
+});
+
+test('native play/pause and debounced native seeking work for all three new protocols',()=>{
+  for(const provider of Object.keys(newProviders)){
+    const a=providerHarness(provider);a.receive('playerstatus');a.receive('timeupdate');
+    a.receive('play');a.setTime(1000);a.receive('timeupdate',1);a.receive('pause',1);
+    assert.deepEqual(a.intents(),[{action:'play'},{action:'pause'}]);
+    a.setTime(2000);a.receive('timeupdate',41);a.receive('timeupdate',51);
+    assert.equal(a.player.getStatus().seekPending,true);a.settleSeek();
+    assert.deepEqual(a.intents().at(-1),{action:'seek',seconds:51});assert.equal(a.intents().filter(i=>i.action==='seek').length,1);
+    a.receive('timeupdate',10);a.settleSeek();a.receive('play',10);
+    for(let t=2100;t<=8000;t+=100){a.setTime(t);a.receive('timeupdate',10+(t-2000)/1000);}
+    assert.equal(a.player.getStatus().buffering,false);
+  }
+});
+
+test('buffering and heuristic seek events cannot clear play intent; quiet paused VidBolt stays ready',()=>{
+  const a=providerHarness('vidspark');a.receive('playerstatus');a.receive('timeupdate',10);a.settleSeek();a.receive('play',10);
+  const before=a.intents().length;a.setTime(6000);a.receive('pause',10);a.receive('seeked',10);a.settleSeek();
+  assert.equal(a.intents().length,before);
+  const b=providerHarness('vidbolt');b.receive('playerstatus');b.receive('timeupdate');b.setTime(60000);
+  assert.equal(b.player.getStatus().buffering,false);b.receive('timeupdate',60);b.player.clear();b.settleSeek();assert.deepEqual(b.intents(),[]);
+});
+
+test('a delayed saved-progress restore during initialization never becomes a native room seek',()=>{
+  for(const provider of Object.keys(newProviders)){
+    const a=providerHarness(provider);a.receive('playerstatus');a.receive('timeupdate');a.player.command('seek',{time:0});a.receive('timeupdate');
+    a.setTime(5000);a.receive('timeupdate',370);a.settleSeek();assert.deepEqual(a.intents(),[]);
+  }
+});
+
+test('timestamp-free VidBolt Play/Pause acknowledgements never turn a long pause into native seeking',()=>{
+  const a=providerHarness('vidbolt');
+  const receive=data=>a.listeners.get('message')({origin:newProviders.vidbolt.origin,source:a.frame.contentWindow,data});
+  a.receive('playerstatus');a.receive('timeupdate');
+  let time=0,seconds=0;
+  for(let i=0;i<8;i++){
+    time+=10000;a.setTime(time);a.player.command('play');receive({type:'play'});
+    time+=250;seconds+=0.25;a.setTime(time);a.receive('timeupdate',seconds);
+    time+=250;seconds+=0.25;a.setTime(time);a.receive('timeupdate',seconds);
+    a.player.command('pause');receive({type:'pause'});a.settleSeek();
+  }
+  assert.deepEqual(a.intents(),[]);
 });

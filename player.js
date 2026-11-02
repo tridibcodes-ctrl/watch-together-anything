@@ -1,6 +1,9 @@
 (function (root) {
   'use strict';
   const PROVIDERS = Object.freeze({
+    vidspark: { name: 'VidSpark', origin: 'https://vidspark.to', controls: true },
+    vidrift: { name: 'VidRift', origin: 'https://embed.vidrift.net', controls: true },
+    vidbolt: { name: 'VidBolt', origin: 'https://vidbolt.pro', controls: true, pushOnly: true },
     cinesrc: { name: 'CineSrc', origin: 'https://cinesrc.st', controls: true },
     cinemaos: { name: 'CinemaOS', origin: 'https://cinemaos.tech', controls: true },
     vidlink: { name: 'VidLink', origin: 'https://vidlink.pro', controls: false }
@@ -14,6 +17,13 @@
     validateMedia(media);
     if (!Object.hasOwn(PROVIDERS, provider)) throw new Error('Unknown player provider.');
     const start = position(seconds) ? Math.floor(seconds) : 0;
+    if (['vidspark', 'vidrift', 'vidbolt'].includes(provider)) {
+      const suffix = media.mediaType === 'tv' ? `/${media.season}/${media.episode}` : '';
+      const url = new URL(`${provider === 'vidrift' ? '/embed' : ''}/${media.mediaType}/${media.tmdbId}${suffix}`, PROVIDERS[provider].origin);
+      if (provider === 'vidspark') url.searchParams.set('t', String(start));
+      if (provider === 'vidrift') url.searchParams.set('autoplay', '0');
+      return url.href;
+    }
     if (provider === 'cinesrc') {
       const url = new URL(`/embed/${media.mediaType}/${media.tmdbId}`, PROVIDERS.cinesrc.origin);
       if (media.mediaType === 'tv') { url.searchParams.set('s', media.season); url.searchParams.set('e', media.episode); }
@@ -37,6 +47,30 @@
     if (typeof payload === 'string') {
       if (payload.length > 10000) return null;
       try { payload = JSON.parse(payload); } catch { return null; }
+    }
+    if (!payload || typeof payload !== 'object') return null;
+    if (provider === 'vidspark') {
+      if (payload.source !== 'vidspark-player' || !['play','pause','seeked','timeupdate','ended','playerstatus'].includes(payload.event) || !position(payload.currentTime)) return null;
+      return { event: payload.event, seconds: payload.currentTime,
+        ...(position(payload.duration) ? { duration: payload.duration } : {}),
+        ...(typeof payload.paused === 'boolean' ? { playing: !payload.paused } : {}) };
+    }
+    if (provider === 'vidrift') {
+      const kinds = { 'vidrift:state': 'playerstatus', 'vidrift:progress': 'timeupdate', 'vidrift:unpaused': 'play', 'vidrift:paused': 'pause', 'vidrift:ended': 'ended', 'vidrift:episode': 'episode' };
+      if (!Object.hasOwn(kinds, payload.type)) return null;
+      if (Number(payload.tmdbId) !== media.tmdbId || payload.mediaType !== media.mediaType || media.mediaType === 'tv' && (Number(payload.season) !== media.season || Number(payload.episode) !== media.episode)) return { event: 'mismatch' };
+      if (kinds[payload.type] === 'episode') return null;
+      if (!position(payload.currentTime)) return null;
+      return { event: kinds[payload.type], seconds: payload.currentTime,
+        ...(position(payload.duration) ? { duration: payload.duration } : {}),
+        ...(typeof payload.paused === 'boolean' ? { playing: !payload.paused } : {}) };
+    }
+    if (provider === 'vidbolt') {
+      if (payload.type === 'ready') return { event: 'playerstatus' };
+      if (payload.type === 'durationchange') return position(payload.duration) && payload.duration > 0 ? { event: 'playerstatus', duration: payload.duration } : null;
+      if (!['play','pause','timeupdate','ended'].includes(payload.type)) return null;
+      if (payload.type === 'timeupdate' && !position(payload.time)) return null;
+      return { event: payload.type, ...(position(payload.time) ? { seconds: payload.time } : {}) };
     }
     if (provider === 'cinesrc') {
       if (!payload || typeof payload !== 'object') return null;
@@ -70,34 +104,44 @@
       playing: typeof data.paused === 'boolean' ? !data.paused : typeof data.playing === 'boolean' ? data.playing : typeof data.isPlaying === 'boolean' ? data.isPlaying : undefined };
   }
   function createPlayer({ container, onState = () => {}, onFallback, windowImpl = window, documentImpl = document, setTimer = setTimeout, clearTimer = clearTimeout, now = Date.now }) {
-    let frame = null, media = null, provider = 'cinesrc', seconds = 0, timer = null, generation = 0, ready = false, playing = false, measuredAt = now(), mediaMismatch = false;
+    let frame = null, media = null, provider = 'vidspark', seconds = 0, timer = null, generation = 0, ready = false, playing = false, measuredAt = now(), mediaMismatch = false;
     let playable = false, pendingSeek = null, lastAdvanceAt = now(), lastStatusAt = now(), playAttemptAt = null, playBlocked = false, lastProgressSeconds = 0;
-    const emit = (status, message) => onState({ media, provider, seconds, ready, playing, playable, status, message });
+    let expectedPlayback = [], seekEcho = null, sample = null, nativeSeek = null, seekTimer = null, duration = 0, activatedAt = null;
+    const emit = (status, message, nativeIntent) => onState({ media, provider, seconds, ready, playing, playable, status, message, ...(nativeIntent ? { nativeIntent } : {}) });
     function sendCommand(command, params = {}) {
       if (!frame?.contentWindow || !PROVIDERS[provider].controls || (!['getStatus','pause'].includes(command) && !ready)) return false;
       if (!['play','pause','seek','getStatus'].includes(command)) return false;
       if (command === 'seek' && !position(params.time)) return false;
+      if (command === 'getStatus' && PROVIDERS[provider].pushOnly) return false;
+      if (['play','pause'].includes(command) && (playing !== (command === 'play') || !ready)) {
+        expectedPlayback = expectedPlayback.filter(item => now() - item.at < 6000);
+        expectedPlayback.push({ playing: command === 'play', at: now() });
+        expectedPlayback = expectedPlayback.slice(-8);
+      }
       if (command === 'play' && !playing && playAttemptAt === null) playAttemptAt = now();
-      if (command === 'seek') pendingSeek = { target: params.time, at: now() };
+      if (command === 'seek') { pendingSeek = { target: params.time, at: now() }; seekEcho = { ...pendingSeek }; }
+      const post = message => frame.contentWindow.postMessage(message, PROVIDERS[provider].origin);
       if (provider === 'cinesrc') {
         const send = (name, args = []) => frame.contentWindow.postMessage({ type: 'cinesrc:command', command: name, args }, PROVIDERS.cinesrc.origin);
         if (command === 'getStatus') for (const getter of ['getCurrentTime','getDuration','getPaused']) send(getter);
         else send(command, command === 'seek' ? [params.time] : []);
-      } else {
-        frame.contentWindow.postMessage({ command, ...(command === 'seek' ? { time: params.time } : {}) }, PROVIDERS.cinemaos.origin);
-      }
+      } else if (provider === 'vidspark') post({ action: command, ...(command === 'seek' ? { time: params.time } : {}) });
+      else if (provider === 'vidrift') post(command === 'seek' ? { type: 'vidrift:resume', currentTime: params.time } : { type: 'vidrift:' + (command === 'getStatus' ? 'get-state' : command) });
+      else if (provider === 'vidbolt') post({ type: command, ...(command === 'seek' ? { time: params.time } : {}) });
+      else post({ command, ...(command === 'seek' ? { time: params.time } : {}) });
       return true;
     }
     function removeFrame() {
-      generation++; clearTimer(timer); timer = null;
+      generation++; clearTimer(timer); clearTimer(seekTimer); timer = null; seekTimer = null; nativeSeek = null;
       if (frame) { frame.onload = null; frame.onerror = null; }
       frame = null; container.replaceChildren();
     }
-    function load(nextMedia, nextProvider = 'cinesrc', startSeconds = 0) {
+    function load(nextMedia, nextProvider = 'vidspark', startSeconds = 0) {
       const src = embedUrl(nextMedia, nextProvider, startSeconds);
       removeFrame(); media = { ...nextMedia }; provider = nextProvider;
       ready = false; playing = false; playable = false; pendingSeek = null; mediaMismatch = false; measuredAt = now(); lastStatusAt = now(); lastAdvanceAt = now(); playAttemptAt = null; playBlocked = false;
-      seconds = provider !== 'cinemaos' && position(startSeconds) ? startSeconds : 0;
+      expectedPlayback = []; seekEcho = null; sample = null; duration = 0; activatedAt = null;
+      seconds = ['cinesrc','vidspark','vidlink'].includes(provider) && position(startSeconds) ? startSeconds : 0;
       lastProgressSeconds = seconds;
       const version = generation;
       frame = documentImpl.createElement('iframe');
@@ -107,6 +151,7 @@
       frame.onload = () => {
         if (version !== generation) return;
         emit('loaded', `${PROVIDERS[provider].name} frame loaded; video playback is not confirmed. Press Play inside the player if needed.`);
+        if (provider === 'vidrift') frame.contentWindow?.postMessage({ type: 'vidrift:nextup-info', next: null }, PROVIDERS.vidrift.origin);
         sendCommand('getStatus');
       };
       frame.onerror = () => {
@@ -122,18 +167,52 @@
       }, 20000);
       container.append(frame);
     }
+    function queueNativeSeek(target) {
+      nativeSeek = { target, at: now() };
+      lastAdvanceAt = now(); lastProgressSeconds = target;
+      clearTimer(seekTimer);
+      const version = generation;
+      seekTimer = setTimer(() => {
+        if (version !== generation || !nativeSeek) return;
+        const target = nativeSeek.target;
+        nativeSeek = null; seekTimer = null;
+        emit('seeked', `${PROVIDERS[provider].name}: sharing native seek.`, { action: 'seek', seconds: target });
+      }, 200);
+    }
     const receive = event => {
       if (!media || !frame || mediaMismatch) return;
       const update = playbackEvent(event, frame, media, provider);
       if (!update) return;
       if (update.event === 'mismatch') { mediaMismatch = true; ready = false; emit('error', 'Player changed episode locally. Reload the player to return to the room episode.'); return; }
       if (update.event === 'error') { ready = false; emit('error', `${PROVIDERS[provider].name} reported a playback error. Reload or choose another provider.`); return; }
-      const previouslyPlaying = playing;
+      const previouslyPlaying = playing, wasReady = ready, wasPlayable = playable;
+      const stamp = now(), stalled = playing && stamp - lastAdvanceAt > 4000;
+      let nativeIntent;
+      const nextPlaying = update.event === 'play' ? true : ['pause','ended'].includes(update.event) ? false : update.playing;
+      expectedPlayback = expectedPlayback.filter(item => stamp - item.at < 6000);
+      const ack = typeof nextPlaying === 'boolean' ? expectedPlayback.findIndex(item => item.playing === nextPlaying) : -1;
+      if (ack >= 0) expectedPlayback.splice(0, ack + 1);
+      // An opposite native action is still accepted while another command is awaiting acknowledgement.
+      if (ack < 0 && nextPlaying !== previouslyPlaying && PROVIDERS[provider].controls) {
+        if (update.event === 'play') nativeIntent = { action: 'play' };
+        if (update.event === 'pause' && wasReady && wasPlayable && !stalled && !pendingSeek && !nativeSeek && !(duration > 0 && seconds >= duration - 1)) nativeIntent = { action: 'pause' };
+      }
+      const ownSeek = !!pendingSeek || seekEcho && stamp - seekEcho.at < 1500 && position(update.seconds) && Math.abs(update.seconds - seekEcho.target) < 2;
+      const elapsed = sample ? Math.max(0, stamp - sample.at) / 1000 : 0;
+      const expectedTime = sample ? sample.seconds + (sample.playing && previouslyPlaying ? elapsed : 0) : seconds;
+      const jump = sample && position(update.seconds) && Math.abs(update.seconds - expectedTime) > 2;
+      // Some providers restore old local progress after metadata/seek acknowledgement.
+      // Establish playback first before interpreting subsequent time jumps as native seeks.
+      if (PROVIDERS[provider].controls && activatedAt !== null && stamp - activatedAt >= 1000 && wasReady && wasPlayable && !ownSeek && !stalled &&
+          ['seeking','seeked','timeupdate','playerstatus'].includes(update.event) && jump) queueNativeSeek(update.seconds);
+      if (update.duration > 0) {
+        if (duration && Math.abs(update.duration - duration) > 2) { sample = null; nativeSeek = null; clearTimer(seekTimer); }
+        duration = update.duration;
+      }
       lastStatusAt = now();
       if (typeof update.seconds === 'number' && update.seconds > lastProgressSeconds + 0.1) {
         lastAdvanceAt = now(); lastProgressSeconds = update.seconds; if (ready || update.duration > 0) playable = true;
       }
-      if (update.event === 'seeking' && !pendingSeek) pendingSeek = { target: update.seconds ?? seconds, at: now() };
       if (pendingSeek && typeof update.seconds === 'number' && Math.abs(update.seconds - pendingSeek.target) <= 1 && update.event !== 'seeking') {
         pendingSeek = null; playable = true; lastAdvanceAt = now(); lastProgressSeconds = update.seconds;
       }
@@ -141,14 +220,17 @@
       seconds = update.seconds ?? (seconds + (playing ? Math.max(0, now() - measuredAt) / 1000 : 0)); measuredAt = now();
       if (update.playing !== undefined) playing = update.playing;
       if (update.event === 'play') playing = true;
+      if (update.event === 'play' && activatedAt === null) activatedAt = stamp;
       if (['pause','ended'].includes(update.event)) playing = false;
+      // Play/Pause may omit a timestamp (VidBolt). Never extrapolate across time spent paused.
+      if (position(update.seconds) || previouslyPlaying !== playing) sample = { seconds, at: stamp, playing };
       if (playing) { playAttemptAt = null; playBlocked = false; }
       if (playing && !previouslyPlaying) lastAdvanceAt = now();
       if (!ready && (update.duration > 0 || update.seconds > 0)) {
         ready = true; clearTimer(timer); timer = null; emit('ready', `${PROVIDERS[provider].name} is responding with video status.`);
       }
       if (update.requestStatus) sendCommand('getStatus');
-      emit(update.event, `${PROVIDERS[provider].name}: ${update.event} at ${Math.floor(seconds)} seconds.`);
+      emit(update.event, `${PROVIDERS[provider].name}: ${update.event} at ${Math.floor(seconds)} seconds.`, nativeIntent);
     };
     windowImpl.addEventListener('message', receive);
     return {
@@ -156,13 +238,13 @@
       requestStatus() { return sendCommand('getStatus'); },
       getStatus() {
         if (!playing && playAttemptAt !== null && now() - playAttemptAt > 4000) playBlocked = true;
-        const buffering = playBlocked || !ready || (playing && now() - lastAdvanceAt > 4000) || (pendingSeek && now() - pendingSeek.at > 4000) || (ready && now() - lastStatusAt > 8000);
-        return { ready, playable, playing, needsGesture: playBlocked, buffering: !!buffering, seekPending: !!pendingSeek,
-          seconds: seconds + (playing && !buffering && !pendingSeek ? Math.max(0, now() - measuredAt) / 1000 : 0), provider };
+        const buffering = playBlocked || !ready || (playing && now() - lastAdvanceAt > 4000) || (pendingSeek && now() - pendingSeek.at > 4000) || (ready && !PROVIDERS[provider].pushOnly && now() - lastStatusAt > 8000);
+        return { ready, playable, playing, needsGesture: playBlocked, buffering: !!buffering, seekPending: !!(pendingSeek || nativeSeek),
+          seconds: seconds + (playing && !buffering && !pendingSeek && !nativeSeek ? Math.max(0, now() - measuredAt) / 1000 : 0), provider };
       },
       switchProvider(next) { if (!media) throw new Error('Choose a title first.'); load(media, next, seconds); },
       retry() { if (media) load(media, provider, seconds); },
-      clear() { removeFrame(); media = null; seconds = 0; ready = false; playing = false; playable = false; pendingSeek = null; playAttemptAt = null; playBlocked = false; provider = 'cinesrc'; emit('idle', 'Choose Watch on a movie or TV episode to open CineSrc.'); },
+      clear() { removeFrame(); media = null; seconds = 0; ready = false; playing = false; playable = false; pendingSeek = null; playAttemptAt = null; playBlocked = false; expectedPlayback = []; seekEcho = null; sample = null; duration = 0; activatedAt = null; provider = 'vidspark'; emit('idle', 'Choose Watch on a movie or TV episode to open VidSpark.'); },
       destroy() { this.clear(); windowImpl.removeEventListener('message', receive); }
     };
   }

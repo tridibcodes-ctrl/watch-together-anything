@@ -124,3 +124,93 @@ test('native initialization overshoot realigns to the same frozen anchor, not a 
   c.setTime(14000);c.setActual({ready:true,playable:true,playing:true,seconds:124,seekPending:false});c.sync.playerEvent({provider:'cinesrc',status:'timeupdate'});
   assert.equal(c.player.getStatus().seconds,120);assert.equal(c.player.getStatus().playing,false);c.sync.destroy();
 });
+
+test('native controls commit once and mirror to the partner on all added providers',async()=>{
+  for(const provider of ['vidspark','vidrift','vidbolt']){
+    let state={...initial,provider}, writes=[];
+    const request=async(path,method,body)=>{
+      if(path.endsWith('/commands')){
+        writes.push(body);assert.equal(body.expectedRevision,state.revision);
+        state={...state,revision:state.revision+1,status:body.action==='play'?'playing':'paused',playRequested:body.action==='play'?true:body.action==='pause'?false:state.playRequested,positionMs:body.targetPositionMs??state.positionMs,readyEpoch:state.readyEpoch+(body.action==='play'?0:1)};
+      }return {...state};
+    };
+    const a=client(request),b=client(request);a.sync.selectRoom('room');b.sync.selectRoom('room');await flush();a.sync.join();b.sync.join();await flush();
+    a.setActual({ready:true,playable:true,playing:true,seconds:0});a.sync.playerEvent({provider,nativeIntent:{action:'play'}});await flush();await b.sync.refresh();
+    assert.equal(b.player.getStatus().playing,true);assert.equal(writes.length,1);
+    b.setActual({ready:true,playable:true,playing:false,seconds:0});b.sync.playerEvent({provider,nativeIntent:{action:'pause'}});await flush();await a.sync.refresh();
+    assert.equal(a.player.getStatus().playing,false);assert.equal(writes.length,2);
+    a.setActual({ready:true,playable:true,playing:false,seconds:120});a.sync.playerEvent({provider,nativeIntent:{action:'seek',seconds:120}});await flush();await b.sync.refresh();
+    assert.equal(b.player.getStatus().seconds,120);assert.equal(writes.length,3);
+    a.sync.playerEvent({provider,status:'seeked'});b.sync.playerEvent({provider,status:'pause'});await flush();assert.equal(writes.length,3);
+    a.sync.destroy();b.sync.destroy();
+  }
+});
+
+test('rapid native actions queue through a slow write, and do not seek back to the old anchor',async()=>{
+  let state={...initial,provider:'vidspark'},resolve;
+  const writes=[];
+  const c=client(async(path,method,body)=>{
+    if(path.endsWith('/commands')){
+      writes.push(body);
+      if(writes.length===1)await new Promise(done=>resolve=done);
+      state={...state,revision:state.revision+1,status:body.action==='play'?'playing':'paused',playRequested:body.action==='play'?true:body.action==='pause'?false:state.playRequested,positionMs:body.targetPositionMs??state.positionMs,readyEpoch:state.readyEpoch+(body.action==='play'?0:1)};
+    }return {...state};
+  });
+  c.sync.selectRoom('room');await flush();c.sync.join();await flush();
+  c.setActual({ready:true,playable:true,playing:true,seconds:0});c.sync.playerEvent({provider:'vidspark',nativeIntent:{action:'play'}});
+  c.setTime(14000);c.setActual({ready:true,playable:true,playing:false,seconds:120});
+  c.sync.playerEvent({provider:'vidspark',nativeIntent:{action:'seek',seconds:100}});
+  c.sync.playerEvent({provider:'vidspark',nativeIntent:{action:'seek',seconds:120}});
+  c.sync.playerEvent({provider:'vidspark',nativeIntent:{action:'pause'}});
+  c.timers[1]();assert.equal(c.commands.filter(c=>c.action==='seek').length,0);
+  resolve();await flush();await flush();
+  assert.deepEqual(writes.map(b=>b.action),['play','seek','pause']);assert.equal(writes[1].targetPositionMs,120000);assert.equal(state.playRequested,false);
+  assert.deepEqual(writes.map(b=>b.expectedRevision),[1,2,3]);c.sync.destroy();
+});
+
+test('native failures retain exact retry identity and ignore events from other providers',async()=>{
+  let fail=true,writes=[],state={...initial,provider:'vidspark'};
+  const c=client(async(path,method,body)=>{
+    if(path.endsWith('/commands')){writes.push(body);if(fail){fail=false;throw new Error('network');}state={...state,revision:2,playRequested:true};}return {...state};
+  });
+  c.sync.selectRoom('room');await flush();c.sync.join();await flush();
+  c.sync.playerEvent({provider:'vidspark',nativeIntent:{action:'play'}});await flush();
+  assert.ok(c.events.some(e=>e.error==='network'));await c.sync.retryCommand();assert.deepEqual(writes[0],writes[1]);
+  const count=writes.length;c.sync.playerEvent({provider:'vidrift',nativeIntent:{action:'seek',seconds:10}});await flush();assert.equal(writes.length,count);
+  c.sync.destroy();
+});
+
+test('a failed native command can recover from a conflicting retry without leaving controls blocked',async()=>{
+  let attempt=0,state={...initial,provider:'vidspark'};
+  const c=client(async(path,method,body)=>{
+    if(path.endsWith('/commands')){
+      attempt++;
+      if(attempt===1)throw new Error('network');
+      if(attempt===2){state={...state,revision:3};throw Object.assign(new Error('conflict'),{state});}
+      state={...state,revision:state.revision+1,playRequested:body.action==='play'};
+    }return {...state};
+  });
+  c.sync.selectRoom('room');await flush();c.sync.join();await flush();c.sync.playerEvent({provider:'vidspark',nativeIntent:{action:'play'}});await flush();
+  await assert.rejects(c.sync.retryCommand(),/conflict/);await c.sync.command('pause');assert.equal(attempt,3);c.sync.destroy();
+});
+
+test('queued native actions from an old room are discarded after selection changes',async()=>{
+  let resolve;const writes=[];
+  const c=client(async(path,method,body)=>{
+    if(path.endsWith('/commands')){writes.push(body);await new Promise(done=>resolve=done);}
+    return {...initial,provider:'vidspark',roomId:path.includes('/other/')?'other':'room'};
+  });
+  c.sync.selectRoom('room');await flush();c.sync.join();await flush();
+  c.sync.playerEvent({provider:'vidspark',nativeIntent:{action:'play'}});c.sync.playerEvent({provider:'vidspark',nativeIntent:{action:'pause'}});
+  c.sync.selectRoom('other');await flush();resolve();await flush();
+  assert.equal(writes.length,1);assert.equal(c.events.at(-1).roomId,'other');assert.equal(c.events.at(-1).joined,false);c.sync.destroy();
+});
+
+test('native play still waits for both accounts, and a native pause cancels queued play',async()=>{
+  let state={...initial,provider:'vidrift',readiness:{bothReady:false,readyCount:1,requiredCount:2},playRequested:false,waitingForReady:true};
+  const c=client(async(path,method,body)=>{if(path.endsWith('/commands'))state={...state,revision:state.revision+1,playRequested:body.action==='play'};return {...state};});
+  c.sync.selectRoom('room');await flush();c.sync.join();await flush();
+  c.setActual({ready:true,playable:true,playing:true,seconds:0});c.sync.playerEvent({provider:'vidrift',nativeIntent:{action:'play'}});await flush();
+  assert.equal(state.status,'paused');assert.equal(state.playRequested,true);assert.equal(c.player.getStatus().playing,false);
+  c.sync.playerEvent({provider:'vidrift',nativeIntent:{action:'pause'}});await flush();assert.equal(state.playRequested,false);c.sync.destroy();
+});

@@ -1,4 +1,5 @@
 const { createTmdbHandler } = require('./tmdb');
+const { PROVIDERS } = require('../player');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function authenticate(request) {
   const { verifyAuth } = await import('@supabase/server/core');
@@ -37,7 +38,7 @@ function createPlaybackHandler({ authenticateUser = authenticate, fetchImpl = fe
         try { input = JSON.parse(raw); } catch { return fail(400, 'Request must be valid JSON'); }
         if (route === 'readiness') {
           if (!input || !UUID.test(input.sessionId || '') || !UUID.test(input.clientId || '') ||
-              !['cinesrc','cinemaos'].includes(input.provider) || !Number.isSafeInteger(input.epoch) || input.epoch < 1 ||
+              !Object.hasOwn(PROVIDERS, input.provider) || !PROVIDERS[input.provider].controls || !Number.isSafeInteger(input.epoch) || input.epoch < 1 ||
               typeof input.ready !== 'boolean' || typeof input.joined !== 'boolean') return fail(400, 'Invalid readiness report');
           delete args.p_action;
           Object.assign(args, { p_session_id: input.sessionId, p_client_id: input.clientId, p_provider: input.provider,
@@ -73,7 +74,7 @@ function createPlaybackHandler({ authenticateUser = authenticate, fetchImpl = fe
               args.p_position_ms = input.targetPositionMs;
             }
             if (input.action === 'provider') {
-              if (!['cinesrc', 'cinemaos', 'vidlink'].includes(input.provider)) return fail(400, 'Unknown provider');
+              if (!Object.hasOwn(PROVIDERS, input.provider)) return fail(400, 'Unknown provider');
               args.p_provider = input.provider;
             }
           }
