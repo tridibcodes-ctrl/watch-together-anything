@@ -521,6 +521,10 @@
     body :is(h1, h2, h3, h4, h5, h6), body .nav-brand, body .pick-title {
       font-family: 'Henny Penny', cursive !important; font-weight: 400 !important;
     }
+    #main-content #search-form { grid-template-columns: minmax(0, 1fr) auto; }
+    #main-content #search-form .search-field { grid-column: auto; }
+    .invite-code-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .invite-code-row #room-invite { margin:0; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -533,7 +537,7 @@
   <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="app-header">
     <h1>Multiplay</h1>
-    <p>Your little cinema, together.</p>
+
   </header>
 
   <nav class="side-nav" aria-label="Main navigation">
@@ -599,7 +603,7 @@
         </div>
         <button id="discover-next" class="icon-button carousel-arrow" type="button" aria-label="Next featured title" title="Next featured title"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
       </section>
-      <p class="eyebrow">One room. Two people.</p>
+
       <h2 id="home-heading" tabindex="-1">Make a little time for each other.</h2>
       <p id="home-greeting">A favourite film. A new series. A little time together.</p>
       <div class="home-grid">
@@ -610,28 +614,24 @@
           <h3 id="home-title">Something good starts with the two of you.</h3>
           <p id="home-session-status">Create a room or join your partner to get started.</p>
           <a id="home-watch" class="primary-link" href="#browse">Find a movie</a>
-          <a class="quiet-link" href="#browse">Find something to watch</a>
+
           </div>
         </article>
-        <article class="home-room"><span class="eyebrow">Your place together</span><h3 id="home-room-name">Your room</h3><p id="home-partner">Invite your partner to your place together.</p><div id="home-room-controls"></div></article>
+        <article class="home-room"><span class="eyebrow">Current Room</span><h3 id="home-room-name">Your room</h3><p id="home-partner">Invite your partner.</p><div id="home-room-controls"></div></article>
       </div>
       <div class="section-heading"><h3>Continue watching together</h3></div>
       <p id="progress-empty">Your shared movies and episodes will appear here once you start watching.</p>
       <div id="continue-list" class="poster-grid"></div>
     </section>
     <section id="browse" data-view aria-labelledby="browse-heading" hidden>
-      <p class="eyebrow">Find your next favourite</p>
+
       <h2 id="browse-heading" tabindex="-1">What are we watching?</h2>
       <form id="search-form">
         <div class="search-field"><label for="query">Search</label><input id="query" type="search" maxlength="200" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-suggestions"><ul id="search-suggestions" role="listbox" aria-label="Suggested movies and TV series" hidden></ul><span id="suggestion-status" class="visually-hidden" role="status"></span></div>
-        <label>Type <select id="media-type">
-            <option value="movie">Movie</option>
-            <option value="tv">TV</option>
-          </select></label>
         <button>Search</button>
       </form>
       <div id="genre-sections" class="genre-chips" role="group" aria-label="Browse by genre"></div>
-      <p>Explore together, save a favourite, or pick something for tonight.</p>
+
       <button id="retry-catalog" type="button" hidden>Try loading titles again</button>
       <div id="catalog"></div>
       <p id="catalog-status" role="status" aria-live="polite">Search or browse popular titles.</p>
@@ -658,13 +658,13 @@
     </section>
 
     <section id="list" data-view aria-labelledby="list-heading" hidden>
-      <p class="eyebrow">Good things to look forward to</p>
+
       <div class="watchlist-heading"><h2 id="list-heading" tabindex="-1">Our list</h2><button id="refresh-list" class="icon-button" type="button" aria-label="Refresh our list" title="Refresh our list"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M19.5 12a8 8 0 1 0-2.2 5.5M20 12l-3-4"/></svg></button></div>
-      <p>A shared collection for your next night together.</p>
+
       <div id="list-filters" role="group" aria-label="Filter our list"><button type="button" data-filter="all" aria-pressed="true">All</button><button type="button" data-filter="planned" aria-pressed="false">Planned</button><button type="button" data-filter="watching" aria-pressed="false">Watching</button><button type="button" data-filter="watched" aria-pressed="false">Watched</button></div>
       <p id="list-status" role="status" aria-live="polite">Connect and select a room to load your shared list.</p>
       <div id="list-items" class="kanban-board" aria-label="Shared watchlist board"></div>
-      <h3>Episode history</h3><p>A finished episode stays here. Finishing one episode does not mark the whole show as watched.</p><div id="episode-history"></div>
+      <h3>Episode history</h3><div id="episode-history"></div>
     </section>
 
     <section id="room" data-view aria-labelledby="room-heading" hidden>
@@ -677,7 +677,7 @@
       <details id="room-management"><summary>Room and invitation</summary>
       <p>Share the code with your partner so they can join your private room. Each room supports two members.</p>
       <form id="create-room-form">
-        <label>Room name <input id="room-name" maxlength="60" value="Our room" required></label>
+        <label>Room name <input id="room-name" maxlength="60" required></label>
         <button>Create room</button>
       </form>
       <form id="join-room-form">
@@ -685,13 +685,9 @@
         <button>Join room by code</button>
       </form>
       <p id="room-invite" role="status" aria-live="polite"></p>
-      <label>Invitation link <input id="invite-link" type="url" readonly></label><button id="copy-invite" type="button">Copy invitation link</button>
-      <p id="invite-help">Send the link privately. If you already share a room, the invitation returns you both to that room.</p>
+      <button id="copy-invite" class="icon-button" type="button" aria-label="Copy invite code" title="Copy invite code"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button>
       <form id="rename-room-form"><label>Room name <input id="rename-room-name" maxlength="60" required></label><button>Save room name</button></form>
       </details>
-      <div class="room-actions"><button id="join" type="button">Join movie</button>
-      <button id="leave" type="button">Leave movie</button><a href="#browse">Choose a title</a></div>
-      <p class="muted">Leaving the movie keeps your room membership, list and conversation.</p>
       </div>
       <details id="playback-diagnostics"><summary>Connection details</summary>
       <button id="refresh-room" type="button">Refresh room</button>
@@ -725,6 +721,7 @@
         </aside>
       </div>
       <details id="player-settings"><summary>Video source and playback options</summary>
+      <button id="join" type="button">Join movie</button><button id="leave" type="button">Leave movie</button>
       <button id="stop-player" type="button" disabled>Close player</button>
       <button id="play" type="button">Play together</button>
       <button id="pause" type="button">Pause together</button>
@@ -1297,7 +1294,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function titleMetadata(title, tag = 'div') {
       const meta = node(tag, ''); meta.className = 'title-meta';
-      const badge = node('span', title.mediaType === 'tv' ? 'TV' : 'MOVIE'); badge.className = 'media-badge';
+      const badge = node('span', title.mediaType === 'tv' ? 'TV SERIES' : 'MOVIE'); badge.className = 'media-badge';
       meta.append(badge); if (title.year) meta.append(node('span', title.year));
       if (Number.isFinite(title.rating) && title.rating >= 0 && title.rating <= 10) {
         const rating = node('span', ''); rating.className = 'card-rating';
@@ -1370,7 +1367,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const selected = me?.rooms?.find(item => item.roomId === me.roomId);
       const hasRoom = !!me?.roomId;
       const name = me?.profile?.displayName || 'you';
-      $('home-greeting').textContent = mode === 'demo' ? 'Local Demo · sample data only. Nothing is saved or shared.' : `Welcome back, ${name}. Make tonight a little time together.`;
+      $('home-greeting').textContent = mode === 'demo' ? 'Local Demo · sample data only. Nothing is saved or shared.' : `Welcome back, ${name}.`;
       $('home-room-name').textContent = selected?.name || (mode === 'demo' ? 'Demo room' : 'A place for the two of you');
       $('lobby-name').textContent = selected?.name || (mode === 'demo' ? 'Demo room' : 'Create your private room');
       const members = mode === 'api' ? (room?.readiness?.members?.length ? room.readiness.members : roomInfo?.members?.map(member => ({ ...member, ready: false })) || []) : [{ userId: me?.userId || me?.profile?.userId, displayName: name, ready: joined }];
@@ -1478,7 +1475,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (item) { item.name = data.name; item.inviteCode = data.inviteCode; }
         for (const option of $('room-select').options) if (option.value === id) option.textContent = data.name;
         controls();
-      } catch { if (id === me?.roomId) $('invite-help').textContent = 'Room details could not be loaded. Reopen your room or try refreshing.'; }
+      } catch { if (id === me?.roomId) say('Room details could not be loaded. Try again.'); }
     }
     function listProgress(item) {
       const history = progressItems.filter(entry => entry.media.mediaType === item.title.mediaType && entry.media.tmdbId === item.title.tmdbId);
@@ -1519,9 +1516,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('accept-invitation').disabled = mode !== 'api' || !me || inviteBusy;
       $('invitation-status').textContent = me ? 'Your partner’s invitation is ready. Join to open your shared room.' : 'Your partner’s invitation is saved. Sign in to join.';
       const selected = me?.rooms?.find(item => item.roomId === me.roomId);
-      const link = selected?.inviteCode ? location.href.split('#')[0]+'#invite='+selected.inviteCode : '';
-      $('invite-link').value = mode === 'api' ? link : '';
-      $('copy-invite').disabled = !link || mode !== 'api';
+      $('room-invite').textContent = selected?.inviteCode ? 'Invite code: '+selected.inviteCode : 'No invite code available.';
+      $('copy-invite').disabled = !selected?.inviteCode || mode !== 'api';
       $('rename-room-form').querySelector('button').disabled = !selected || mode !== 'api';
       if (document.activeElement !== $('rename-room-name')) $('rename-room-name').value = selected?.name || '';
       const latest = room?.media ? progressFor(room.media) : progressItems[0];
@@ -1589,6 +1585,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       controls();
     }
     async function getGenres(type) {
+      if (type==='all') {
+        const [movies,shows]=await Promise.all([getGenres('movie'),getGenres('tv')]);const merged=new Map();
+        for(const [kind,genres] of [['movie',movies],['tv',shows]])for(const genre of genres){const entry=merged.get(genre.name)||{id:genre.name,name:genre.name};entry[kind]=genre.id;merged.set(genre.name,entry);}
+        return [...merged.values()];
+      }
       const key = mode + ':' + type;
       if (!genreCache.has(key)) genreCache.set(key, request('/api/genres?type=' + type).then(data => data.items).catch(error => { genreCache.delete(key); throw error; }));
       return genreCache.get(key);
@@ -1621,6 +1622,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const status = node('p','Loading titles…'); status.className = 'shelf-status'; status.setAttribute('role','status');
       section.append(heading,track,status); return {section,track,status};
     }
+    function combineTitles(groups) {
+      const result=[],seen=new Set();
+      for(let i=0;i<Math.max(0,...groups.map(items=>items.length));i++)for(const items of groups){const title=items[i];if(!title)continue;const key=title.mediaType+':'+title.tmdbId;if(!seen.has(key)){seen.add(key);result.push(title);}}
+      return result;
+    }
     async function discoveryShelves(version,type) {
       const genres = await getGenres(type);
       if (version !== catalogVersion) return;
@@ -1630,7 +1636,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         {name:'Trending Today',path:'/api/catalog?type=all&feed=trending-day'},
         {name:'Popular Movies',path:'/api/catalog?type=movie'},
         {name:'Popular TV Shows',path:'/api/catalog?type=tv'},
-        ...[...genres].sort((a,b)=>a.name.localeCompare(b.name)).map(genre=>({name:genre.name+' · '+(type==='tv'?'TV Shows':'Movies'),path:`/api/catalog?type=${type}&genre=${genre.id}`}))
+        ...[...genres].sort((a,b)=>a.name.localeCompare(b.name)).map(genre=>({name:genre.name,paths:['movie','tv'].filter(kind=>genre[kind]).map(kind=>`/api/catalog?type=${kind}&genre=${genre[kind]}`)}))
       ].map(job=>({...job,...catalogShelf(job.name)}));
       $('catalog').replaceChildren(...jobs.map(job=>job.section));
       catalogState = {type,q:'',genre:'',page:1,hasMore:false};
@@ -1638,7 +1644,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (version !== catalogVersion) return;
         job.status.hidden = false; job.status.textContent = 'Loading titles…';
         try {
-          const data = await request(job.path);
+          const pages=[];for(const path of job.paths || [job.path]){if(version!==catalogVersion)return;pages.push(await request(path));}
+          const data={items:combineTitles(pages.map(page=>page.items))};
           if (version !== catalogVersion) return;
           job.track.replaceChildren(...data.items.map(title=>card(title))); job.status.hidden = data.items.length>0; job.status.textContent = 'No titles available yet.';
           if (job.name==='Popular Movies' && !featureItems.length) { featureItems=data.items.slice(0,8); featureIndex=0; paintFeature(); scheduleFeature(); }
@@ -1650,7 +1657,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       let cursor = 0;
       await Promise.all(Array.from({length:3},async()=>{while(cursor<jobs.length && version===catalogVersion)await load(jobs[cursor++]);}));
       if (version !== catalogVersion) return;
-      discoveryLoadedAt = Date.now(); $('catalog-status').textContent = 'Scroll each row to explore. Lists refresh automatically.';
+      discoveryLoadedAt = Date.now(); $('catalog-status').textContent = '';
     }
     function refreshDiscoveryIfDue() {
       if (document.hidden || currentView!=='browse' || !me || catalogLoading || $('query').value.trim() || selectedGenre || !discoveryLoadedAt) return;
@@ -1676,9 +1683,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const watch = iconButton('Watch together: '+title.title,'play',()=>watchTitle(title)); watch.classList.add('hero-action');
       const details = iconButton('More info: '+title.title,'details',()=>showDetails(title)); details.classList.add('hero-action');
       const save = iconButton('Save: '+title.title,'save',()=>add(title)); save.classList.add('hero-action'); actions.append(watch,details,save);
-      const kicker = node('p','TONIGHT, TOGETHER'); kicker.className = 'eyebrow';
       const meta = node('p',(title.mediaType === 'tv' ? 'TV series' : 'Movie')+' · '+(title.year || 'Discover something new')); meta.className = 'hero-meta';
-      copy.append(kicker,node('h3', title.title),meta,node('p', title.overview || 'Find out more about this title.'), actions);
+      copy.append(node('h3', title.title),meta,node('p', title.overview || 'Find out more about this title.'), actions);
       article.append(copy); $('discover-slide').replaceChildren(article);
       $('discover-next').disabled = $('discover-previous').disabled = featureItems.length < 2;
     }
@@ -1709,7 +1715,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function chooseSuggestion(index) {
       const title = suggestions[index]; if (!title) return;
-      closeSuggestions(); $('query').value = title.title; $('media-type').value = title.mediaType; selectedGenre = '';
+      closeSuggestions(); $('query').value = title.title; selectedGenre = '';
       void act(async () => { await catalog(); await showDetails(title); });
     }
     async function suggestTitles() {
@@ -1746,7 +1752,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('catalog').setAttribute('aria-busy', 'false');
     }
     async function catalog(page = 1, selection = null) {
-      const type = selection?.type || $('media-type').value;
+      const type = 'all';
       const q = selection?.q ?? $('query').value.trim();
       const genre = selection?.genre ?? selectedGenre;
       const version = ++catalogVersion;
@@ -1757,16 +1763,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('catalog-pagination').hidden = !q && !genre;
       try {
         if (!q && !genre) { await discoveryShelves(version,type); return; }
-        const [data, genres] = await Promise.all([
-          request(`/api/${q ? 'search' : 'catalog'}?type=${type}&page=${page}${q ? '&q=' + encodeURIComponent(q) : ''}${genre ? '&genre=' + encodeURIComponent(genre) : ''}`),
-          getGenres(type).catch(() => [])
-        ]);
+        const genres=await getGenres('all');const chosen=genres.find(item=>String(item.id)===String(genre));
+        const pages=await Promise.all(['movie','tv'].filter(kind=>!genre || chosen?.[kind]).map(kind=>request(`/api/${q?'search':'catalog'}?type=${kind}&page=${page}${q?'&q='+encodeURIComponent(q):''}${genre?'&genre='+chosen[kind]:''}`)));
+        const data={items:combineTitles(pages.map(result=>result.items)),page,hasMore:pages.some(result=>result.hasMore)};
         if (version !== catalogVersion) return;
         catalogGenres = genres; renderGenreControls(genre); renderCatalog(data.items, genre);
         catalogState = { type, q, genre, page: data.page, hasMore: data.hasMore };
         if (!q && !genre && page === 1) { featureItems = data.items.slice(0, 8); featureIndex = 0; clearTimeout(featureFade); paintFeature(); scheduleFeature(); }
         $('catalog-page').textContent = `Page ${data.page}`;
-        $('catalog-status').textContent = data.items.length ? `${data.items.length} ${type === 'tv' ? 'TV shows' : 'movies'}${q ? ' matching “' + q + '”' : ' · popular titles'}.` : 'No results. Try another search.';
+        $('catalog-status').textContent = data.items.length ? `${data.items.length} results${q ? ' matching “'+q+'”' : ''}.` : 'No results. Try another search.';
       } catch (error) {
         if (version !== catalogVersion) return;
         $('catalog-status').textContent = `Could not load titles: ${error.message}${catalogState ? ' Previous results are still shown.' : ''}`;
@@ -2101,10 +2106,10 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (me?.roomId === id) { await loadRoomInfo(); say('Room name saved. Your list, chat and progress stay in the same room.'); }
     });
     bind('copy-invite', async () => {
-      const link = $('invite-link').value;
-      if (!link) return;
-      try { await navigator.clipboard.writeText(link); say('Invitation link copied. Send it privately to your partner.'); }
-      catch { $('invite-link').focus(); $('invite-link').select(); say('Copy the selected invitation link and send it privately to your partner.'); }
+      const code = me?.rooms?.find(item=>item.roomId===me.roomId)?.inviteCode;
+      if (!code) return;
+      try { await navigator.clipboard.writeText(code); say('Invite code copied.'); }
+      catch { window.prompt('Copy invite code:',code); }
     });
     bind('accept-invitation', () => acceptInvitation());
     bind('dismiss-invitation', () => { pendingInvite = null; preference('multiplay.pendingInvite',null); if (inviteFromHash(location.hash)) location.hash = 'home'; controls(); });
@@ -2129,7 +2134,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     });
     document.addEventListener('pointerdown', event => { if (!event.target.closest('.search-field')) closeSuggestions(); });
     $('query').addEventListener('blur', () => { setTimeout(closeSuggestions, 150); });
-    $('media-type').addEventListener('change', () => { closeSuggestions(); selectedGenre = ''; void act(() => catalog()); });
     bind('discover-previous', () => advanceFeature(-1)); bind('discover-next', () => advanceFeature(1));
     $('discover-feature').addEventListener('mouseenter', () => clearTimeout(featureTimer));
     $('discover-feature').addEventListener('mouseleave', scheduleFeature);
@@ -2383,6 +2387,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     $('developer-contract').append($('backend-contract'));
     $('main-content').after($('title-details'));
     $('home-room-controls').append(document.querySelector('.room-lobby'), $('playback-diagnostics'));
+    const inviteCodeRow=node('div','');inviteCodeRow.className='invite-code-row';
+    $('room-invite').before(inviteCodeRow);inviteCodeRow.append($('room-invite'),$('copy-invite'));
     const listTools = node('div'); listTools.className = 'watchlist-tools';
     $('list-filters').before(listTools); listTools.append($('list-filters'), $('refresh-list'));
     window.addEventListener('online', () => { void checkConnection(); void partnerPresence?.refresh(true); });
