@@ -21,6 +21,7 @@ function normalizeTitle(item, mediaType) {
     year: typeof date === "string" ? date.slice(0, 4) : "",
     overview: item.overview || "",
     posterPath: item.poster_path || null,
+    backdropPath: item.backdrop_path || null,
     genreIds: item.genre_ids || (item.genres || []).map(genre => genre.id),
   };
 }

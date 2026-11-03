@@ -246,6 +246,48 @@
     .chat-retention { margin: 4px 0; font-size: 11px; }
     @media (prefers-reduced-motion: reduce) { .discover-slide { transition: none; } }
     @media (max-width: 700px) { #search-form { grid-template-columns: 1fr 1fr; }.search-field { grid-column: 1/-1; }.home-session.has-poster { grid-template-columns: 100px minmax(0, 1fr); gap: 14px; }.feature-card { grid-template-columns: 90px minmax(0, 1fr); gap: 14px; min-height: 180px; }.genre-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }#list-items.kanban-board { grid-template-columns: repeat(3, minmax(250px, 1fr)); }.carousel-controls { gap: 4px; } }
+    /* Full-width movie-night feature, poster suggestions, and quiet account status. */
+    body:has(#home:not([hidden])) main { max-width: none; }
+    #home { padding-top: 0; }
+    #discover-feature { position: relative; isolation: isolate; width: calc(100% + 80px); margin: 0 0 40px -40px; padding: 0; border: 0; border-radius: 0; overflow: hidden; background: #201921; }
+    .feature-card { position: relative; isolation: isolate; display: flex; align-items: center; min-height: clamp(560px, 78svh, 860px); padding: 70px clamp(28px, 6vw, 110px) 170px; overflow: hidden; }
+    .hero-art { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 35%; }
+    .feature-card::after { content: ''; position: absolute; z-index: -1; inset: 0; background: linear-gradient(90deg, #100d17f5 0%, #160f1bce 34%, #17101a3d 78%), linear-gradient(0deg, #16151a 0%, transparent 55%); }
+    .feature-copy { width: min(650px, 75%); }
+    .feature-copy h3 { font-family: Georgia, serif; font-size: clamp(36px, 5.3vw, 78px); font-weight: 600; line-height: 1.06; text-align: left; color: #fff4f9; margin: 18px 0; }
+    .feature-copy p { color: #e2d8df; font-size: 16px; line-height: 1.7; -webkit-line-clamp: 3; }
+    .feature-copy .hero-meta { color: #f4b6ce; font-size: 13px; letter-spacing: .09em; }
+    .feature-copy .card-actions { justify-content: flex-start; gap: 12px; margin-top: 25px; }
+    .hero-action { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 20px; margin: 0; border-radius: 9px; font-weight: 600; }
+    .hero-action:first-child { background: #eda6c0; color: #25151f; border-color: #eda6c0; }
+    .hero-action:nth-child(2) { background: #201820bc; border-color: #d4b3c799; }
+    .hero-footer { position: absolute; z-index: 1; bottom: 24px; inset-inline: clamp(24px, 5vw, 90px); display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+    .hero-next { display: flex; gap: 10px; min-width: 0; }
+    .hero-next button { display: flex; align-items: center; gap: 10px; width: 150px; padding: 6px; margin: 0; background: #17121cbd; border: 1px solid #b7849b66; text-align: left; font-size: 12px; }
+    .hero-next button[aria-pressed="true"] { border-color: #f4b6ce; background: #684156b5; }
+    .hero-next img { width: 35px; height: 51px; object-fit: cover; border-radius: 5px; }
+    .hero-next span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .hero-footer .carousel-controls { flex-shrink: 0; margin: 0; }
+    .carousel-controls button { background: #211a24ba; border-color: #a87891; margin: 0; }
+    .carousel-controls button:first-child, .carousel-controls button:last-child { font-size: 25px; line-height: 1; width: 44px; }
+    #search-suggestions { max-height: min(470px, 65svh); }
+    #search-suggestions li { display: flex; align-items: center; gap: 14px; padding: 9px; min-height: 82px; }
+    .suggestion-poster { width: 42px; height: 63px; flex: 0 0 42px; border-radius: 5px; object-fit: cover; background: #503246; display: grid; place-items: center; font-size: 18px; }
+    .suggestion-copy { display: flex; flex-direction: column; gap: 5px; min-width: 0; }.suggestion-copy strong { font-size: 14px; color: #f7eaf2; }.suggestion-copy small { color: #cfb9c6; font-size: 12px; }
+    #title-details { position: fixed; inset: 0; width: min(820px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 48px); margin: auto; padding: clamp(22px, 4vw, 38px); overflow-y: auto; border: 1px solid #a26b87; border-radius: 22px; background: #251e29; color: #f3e6ee; box-shadow: 0 32px 100px #000a; text-align: left; }
+    #title-details::backdrop { background: #0e0b13c9; backdrop-filter: blur(7px); }
+    #title-details #details-heading { padding-right: 48px; text-align: left; font-family: Georgia, serif; font-size: 30px; }
+    #close-details { position: sticky; float: right; top: 0; width: 44px; height: 44px; padding: 0; margin: -42px 0 12px 12px; border-radius: 50%; font-size: 25px; background: #483044; }
+    #details-content { clear: both; }#episode-picker { clear: both; padding-top: 12px; }.details-actions { padding-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+    #episode-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }#episode-picker label { margin: 0; min-width: 0; }#episode-picker select { min-width: 0; max-width: 100%; width: 100%; }#episode-picker > p, #episode-picker > div, #retry-season { grid-column: 1/-1; }
+    body.details-open { overflow: hidden; }
+    .account-presence { width: 76px; padding: 10px 4px 0; display: flex; flex-direction: column; align-items: center; gap: 7px; border-top: 1px solid #654052; }
+    .presence-avatar { width: 34px; height: 34px; border-radius: 50%; background: #704560; color: #ffe6f0; display: grid; place-items: center; position: relative; font-weight: 650; font-size: 14px; }
+    .presence-dot { position: absolute; bottom: -1px; right: -2px; width: 13px; height: 13px; border: 3px solid #1b171f; background: #9b94a2; border-radius: 50%; }
+    .account-presence[data-state="online"] .presence-dot { background: #3dce92; }.account-presence[data-state="connecting"] .presence-dot { background: #f3bd62; }.account-presence[data-state="demo"] .presence-dot { background: #d993c5; }
+    .presence-copy { display: flex; flex-direction: column; text-align: center; width: 100%; font-size: 10px; gap: 3px; }.presence-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }#presence-label { color: #c9b6c4; }
+    @media (max-width: 1000px) { #discover-feature { width: calc(100% + 44px); margin-left: -22px; }.feature-copy { width: min(600px, 90%); }.hero-next button { width: 85px; }.hero-next img { display: none; }.hero-next button { min-height: 44px; }.hero-footer { gap: 12px; } }
+    @media (max-width: 700px) { #discover-feature { width: calc(100% + 32px); margin-left: -16px; }.feature-card { min-height: 72svh; padding: 42px 24px 155px; }.feature-copy { width: 100%; }.feature-copy h3 { font-size: clamp(34px, 10vw, 52px); }.feature-copy p { font-size: 14px; }.hero-footer { flex-direction: column; align-items: stretch; bottom: 18px; inset-inline: 20px; gap: 14px; }.hero-next button { flex: 1; width: auto; }.hero-footer .carousel-controls { justify-content: flex-start; }.account-presence { flex: 0 0 42px; width: 42px; padding: 0; border: 0; }.presence-copy { width: 42px; }.presence-copy #presence-name { display: none; }.presence-avatar { width: 29px; height: 29px; }.side-nav { gap: 0; }.side-nav a { flex: 1; min-width: 0; }#title-details { max-height: calc(100dvh - 24px); width: calc(100vw - 20px); }.details-poster { width: 105px; }.hero-action { padding: 10px 14px; font-size: 14px; } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -267,6 +309,7 @@
     <a href="#list" aria-label="Watchlist" title="Watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-7-4-7 4z"/></svg></a>
     <a href="#room" aria-label="Room" title="Room"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg></a>
     <a class="nav-profile" href="#profile" aria-label="Profile" title="Profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3-7 8-7s8 3 8 7"/></svg></a>
+    <div id="account-presence" class="account-presence" data-state="connecting" role="status" aria-live="polite"><span class="presence-avatar" aria-hidden="true"><span id="presence-initial">M</span><span class="presence-dot"></span></span><span class="presence-copy"><span id="presence-name">Your account</span><span id="presence-label">Connecting</span></span></div>
   </nav>
 
   <section id="developer" data-view aria-labelledby="connection-heading" hidden>
@@ -313,6 +356,10 @@
   </section>
   <main id="main-content" tabindex="-1">
     <section id="home" data-view aria-labelledby="home-heading" hidden>
+      <section id="discover-feature" class="discover-feature" aria-roledescription="carousel" aria-label="Featured movies and shows" hidden>
+        <div id="discover-slide" class="discover-slide" aria-live="off"></div>
+        <div class="hero-footer"><div id="hero-next" class="hero-next" aria-label="Choose a featured title"></div><div class="carousel-controls"><button id="discover-previous" type="button" aria-label="Previous featured title">&#8249;</button><button id="discover-pause" type="button" aria-pressed="false">Pause rotation</button><span id="discover-count"></span><button id="discover-next" type="button" aria-label="Next featured title">&#8250;</button></div></div>
+      </section>
       <p class="eyebrow">One room. Two people.</p>
       <h2 id="home-heading" tabindex="-1">Make a little time for each other.</h2>
       <p id="home-greeting">A favourite film. A new series. A little time together.</p>
@@ -348,10 +395,6 @@
         <label>Genre <select id="genre"><option value="">All genres</option></select></label>
         <button>Search</button>
       </form>
-      <section id="discover-feature" class="discover-feature" aria-label="Featured discoveries" hidden>
-        <div id="discover-slide" class="discover-slide" aria-live="off"></div>
-        <div class="carousel-controls"><button id="discover-previous" type="button" aria-label="Previous featured title">&#8249;</button><button id="discover-pause" type="button" aria-pressed="false">Pause rotation</button><span id="discover-count"></span><button id="discover-next" type="button" aria-label="Next featured title">&#8250;</button></div>
-      </section>
       <div id="genre-sections" class="genre-chips" role="group" aria-label="Browse by genre"></div>
       <p>Explore together, save a favourite, or pick something for tonight.</p>
       <button id="retry-catalog" type="button" hidden>Try loading titles again</button>
@@ -362,7 +405,7 @@
         <span id="catalog-page">No page loaded</span>
         <button id="catalog-next" type="button" disabled>Next</button>
       </nav>
-      <section id="title-details" aria-labelledby="details-heading" hidden>
+      <dialog id="title-details" aria-labelledby="details-heading" hidden>
         <h3 id="details-heading" tabindex="-1">Title details</h3>
         <button id="close-details" type="button">Back to titles</button>
         <p id="details-status" role="status" aria-live="polite"></p>
@@ -375,7 +418,7 @@
           <button id="retry-season" type="button" hidden>Retry season</button>
         </div>
         <div class="details-actions"><button id="details-watch" type="button" disabled>Watch together</button><button id="details-save" type="button" disabled>Add to our list</button><button id="retry-details" type="button" hidden>Try details again</button></div>
-      </section>
+      </dialog>
       <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
     </section>
 
@@ -603,11 +646,12 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     const genreCache = new Map(), posterRequests = new Map();
     let catalogGenres = [], featureItems = [], featureIndex = 0, featureTimer = null, featureFade = null;
     let featurePaused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let connectionHealth = 'connecting', healthChecking = false;
     let suggestionTimer = null, suggestionVersion = 0, suggestions = [], suggestionIndex = -1;
     let selectedTitle = null, selectedEpisodes = [], detailsVersion = 0, seasonVersion = 0;
     $('mode').value = mode; $('backend').value = base;
     const samples = [
-      { tmdbId: 155, mediaType: 'movie', title: 'The Dark Knight', year: '2008', genreIds: [28, 80], posterPath: '/qJ2tW6WMUDux911r6m7haRef0WH.jpg', overview: 'A new threat arrives in Gotham.' },
+      { tmdbId: 155, mediaType: 'movie', title: 'The Dark Knight', year: '2008', genreIds: [28, 80], posterPath: '/qJ2tW6WMUDux911r6m7haRef0WH.jpg', backdropPath: '/nMKdUUepR0i5zn0y1T4CsSB5chy.jpg', overview: 'A new threat arrives in Gotham.' },
       { tmdbId: 27205, mediaType: 'movie', title: 'Inception', year: '2010', genreIds: [878, 28], posterPath: '/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg', overview: 'An unusual assignment inside dreams.' },
       { tmdbId: 1396, mediaType: 'tv', title: 'Breaking Bad', year: '2008', genreIds: [18, 80], posterPath: '/3xnWaLQjelJDDF7LT1WBo6f4BRe.jpg', overview: 'A chemistry teacher makes a life-changing choice.' }
     ];
@@ -855,6 +899,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (requested === 'signup') showAuthForm(true);
       const next = requested === 'signup' ? 'profile' : ['home', 'browse', 'list', 'room', 'profile', 'developer'].includes(requested) ? requested : 'home';
       if (currentView !== next) {
+        if ($('title-details').open) closeDetails();
         if (currentView) viewScroll.set(currentView, window.scrollY);
         currentView = next;
         if (typeof closeSuggestions === 'function') closeSuggestions();
@@ -877,6 +922,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function renderExperience() {
       route();
+      renderConnection();
       const selected = me?.rooms?.find(item => item.roomId === me.roomId);
       const hasRoom = !!me?.roomId;
       const name = me?.profile?.displayName || 'you';
@@ -922,6 +968,33 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('details-save').disabled = !selectedTitle;
       $('details-watch').textContent = mode === 'demo' ? 'Preview video' : 'Watch together';
       renderCoupleExperience();
+    }
+    function renderConnection() {
+      const name = me?.profile?.displayName || 'Your account';
+      let state, label;
+      if (mode === 'demo') { state = 'demo'; label = 'Local Demo'; }
+      else if (!navigator.onLine) { state = 'offline'; label = 'Offline'; }
+      else if (!authSession) { state = 'offline'; label = 'Signed out'; }
+      else if (connectionHealth === 'signin') { state = 'connecting'; label = 'Sign in again'; }
+      else if (!me || connectionHealth !== 'online') { state = 'connecting'; label = 'Connecting'; }
+      else { state = 'online'; label = 'Online'; }
+      const host = $('account-presence'), signature = [state,label,name].join(':');
+      if (host.dataset.signature === signature) return;
+      host.dataset.signature = signature; host.dataset.state = state;
+      host.title = name + ' · ' + label + (state === 'online' ? ' — app connection available' : '');
+      $('presence-name').textContent = name; $('presence-label').textContent = label;
+      $('presence-initial').textContent = name === 'Your account' ? 'M' : name.slice(0,1).toUpperCase();
+    }
+    async function checkConnection() {
+      if (healthChecking || mode !== 'api' || !authSession || !navigator.onLine) { renderConnection(); return; }
+      healthChecking = true;
+      const user = me?.userId;
+      try {
+        const result = await fetch(base+'/api/health',{cache:'no-store',signal:AbortSignal.timeout(5000)});
+        const healthy = result.ok && (await result.json()).status === 'ok';
+        if (user === me?.userId && connectionHealth !== 'signin') connectionHealth = healthy ? 'online' : 'connecting';
+      } catch { if (user === me?.userId) connectionHealth = 'connecting'; }
+      finally { healthChecking = false; renderConnection(); }
     }
     function inviteFromHash(hash) {
       const match = /^#invite=([a-zA-Z0-9-]{1,32})$/.exec(hash || '');
@@ -1113,20 +1186,49 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('discover-slide').classList.remove('is-fading');
       if (!title) { $('discover-slide').replaceChildren(); return; }
       const article = node('article', ''); article.className = 'feature-card';
+      const path = title.backdropPath || title.posterPath;
+      if (typeof path === 'string' && /^\/[a-zA-Z0-9._-]+$/.test(path)) {
+        const art = document.createElement('img'); art.className = 'hero-art'; art.alt = ''; art.decoding = 'async'; art.fetchPriority = 'high';
+        art.src = 'https://image.tmdb.org/t/p/w1280'+path;
+        art.onerror = () => { if (title.posterPath && path !== title.posterPath && !art.dataset.fallback) { art.dataset.fallback = 'true'; art.src = 'https://image.tmdb.org/t/p/w780'+title.posterPath; } else art.remove(); };
+        article.append(art);
+      }
       const copy = node('div', ''); copy.className = 'feature-copy';
       const actions = node('div', ''); actions.className = 'card-actions';
-      actions.append(iconButton('Details: ' + title.title, 'details', () => showDetails(title)), iconButton('Save: ' + title.title, 'save', () => add(title)), iconButton('Watch together: ' + title.title, 'play', () => watchTitle(title)));
-      copy.append(node('h3', title.title), node('p', title.overview || 'Find out more about this title.'), actions);
-      article.append(posterNode(title), copy); $('discover-slide').replaceChildren(article);
+      const watch = button('',()=>watchTitle(title)); watch.className = 'hero-action'; watch.append(icon('play'),node('span','Watch together'));
+      const details = button('',()=>showDetails(title)); details.className = 'hero-action'; details.append(icon('details'),node('span','More info'));
+      const save = iconButton('Save: '+title.title,'save',()=>add(title)); save.classList.add('hero-action'); actions.append(watch,details,save);
+      const kicker = node('p','TONIGHT, TOGETHER'); kicker.className = 'eyebrow';
+      const meta = node('p',(title.mediaType === 'tv' ? 'TV series' : 'Movie')+' · '+(title.year || 'Discover something new')); meta.className = 'hero-meta';
+      copy.append(kicker,node('h3', title.title),meta,node('p', title.overview || 'Find out more about this title.'), actions);
+      article.append(copy); $('discover-slide').replaceChildren(article);
+      const hadPickerFocus = $('hero-next').contains(document.activeElement), pickerStart = Math.floor(featureIndex/4)*4;
+      $('hero-next').replaceChildren(...featureItems.slice(pickerStart,pickerStart+4).map((item,index)=>{
+        const actualIndex=pickerStart+index;
+        const pick = button('',()=>{ featureIndex=actualIndex; paintFeature(); scheduleFeature(); });
+        pick.setAttribute('aria-label','Show featured title: '+item.title); pick.setAttribute('aria-pressed',String(actualIndex===featureIndex));
+        if (item.posterPath && /^\/[a-zA-Z0-9._-]+$/.test(item.posterPath)) { const img=document.createElement('img'); img.alt=''; img.loading='lazy'; img.src='https://image.tmdb.org/t/p/w92'+item.posterPath; img.onerror=()=>img.remove(); pick.append(img); }
+        pick.append(node('span',item.title)); return pick;
+      }));
+      if (hadPickerFocus) $('hero-next').querySelector('[aria-pressed="true"]')?.focus({preventScroll:true});
       $('discover-count').textContent = (featureIndex + 1) + ' / ' + featureItems.length;
       $('discover-pause').textContent = featurePaused ? 'Resume rotation' : 'Pause rotation';
       $('discover-pause').setAttribute('aria-pressed', String(featurePaused));
       $('discover-next').disabled = $('discover-previous').disabled = featureItems.length < 2;
     }
+    async function ensureHomeFeature() {
+      if (featureItems.length || !me) return;
+      const owner = me, requestMode = mode;
+      try {
+        const data = await request('/api/catalog?type=movie&page=1');
+        if (me !== owner || mode !== requestMode) return;
+        featureItems = data.items.slice(0,8); featureIndex = 0; paintFeature(); scheduleFeature();
+      } catch { /* The rest of Home stays usable if discovery is unavailable. */ }
+    }
     function scheduleFeature() {
       clearTimeout(featureTimer);
-      if (featurePaused || featureItems.length < 2 || currentView !== 'browse' || document.hidden || $('discover-feature').matches(':hover') || $('discover-feature').contains(document.activeElement)) return;
-      featureTimer = setTimeout(() => advanceFeature(1), 3000);
+      if (featurePaused || featureItems.length < 2 || currentView !== 'home' || document.hidden || $('title-details').open || $('discover-feature').matches(':hover') || $('discover-feature').contains(document.activeElement)) return;
+      featureTimer = setTimeout(() => advanceFeature(1), 7000);
     }
     function advanceFeature(direction) {
       clearTimeout(featureTimer); clearTimeout(featureFade);
@@ -1154,7 +1256,12 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         suggestions = results.flatMap(result => result.items).sort((a, b) => Number(b.title.toLowerCase().startsWith(q.toLowerCase())) - Number(a.title.toLowerCase().startsWith(q.toLowerCase()))).slice(0, 8);
         suggestionIndex = -1;
         $('search-suggestions').replaceChildren(...suggestions.map((title, index) => {
-          const option = node('li', title.title + ' · ' + (title.year || '') + ' · ' + (title.mediaType === 'tv' ? 'TV' : 'Movie'));
+          const option = node('li', '');
+          const poster = node('span','◈'); poster.className = 'suggestion-poster'; poster.setAttribute('aria-hidden','true');
+          if (typeof title.posterPath === 'string' && /^\/[a-zA-Z0-9._-]+$/.test(title.posterPath)) {
+            const image = document.createElement('img'); image.alt=''; image.width=42; image.height=63; image.className='suggestion-poster'; image.loading='lazy'; image.src='https://image.tmdb.org/t/p/w92'+title.posterPath; image.onerror=()=>image.replaceWith(poster); option.append(image);
+          } else option.append(poster);
+          const copy=node('span',''); copy.className='suggestion-copy'; copy.append(node('strong',title.title),node('small',(title.year || 'Year unknown')+' · '+(title.mediaType === 'tv' ? 'TV series' : 'Movie'))); option.append(copy);
           option.id = 'suggestion-' + index; option.setAttribute('role', 'option'); option.setAttribute('aria-selected', 'false');
           option.onpointerdown = event => event.preventDefault(); option.onclick = () => chooseSuggestion(index); return option;
         }));
@@ -1189,7 +1296,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (version !== catalogVersion) return;
         catalogGenres = genres; renderGenreControls(genre); renderCatalog(data.items, genre);
         catalogState = { type, q, genre, page: data.page, hasMore: data.hasMore };
-        featureItems = data.items.slice(0, 8); featureIndex = 0; clearTimeout(featureFade); paintFeature(); scheduleFeature();
+        if (!q && !genre && page === 1) { featureItems = data.items.slice(0, 8); featureIndex = 0; clearTimeout(featureFade); paintFeature(); scheduleFeature(); }
         $('catalog-page').textContent = `Page ${data.page}`;
         $('catalog-status').textContent = data.items.length ? `${data.items.length} ${type === 'tv' ? 'TV shows' : 'movies'}${q ? ' matching “' + q + '”' : ' · popular titles'}.` : 'No results. Try another search.';
       } catch (error) {
@@ -1244,26 +1351,32 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function closeDetails(restore = false) {
       detailsVersion++; seasonVersion++; selectedTitle = null; selectedEpisodes = [];
       $('title-details').hidden = true;
+      if ($('title-details').open) $('title-details').close();
+      document.body.classList.remove('details-open');
       $('season').replaceChildren(); $('episode').replaceChildren();
       $('season').disabled = true; $('episode').disabled = true;
       if (detailsOrigin && restore) {
         if (detailsOrigin.view !== currentView) { pendingNavigationFocus = detailsOrigin.element; location.hash = detailsOrigin.view; route(); }
         window.scrollTo(0, detailsOrigin.scroll);
         if (detailsOrigin.element?.isConnected) detailsOrigin.element.focus({ preventScroll: true });
+        else document.querySelector('#'+detailsOrigin.view+' h2')?.focus({preventScroll:true});
       }
       detailsOrigin = null;
+      if (typeof scheduleFeature === 'function') scheduleFeature();
     }
     async function showDetails(title) {
       closeDetails();
       detailsRequested = title;
       detailsOrigin = { view: currentView, scroll: window.scrollY, element: document.activeElement };
-      $('close-details').textContent = currentView === 'list' ? 'Back to our list' : currentView === 'home' ? 'Back to Home' : 'Back to titles';
-      if (currentView !== 'browse') { location.hash = 'browse'; route(); }
+      $('close-details').textContent = '×'; $('close-details').setAttribute('aria-label','Close title details'); $('close-details').title = 'Close details';
       const version = detailsVersion;
       $('title-details').hidden = false;
       $('details-heading').textContent = title.title;
       $('details-status').textContent = 'Loading details…';
-      $('title-details').scrollIntoView({ block: 'start' });
+      clearTimeout(featureTimer); clearTimeout(featureFade);
+      $('discover-slide').classList.remove('is-fading');
+      document.body.classList.add('details-open');
+      $('title-details').showModal();
       $('details-heading').focus({ preventScroll: true });
       $('details-content').replaceChildren(); $('episode-content').replaceChildren();
       $('retry-details').hidden = true; $('details-watch').disabled = true; $('details-save').disabled = true;
@@ -1361,6 +1474,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           embeddedPlayer.load(media,room.provider,room.positionMs/1000); joined = true; await chat();
         }
         location.hash = 'room';
+        closeDetails();
         await loadProgress(); await list().catch(() => {});
         say(mode === 'api' ? 'Movie selected. Your partner can join from your Watch Room.' : 'Demo video opened in this browser.');
         controls();
@@ -1428,25 +1542,29 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       startLiveChat();
     }
     async function connect() {
+      connectionHealth = 'connecting';
       stopLiveChat();
       resetCatalog();
       me = null; room = null; joined = false; unload(); controls();
       $('catalog').replaceChildren(); $('list-items').replaceChildren(); $('messages').replaceChildren();
       me = await request('/api/me'); $('display-name').value = me.profile.displayName; $('avatar').value = me.profile.avatarKey === 'default' ? 'moon' : me.profile.avatarKey;
+      connectionHealth = 'online'; renderConnection();
       if (mode === 'api') {
         await loadRooms();
         let invitationFailed = false;
         if (pendingInvite) { try { await acceptInvitation(); } catch (error) { invitationFailed = true; say('Could not join the invitation: '+friendlyError(error.message)); } }
         await catalog();
-        if (!invitationFailed && location.hash.indexOf('#invite=') !== 0) say('You’re connected. Your movie night is ready.');
+        await ensureHomeFeature();
+        if (!invitationFailed) say('');
         return;
       }
       $('chat-status').textContent = 'Live chat is off in Local demo.';
       me.rooms = [{ roomId: 'demo-room', name: 'Demo room' }];
       $('room-select').replaceChildren(new Option('Demo room', 'demo-room')); $('room-select').disabled = true;
       await catalog(); await list(); apply(await request(`/api/rooms/${me.roomId}/state`));
+      await ensureHomeFeature();
       await loadProgress();
-      say(mode === 'demo' ? 'Local demo ready. Changes reset on reload; no backend is running.' : 'Backend connected.');
+      say('');
     }
     function bind(id, fn) { $(id).onclick = e => act(fn, e.currentTarget); }
     function form(id, fn) { $(id).onsubmit = e => { e.preventDefault(); act(fn, e.submitter); }; }
@@ -1532,6 +1650,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     bind('catalog-previous', () => catalog(catalogState.page - 1, catalogState));
     bind('catalog-next', () => catalog(catalogState.page + 1, catalogState));
     bind('close-details', () => closeDetails(true));
+    $('title-details').addEventListener('cancel', event => { event.preventDefault(); closeDetails(true); });
+    $('title-details').addEventListener('close', () => { if (!$('title-details').hidden) closeDetails(true); });
+    $('title-details').addEventListener('click', event => {
+      if (event.target !== $('title-details')) return;
+      const bounds = event.target.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeDetails(true);
+    });
     bind('details-watch', () => watchTitle(selectedTitle));
     bind('details-save', () => add(selectedTitle));
     bind('retry-details', () => showDetails(detailsRequested));
@@ -1601,6 +1726,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     $('close-chat').addEventListener('click', () => setChatOpen(false));
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
+      if ($('title-details').open) return;
       if (!$('chat-panel').hidden) setChatOpen(false);
       else if ($('playback-stage').classList.contains('is-expanded')) act(togglePlaybackFullscreen);
     });
@@ -1752,6 +1878,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     });
     $('backend-contract').hidden = false;
     $('developer-contract').append($('backend-contract'));
+    $('main-content').after($('title-details'));
+    window.addEventListener('online', () => void checkConnection());
+    window.addEventListener('offline', renderConnection);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) void checkConnection(); });
+    setInterval(() => { if (!document.hidden) void checkConnection(); }, 30000);
     window.addEventListener('hashchange', () => {
       const code = inviteFromHash(location.hash);
       if (code && code !== pendingInvite) { pendingInvite = code; preference('multiplay.pendingInvite',code); }
