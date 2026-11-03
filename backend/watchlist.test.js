@@ -112,6 +112,8 @@ test('live list listens for insert/update in selected room and ignores old chann
   const ctx = vm.createContext({ mode: 'api', authSession: {}, me: { roomId: ROOM }, $: id => nodes[id] ??= { replaceChildren() {}, setAttribute() {} }, chat: async () => {}, list: async () => { listReads++; }, setTimeout(fn) { pending.set(++next, fn); return next; }, clearTimeout(id) { pending.delete(id); }, authClient: { removeChannel: async c => removed.push(c), channel() { const c = { listeners: [], on(type, filter, fn) { this.listeners.push({ type, filter, fn }); return this; }, subscribe(fn) { this.status = fn; } }; channels.push(c); return c; } } });
   ctx.loadProgress = async () => {}; ctx.loadRoomInfo = async () => {};
   vm.runInContext(source.slice(source.indexOf('    let chatChannel ='), source.indexOf('    authClient.auth.onAuthStateChange')), ctx);
+  // Invitations have their own account-wide channel; this fixture isolates room-list delivery.
+  ctx.startMovieInvitations = () => {}; ctx.stopMovieInvitations = () => {};
   ctx.startLiveChat();
   const listEvents = channels[0].listeners.filter(l => l.filter?.table === 'watch_room_list_items');
   assert.deepEqual(listEvents.map(l => l.filter.event), ['INSERT', 'UPDATE']);

@@ -3,13 +3,43 @@ const assert = require('node:assert/strict');
 const { createRoomSync, intendedPosition } = require('../frontend/shared-playback');
 const initial = {roomId:'room',sessionId:'session',media:{mediaType:'movie',tmdbId:155,title:'Movie'},revision:1,provider:'cinemaos',status:'paused',positionMs:0,readyEpoch:1,playRequested:false,readiness:{bothReady:true,readyCount:2,requiredCount:2},anchorAt:new Date(10000).toISOString(),serverTime:new Date(10000).toISOString()};
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function client(request, { autoAck = true, loadReady = true } = {}) {
+function client(request, { autoAck = true, loadReady = true, requireSessionConsent = false } = {}) {
   const events=[], loads=[], commands=[], timers=[], subs=[];
   let actual={ready:true,seconds:0,playing:false}, time=10000;
   const player={ clear(){actual={...actual,ready:false};},load(media,provider,seconds){loads.push({media,provider,seconds});actual={ready:loadReady,playable:loadReady,seconds,playing:false};}, getStatus(){return actual;}, requestStatus(){}, command(action,params){commands.push({action,params});if(!autoAck && action==='seek') actual={...actual,seekPending:true};if(autoAck){ if(action==='seek') actual={...actual,seconds:params.time,seekPending:false}; if(action==='play'||action==='pause') actual={...actual,playing:action==='play'}; }return true;} };
-  const sync=createRoomSync({request,player,now:()=>time,onChange:e=>events.push(e),onError:message=>events.push({error:message}),subscribe:(room,refresh)=>{subs.push(refresh);return()=>{};},setIntervalImpl:fn=>{timers.push(fn);return fn;},clearIntervalImpl:()=>{}});
+  const sync=createRoomSync({request,player,requireSessionConsent,now:()=>time,onChange:e=>events.push(e),onError:message=>events.push({error:message}),subscribe:(room,refresh)=>{subs.push(refresh);return()=>{};},setIntervalImpl:fn=>{timers.push(fn);return fn;},clearIntervalImpl:()=>{}});
   return {sync,events,loads,commands,subs,timers,player,setTime:t=>time=t,setActual:s=>actual=s};
 }
+
+test('a new partner-selected session waits for consent; stale accepted invitations cannot load a different movie',async()=>{
+  let state={...initial};const app=client(async()=>({...state}),{requireSessionConsent:true});
+  app.sync.selectRoom('room');await flush();app.sync.join();assert.equal(app.loads.length,1);
+  state={...state,sessionId:'next',media:{...state.media,tmdbId:27205},revision:2};await app.sync.refresh();
+  assert.equal(app.events.at(-1).joined,false);assert.equal(app.loads.length,1);
+  await assert.rejects(app.sync.joinSession('session'),/movie changed/);assert.equal(app.loads.length,1);
+  await app.sync.joinSession('next');assert.equal(app.loads.length,2);assert.equal(app.events.at(-1).joined,true);
+  app.sync.destroy();
+});
+
+test('the person choosing a movie joins their own new session without a second consent prompt',async()=>{
+  let state={...initial};const app=client(async(_path,method,body)=>{
+    if(method==='POST'&&body.tmdbId)state={...state,sessionId:'chosen',media:body,revision:2};return {...state};
+  },{requireSessionConsent:true});
+  app.sync.selectRoom('room');await flush();app.sync.join();
+  await app.sync.watch({mediaType:'movie',tmdbId:27205,title:'Next'});
+  assert.equal(app.events.at(-1).joined,true);assert.equal(app.loads.at(-1).media.tmdbId,27205);app.sync.destroy();
+});
+
+test('a delayed selection response cannot join a newer partner-selected session',async()=>{
+  let state={...initial},resolve;
+  const app=client(async(path,method,body)=>method==='POST'&&body.tmdbId?new Promise(done=>resolve=done):{...state},{requireSessionConsent:true});
+  app.sync.selectRoom('room');await flush();app.sync.join();
+  const selecting=app.sync.watch({mediaType:'movie',tmdbId:27205,title:'Mine'});
+  state={...state,revision:3,sessionId:'partner',media:{...state.media,tmdbId:111}};await app.sync.refresh();
+  resolve({...state,revision:2,sessionId:'mine',media:{...state.media,tmdbId:27205}});
+  await assert.rejects(selecting,/partner selected another/);assert.equal(app.events.at(-1).joined,false);assert.equal(app.loads.length,1);
+  app.sync.destroy();
+});
 test('both members apply committed seek/play and provider changes; nonjoined clients do not autoplay',async()=>{
   let state={...initial};
   const request=async(path,method,body)=>{

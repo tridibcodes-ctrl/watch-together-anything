@@ -6,23 +6,41 @@ This is a working development backend with an HTML/JavaScript frontend. Authenti
 
 Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target design](#complete-target-design--planned-features) · [Local setup](#setup-from-a-fresh-clone) · [Implemented APIs](#implemented-http-api) · [Remaining work](#remaining-work-and-suggested-order)
 
+## Movie invitations and cinema entry
+
+Home, Discover, Watchlist and Profile are the main navigation. The cinema opens when someone chooses **Watch together**, joins an existing movie from Home, or accepts a movie invitation. Room selection, partner readiness, creation/joining, invitation links, rename, and connection diagnostics now live in Home's room card. Leaving the movie returns Home without deleting membership, chat, lists or progress. Browsing elsewhere can keep the current player loaded; choosing a different movie requires fresh consent from the other participant.
+
+Choosing a movie or episode creates a session-bound invitation for the other room member in the same PostgreSQL transaction as playback selection. A small card slides in from the right with accessible tick/accept and cross/decline buttons. Accept verifies that exact session before loading the player; decline keeps the recipient on their current page and notifies the sender. Both-ready playback still waits for both videos. Selecting another title unloads a partner's old session rather than automatically loading the new movie. The creator joins their own selection directly. Repeating Watch together can resend a declined invitation; retries reuse an existing pending invitation. Returning to a movie already joined does not send another invitation.
+
+**Required setup:** apply the complete [backend/watch-invitations.sql](backend/watch-invitations.sql) in Supabase SQL Editor **after** `schema.sql`, `playback.sql` and `phase2.sql`. It adds the invitation table, member-only RLS reads, recipient-only response RPCs, an atomic selection trigger and Realtime publication. It preserves existing room/list/chat/history data and is safe to reapply. Restart Node and hard-refresh both browsers. SQL has been tested locally with PostgreSQL/RLS through PGlite; this repository update does not migrate hosted Supabase automatically.
+
+Invitations expire after ten minutes and are replaced by a newer selected session. They work across a signed-in account's rooms, using Realtime plus a three-second inbox fallback. Stale requests after sign-out or room changes cannot reopen notifications. A failed load after acceptance offers a join retry. These are **in-app notifications**: the partner must have the app open and signed in, or return before expiry. Browser/OS push and email notifications are not implemented. Local Demo remains single-browser and does not pretend to notify a real partner.
+
+API additions (all require the current user's Bearer token):
+
+- `GET /api/watch-invitations` → `{items:[{id,roomId,sessionId,senderId,recipientId,senderName,status,media,createdAt,expiresAt}]}`; only invitations involving that room member, for the current session, before expiry.
+- `POST /api/rooms/{roomId}/watch-invitation` with `{sessionId}` → `{invited,id?}`; intentionally resend the current selection. Returns `invited:false` when the room has no partner yet.
+- `POST /api/watch-invitations/{id}/response` with `{accept:boolean}` → `{roomId,sessionId,status}`. Only the recipient can respond. A stale/expired invitation returns a conflict; direct table writes and client-supplied actor identities are disallowed.
+
+Controls use purple backgrounds with white text. Carousel arrows sit over the fading image without borders. Discover search has a transparent background with aligned controls; watchlist refresh sits beside its filters; Profile puts Save/Sign out together and shows avatar symbols with a white dropdown chevron. Reduced-motion users do not receive sliding notification animation.
+
 ## Frontend redesign — Phase 1
 
-Homepage discovery now uses a full-width backdrop carousel with Watch/More Info actions, title thumbnails, previous/next controls and a pause toggle. Rotation waits seven seconds, pauses while hovered/focused or a details dialog is open, and starts paused for reduced-motion preferences. Movie/TV search suggestions include small posters, title, year and type; arrow-key/Enter selection remains available. Details open in a native modal from any view, with keyboard focus containment, Escape/backdrop dismissal, stale-response guards and focus/scroll restoration. Opening the modal does not navigate to Discover or recreate the room's player.
+Homepage discovery uses a full-width backdrop carousel with Watch/More Info actions, title thumbnails and previous/next controls. Rotation waits seven seconds, pauses while hovered/focused or a details dialog is open, and starts paused for reduced-motion preferences. Movie/TV search suggestions include small posters, title, year and type; arrow-key/Enter selection remains available. Details open in a native modal from any view, with keyboard focus containment, Escape/backdrop dismissal, stale-response guards and focus/scroll restoration. Opening the modal does not navigate to Discover or recreate the room's player.
 
 The persistent connection-success banner is removed. A sidebar avatar/status dot shows the current account as Online, Connecting, Offline, Signed out or Local Demo. Online means the authenticated account has connected to the app backend; a quiet 30-second health check and browser connectivity events update it. It does not claim a partner is present or a stream is working. Errors and action feedback remain visible. Restart Node for the added TMDB `backdropPath` field, then hard-refresh; this UI update needs no additional SQL migration. Existing Phase 2 database setup is still required for its features.
 
-The frontend now has Home, Discover, Our List, Watch Room and Profile views. Normal visits use the same-origin backend and show a simplified sign-in screen. Existing Supabase session restoration is retained. Home shows the room's current title and up to four saved titles; it does not claim to implement per-title Continue Watching history. Room seats use server-reported names/readiness where available, without presenting membership or readiness as proof of online presence.
+The frontend has Home, Discover, Our List and Profile navigation, with a cinema view opened by watching/joining a movie. Normal visits use the same-origin backend and show a simplified sign-in screen. Existing Supabase session restoration is retained. Home shows room management, the current title, saved titles and Phase 2 Continue Watching history. Room seats use server-reported names/readiness where available, without presenting membership or readiness as proof of online presence.
 
 The watch view brings the video forward once a title is loaded. Chat docks beside the video on laptops, stacks beneath it on narrow screens, and stays available in expanded/fullscreen viewing. Opening chat or changing views does not recreate the player. Native controls, the both-ready buffering hold, retries, and shared commands retain their existing behavior. Source choices and backup shared controls are inside playback options; technical playback information is inside Connection details. Phase 2 adds the completion panel described below.
 
 Developer settings and the API contract live at `http://127.0.0.1:3000/#developer`. Select Local Demo and Connect there to preview without an account. With Node off, serve `frontend/` with a static server and open `index.html#developer`, or open that local file directly. The browser SDK/fonts/styles still need internet access as before. Explicit demo selection persists across refresh; its sample lists/chat reset on reload. Back to sign-in exits preview and restores same-origin API mode. Development settings do not appear in the normal sign-in flow.
 
-Phase 1 itself needs only a hard refresh. The approved Phase 2 below requires a database migration. Mutual interest and Tonight's shortlist were explicitly removed from scope. Permanent room departure, signup/recovery and optional couple features remain future work. Each next phase needs the owner's approval and an opportunity to omit changes.
+Phase 1 itself needs only a hard refresh. Phase 2 and movie invitations require the database migrations described here. Mutual interest and Tonight's shortlist were explicitly removed from scope. Permanent room departure, password recovery and optional couple features remain future work. Each next phase needs the owner's approval and an opportunity to omit changes.
 
 ## Phase 2 — couples, resume and watched tracking
 
-For an existing installation with schema/playback already applied, run the complete `backend/phase2.sql` in Supabase SQL Editor. For a fresh database, run `schema.sql`, `playback.sql`, then `phase2.sql`. Always reapply Phase 2 last if rerunning the older files, because it upgrades room functions/triggers. Restart Node and hard-refresh both clients. This repository change does not apply SQL to your hosted Supabase project automatically.
+For an existing installation with schema/playback already applied, run the complete `backend/phase2.sql` in Supabase SQL Editor. For a fresh database, run `schema.sql`, `playback.sql`, `phase2.sql`, then `watch-invitations.sql`. Reapply Phase 2 after the older core files, then movie invitations last, because they upgrade room functions/triggers. Restart Node and hard-refresh both clients. This repository change does not apply SQL to your hosted Supabase project automatically.
 
 - **One room per couple:** `watch_couples` enforces a sorted, unique pair of user IDs. A transactionally enforced membership trigger prevents the same pair from forming a second room, including direct RPC requests. Repeated joins are safe even when a room is full. A different partner can form a different couple. A candidate room stays available for a different partner when its invitation resolves to an existing couple's room.
 - **Existing duplicate rooms:** the oldest room is canonical. Lists are combined, messages retain IDs/bodies and move to the canonical room, and old room records/list rows remain archived through `canonical_room_id`. Colliding message retry IDs are regenerated so both messages survive. Existing playback snapshots seed progress. Old invitation codes resolve to the canonical room; room list aliases preserve remembered selections. No room or chat history is deleted.
@@ -63,7 +81,7 @@ The intended experience lets both partners control playback, maintain a shared m
 | Shared title/episode progress | Implemented; migration/live acceptance pending | Room-scoped history, authoritative checkpoints and Continue Watching Together. |
 | One room per couple and rename | Implemented; migration/live acceptance pending | Sorted account pair uniqueness, repeat-invite reuse and archive migration. |
 | Watched completion | Implemented; migration/live acceptance pending | Both-member confirmation, episode tracking, stale-request protection and undo. |
-| Public signup/recovery | Pending | Only sign-in UI exists; create test accounts in Supabase Dashboard. Check project signup settings separately. |
+| Account signup/recovery | Signup UI implemented; recovery pending | Supabase signup includes display name/avatar and email-confirmation handling. Check project signup settings separately. |
 | Production deployment | Pending | Node listens only on 127.0.0.1:3000. |
 
 ## System design
@@ -276,6 +294,8 @@ frontend/shared-playback.js Room state, subscriptions, retries and drift correct
 backend/playback.js        Authenticated state/media/command API
 backend/playback.sql       Playback tables, transactional RPC, RLS and Realtime
 backend/phase2.sql         Couple uniqueness, archive migration, resume and watched RPCs
+backend/watch-invitations.sql  Session-bound movie invitations, RLS, response RPCs and Realtime
+backend/invitations.js     Authenticated movie invitation inbox/send/response endpoints
 backend/couple.js          Authenticated room details, rename, progress and completion API
 backend/phase2-db.test.js   PostgreSQL couple/progress/completion and upgrade checks
 backend/couple-api.test.js  API authorization and request validation
@@ -315,7 +335,7 @@ Use `.env.example` as the configuration template. For TMDB, copy the **API Read 
 
 A fresh clone does not include the previous checkout's .env or installed dependencies. Keep local configuration in the checkout you actually run.
 
-1. Run `backend/schema.sql`, then `backend/playback.sql`, then `backend/phase2.sql`, in Supabase SQL Editor. Existing installations that already have the first two need the new Phase 2 file. Apply Phase 2 last on later upgrades as well.
+1. Run `backend/schema.sql`, `backend/playback.sql`, `backend/phase2.sql`, then `backend/watch-invitations.sql` in Supabase SQL Editor. Existing installations need only migrations not yet applied. On upgrades, preserve this order and reapply movie invitations last.
 2. Create test email/password accounts under Supabase Authentication → Users. They must be able to sign in under the project's email-confirmation settings.
 3. Start Node from the repository root:
 

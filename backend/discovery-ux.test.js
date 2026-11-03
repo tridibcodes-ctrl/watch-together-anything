@@ -9,7 +9,7 @@ test('details open over the current view; closing returns focus and rejects a de
     append(){},replaceChildren(){},setAttribute(){},focus(){},showModal(){this.open=true;},close(){this.open=false;}};
   const context=vm.createContext({$:element,currentView:'list',detailsVersion:0,seasonVersion:0,selectedTitle:null,selectedEpisodes:[],detailsOrigin:null,
     window:{scrollY:480,scrollTo(x,y){scrolls.push(y);}},document:{activeElement:opener,body:{classList:{add:v=>classes.add(v),remove:v=>classes.delete(v)}}},
-    featureTimer:null,featureFade:null,clearTimeout(){},scheduleFeature(){},request:()=>new Promise(done=>resolve=done),controls(){},node(){throw new Error('Stale content must not render');}});
+    featureTimer:null,featureFade:null,clearTimeout(){},scheduleFeature(){},placeMovieInvitations(){},request:()=>new Promise(done=>resolve=done),controls(){},node(){throw new Error('Stale content must not render');}});
   vm.runInContext(source.slice(source.indexOf('    function closeDetails('),source.indexOf('    async function loadSeason(')),context);
   const pending=context.showDetails({mediaType:'movie',tmdbId:155,title:'Movie'});
   assert.equal(nodes['title-details'].open,true);assert.equal(context.currentView,'list');assert.deepEqual(scrolls,[]);assert.equal(classes.has('details-open'),true);

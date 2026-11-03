@@ -13,7 +13,7 @@
   function intendedPosition(state, now = Date.now()) {
     return Math.min(MAX_POSITION, Math.max(0, state.positionMs + (state.status === 'playing' ? Math.max(0, now + (state.offset || 0) - Date.parse(state.anchorAt)) : 0)));
   }
-  function createRoomSync({ request, player, subscribe = () => () => {}, onChange = () => {}, onError = () => {}, now = Date.now, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval }) {
+  function createRoomSync({ request, player, subscribe = () => () => {}, onChange = () => {}, onError = () => {}, requireSessionConsent = false, now = Date.now, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval }) {
     let roomId = null, state = null, joined = false, generation = 0, fetching = false, refreshQueued = false;
     let stopSubscription = () => {}, poll = null, correction = null, loadedKey = null, busy = false, online = false, lastCommandAt = 0;
     let pendingCommand = null, preparationKey = null, pauseIssued = false;
@@ -71,13 +71,18 @@
       emit();
       void reportReadiness();
     }
-    function accept(next, started) {
+    function accept(next, started, ownSelection = false) {
       if (!next || next.roomId !== roomId || !Number.isSafeInteger(next.revision) || next.revision < 0 || !Number.isFinite(Date.parse(next.serverTime)) || !Number.isFinite(Date.parse(next.anchorAt))) return;
       if (!Number.isSafeInteger(next.readyEpoch) || !next.readiness) {
         online = false; safePause(); emit(); onError('Readiness setup required: run the updated backend/playback.sql in Supabase SQL Editor.'); return;
       }
       if (state && (next.revision < state.revision || next.revision === state.revision && Date.parse(next.serverTime) < Date.parse(state.serverTime))) return;
       if (state && next.status === 'playing' && next.revision > state.revision) lastCommandAt = -Infinity;
+      if (requireSessionConsent && joined && state?.sessionId && next.sessionId !== state.sessionId && !ownSelection) {
+        release(); joined = false; clientId = null; loadedKey = null; preparationKey = null;
+        reporting = false; reportQueued = false; lastReport = null; nativeQueue = []; nativeSending = false; nativeBlocked = false; pauseIssued = false;
+        player.clear();
+      }
       state = { ...next, offset: Date.parse(next.serverTime) - (started + now()) / 2 };
       online = true; reconcile();
     }
@@ -144,7 +149,8 @@
       try {
         const next = await request(`/api/rooms/${selected}/${route}`, 'POST', body);
         if (version !== generation) return;
-        pendingCommand = null; accept(next, started);
+        pendingCommand = null; accept(next, started, route === 'media');
+        if (route === 'media' && state?.sessionId !== next.sessionId) throw new Error('Your partner selected another movie. Open their invitation or choose yours again.');
       } catch (error) {
         if (version !== generation) return;
         if (error.state) { pendingCommand = null; accept(error.state, started); }
@@ -192,9 +198,20 @@
       selectRoom, refresh, command,
       async watch(media) {
         if (!state || !online) throw new Error('Playback is not ready. Refresh the room or apply the playback migration.');
-        ensureJoined(); emit(); await send('media', { ...media, commandId: commandId(), expectedRevision: state.revision });
+        const version = generation;
+        await send('media', { ...media, commandId: commandId(), expectedRevision: state.revision });
+        if (version === generation) { ensureJoined(); reconcile(); }
       },
       join() { if (!state?.media) throw new Error('Choose a title first.'); ensureJoined(); reconcile(); },
+      async joinSession(expectedSessionId) {
+        const version = generation, selected = roomId, started = now();
+        if (!selected) throw new Error('Choose your shared room first.');
+        const next = await request(`/api/rooms/${selected}/state`);
+        if (version !== generation) throw new Error('Your selected room changed. Open the invitation again.');
+        accept(next, started);
+        if (!online || state?.sessionId !== expectedSessionId) throw new Error('The movie changed. Ask your partner for another invitation.');
+        ensureJoined(); reconcile();
+      },
       leave() { release(); joined = false; clientId = null; reporting = false; reportQueued = false; lastReport = null; nativeQueue = []; nativeSending = false; nativeBlocked = false; loadedKey = null; preparationKey = null; player.clear(); emit(); },
       retryPlayer() { if (joined && state?.media) { loadedKey = null; preparationKey = null; pauseIssued = false; reconcile(); } },
       async retryCommand() {

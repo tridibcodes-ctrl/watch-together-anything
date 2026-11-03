@@ -15,7 +15,7 @@ function navigation({ signedIn = true, mode = 'api' } = {}) {
   const links = views.map(view => ({ ...element('link-' + view.id), getAttribute: () => '#' + view.id }));
   const scrolls = [];
   const context = vm.createContext({
-    $: element, mode, me: signedIn ? { userId: 'me' } : null, authSession: signedIn ? {} : null,
+    $: element, mode, me: signedIn ? { userId: 'me' } : null, authSession: signedIn ? {} : null, joined: true,
     location: { hash: '#room' }, currentView: '', viewScroll: new Map(), pendingNavigationFocus: null,
     window: { scrollY: 0, scrollTo(x, y) { scrolls.push(y); this.scrollY = y; } },
     document: { querySelectorAll: selector => selector === '[data-view]' ? views : links,
@@ -59,6 +59,12 @@ test('demo browsing needs no account and remains clearly marked as a preview', (
   app.context.location.hash = '#browse'; app.context.route();
   assert.equal(app.nodes.browse.hidden, false);
   assert.equal(app.nodes['demo-banner'].hidden, false);
+});
+
+test('the cinema cannot open before joining; membership invitation links lead to Home', () => {
+  const app = navigation(); app.context.joined = false;
+  app.context.route(); assert.equal(app.nodes.home.hidden, false); assert.equal(app.nodes.room.hidden, true);
+  app.context.location.hash = '#invite=abc123'; app.context.route(); assert.equal(app.nodes.home.hidden, false);
 });
 
 test('opening details keeps keyboard focus on the details rather than the browse heading', () => {
