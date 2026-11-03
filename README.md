@@ -575,6 +575,8 @@ Acceptance check: join one account first and queue Play; verify the room remains
 
 ## Shared picker wheel
 
+Genre-filtered Discover results use a wrapping grid with normal page navigation; general discovery shelves remain horizontal. TV details keep the season selector and show all episodes in that season as a vertical list, with episode stills, descriptions, air dates, progress, and a Watch together action on each row. Missing TMDB artwork/overviews have explicit fallbacks, and images load lazily. Season API responses include `stillPath`. Restart Node after this update so the frontend receives that field; no SQL migration is needed for these layout changes. Wheel legend numbers now appear once through the ordered list markers.
+
 The Picker navigation icon opens a room-scoped wheel. Both authenticated members must submit their own choices before either can spin. Genre mode removes a genre when **either** partner excludes it; the legend strikes it out and names the person who excluded it. If every genre is excluded, edit the choices or use Trending This Week. Title mode searches movies and TV series and requires two to ten distinct titles from each person. The combined pool deduplicates shared choices, while keeping movie and TV identities separate. Trending This Week uses a snapshot of TMDB's weekly trending movie/TV results and asks both people to confirm readiness.
 
 **Required setup:** apply the complete [backend/picker.sql](backend/picker.sql) in Supabase SQL Editor after the existing room migrations, restart Node, and hard-refresh both browsers. The migration adds a member-readable picker table and authenticated RPCs; existing rooms, messages, lists, and progress are preserved. It is safe to reapply. No new API key or package is required.

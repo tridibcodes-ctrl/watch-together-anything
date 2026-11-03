@@ -157,7 +157,7 @@ function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch,
         if (!Array.isArray(payload.episodes)) throw new Error("Invalid season details");
         body = { tmdbId: Number(details[2]), mediaType: "tv", seasonNumber: Number(details[3]), name: payload.name || "", episodes: payload.episodes.map(episode => ({
           episodeNumber: episode.episode_number, name: episode.name || "", overview: episode.overview || "",
-          airDate: episode.air_date || null, runtimeMinutes: episode.runtime || null,
+          airDate: episode.air_date || null, runtimeMinutes: episode.runtime || null, stillPath: episode.still_path || null,
         })) };
       } else if (details) {
         body = { title: normalizeDetails(payload, mediaType) };

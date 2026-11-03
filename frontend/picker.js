@@ -103,7 +103,7 @@
       const options=state?.mode==='genre'?state.options:pool;
       $('picker-options').replaceChildren(...options.map((item,i)=>{
         const li=el('li');const excluded=state.mode==='genre'?members.filter(m=>(m.choices||[]).includes(item.key)):[];
-        const label=el(excluded.length?'s':'span',(pool.length>16&&!excluded.length?(pool.indexOf(item)+1)+'. ':'')+item.title);
+        const label=el(excluded.length?'s':'span',item.title);
         li.append(label);if(excluded.length)li.append(el('small','Excluded by '+excluded.map(m=>m.displayName).join(' and ')));return li;
       }));
       if(!state?.result)$('picker-result').hidden=true;else animate();
