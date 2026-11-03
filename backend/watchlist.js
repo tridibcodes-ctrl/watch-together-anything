@@ -6,7 +6,13 @@ async function authenticate(request) {
   for (const key of ['authorization', 'apikey']) if (request.headers[key]) headers.set(key, request.headers[key]);
   return verifyAuth(new Request(new URL(request.url, 'http://localhost:3000'), { headers }), { auth: 'user' });
 }
-const shape = row => ({ id: row.id, status: 'planned', title: { tmdbId: row.tmdb_id, mediaType: row.media_type, title: row.title, year: row.year, overview: row.overview, posterPath: row.poster_path } });
+const shape = (row, progress = []) => {
+  const history = progress.filter(item => item.media_type === row.media_type && item.tmdb_id === row.tmdb_id);
+  const watched = history.filter(item => item.completed_at);
+  return { id: row.id, status: row.media_type === 'movie' && watched.length ? 'watched' : history.length ? 'watching' : 'planned',
+    watchedEpisodes: row.media_type === 'tv' ? watched.length : 0,
+    title: { tmdbId: row.tmdb_id, mediaType: row.media_type, title: row.title, year: row.year, overview: row.overview, posterPath: row.poster_path } };
+};
 function createWatchlistHandler({ authenticateUser = authenticate, fetchImpl = fetch } = {}) {
   const metadata = createTmdbHandler({ authenticateUser, fetchImpl });
   return async function handleWatchlist(request, response, sendJson) {
@@ -32,7 +38,10 @@ function createWatchlistHandler({ authenticateUser = authenticate, fetchImpl = f
       if (request.method === 'GET') {
         const result = await upstream(`${table}?${filter}&removed_at=is.null&order=created_at.desc,id.desc`);
         if (!result.ok) throw new Error('List lookup failed');
-        sendJson(response, 200, { items: (await result.json()).map(shape) }); return true;
+        const history = await upstream(`/watch_room_progress?${filter}&select=media_type,tmdb_id,completed_at`);
+        if (!history.ok) { sendJson(response,503,{error:'Shared progress setup required: apply backend/phase2.sql after schema.sql and playback.sql'}); return true; }
+        const progress = await history.json();
+        sendJson(response, 200, { items: (await result.json()).map(row => shape(row,progress)) }); return true;
       }
       const change = async (query, removedAt) => {
         const result = await upstream(`${table}?${query}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ removed_at: removedAt }) });

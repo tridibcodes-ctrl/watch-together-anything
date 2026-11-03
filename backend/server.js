@@ -5,6 +5,7 @@ const { handleChat } = require("./chat");
 const { handleTmdb } = require("./tmdb");
 const { handleWatchlist } = require("./watchlist");
 const { handlePlayback } = require("./playback");
+const { handleCouple } = require("./couple");
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -19,6 +20,7 @@ const server = http.createServer(async (request, response) => {
   if (await handleChat(request, response, sendJson)) return;
   if (await handleWatchlist(request, response, sendJson)) return;
   if (await handlePlayback(request, response, sendJson)) return;
+  if (await handleCouple(request, response, sendJson)) return;
   if (request.method === "GET" && ["/player.js", "/shared-playback.js"].includes(request.url)) {
     fs.readFile(path.join(__dirname, "..", "frontend", request.url.slice(1)), (error, script) => {
       if (error) { sendJson(response, 500, { error: "Could not load player integration" }); return; }
@@ -243,16 +245,16 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 500, { error: "Supabase configuration is incomplete" });
         return;
       }
-      const roomsResponse = await fetch(`${supabaseUrl}/rest/v1/watch_rooms?select=id,name,invite_code,created_at&order=created_at.desc`, {
-        headers: { apikey: publishableKey, Authorization: request.headers.authorization },
+      const roomsResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/get_watch_rooms`, {
+        method:'POST', body:'{}', headers: { apikey: publishableKey, Authorization: request.headers.authorization, 'Content-Type':'application/json' },
       });
       const rooms = await roomsResponse.json().catch(() => ({}));
       if (!roomsResponse.ok) {
         console.error("Room list failed with HTTP", roomsResponse.status);
-        sendJson(response, 502, { error: "Could not load your rooms" });
+        sendJson(response, 502, { error: "Could not load your rooms. Apply backend/phase2.sql after schema.sql and playback.sql." });
         return;
       }
-      sendJson(response, 200, { items: rooms.map((room) => ({ roomId: room.id, name: room.name, inviteCode: room.invite_code })) });
+      sendJson(response, 200, rooms);
     } catch (error) {
       console.error("Room list failed:", error.message);
       sendJson(response, 500, { error: "Could not load your rooms" });
@@ -319,7 +321,7 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, status, { error: result.message || "Room operation failed" });
         return;
       }
-      sendJson(response, isJoin ? 200 : 201, { ...result, createdBy: authData.userClaims.id });
+      sendJson(response, isJoin ? 200 : 201, { ...result, ...(isJoin ? { joinedBy: authData.userClaims.id } : { createdBy: authData.userClaims.id }) });
     } catch (error) {
       console.error("Room operation failed:", error.message);
       sendJson(response, 500, { error: "Room operation failed" });

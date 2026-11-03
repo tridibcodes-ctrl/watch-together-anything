@@ -11,7 +11,7 @@ const ITEM = '33333333-3333-4333-8333-333333333333';
 process.env.SUPABASE_URL = 'https://db.test';
 process.env.SUPABASE_PUBLISHABLE_KEY = 'test-publishable';
 process.env.TMDB_READ_ACCESS_TOKEN = 'test-token';
-function setup({ signedIn = true, member = true, existing = [], failRead = false } = {}) {
+function setup({ signedIn = true, member = true, existing = [], progress = [], failRead = false } = {}) {
   const rows = existing.map(row => ({ ...row })), calls = [];
   let metadataRequests = 0;
   const reply = data => ({ ok: true, status: 200, json: async () => data });
@@ -24,6 +24,7 @@ function setup({ signedIn = true, member = true, existing = [], failRead = false
         return reply({ id: 155, title: 'Canonical title', release_date: '2008-07-16', overview: 'TMDB summary', poster_path: '/poster.jpg', genres: [] });
       }
       if (url.pathname.endsWith('/watch_room_members')) return reply(member ? [{ user_id: USER }] : []);
+      if (url.pathname.endsWith('/watch_room_progress')) return reply(progress);
       if (failRead) return { ok: false, status: 500 };
       assert.ok(url.pathname.endsWith('/watch_room_list_items'));
       let matches = rows.filter(row => row.room_id === url.searchParams.get('room_id')?.slice(3));
@@ -82,6 +83,11 @@ test('list response has frontend shape and hides removed items', async () => {
 test('database failure returns an actionable error', async () => {
   const app = setup({ failRead: true }); assert.equal((await app.request('GET')).status, 502);
 });
+test('shared list uses movie completion but keeps partially completed television shows Watching', async () => {
+  const movie=row(), show={...row(),id:USER,media_type:'tv',tmdb_id:1396,title:'Show'};
+  const app=setup({existing:[movie,show],progress:[{media_type:'movie',tmdb_id:155,completed_at:'2026-01-01'},{media_type:'tv',tmdb_id:1396,completed_at:'2026-01-01'},{media_type:'tv',tmdb_id:1396,completed_at:null}]});
+  const result=await app.request('GET');assert.equal(result.data.items[0].status,'watched');assert.equal(result.data.items[1].status,'watching');assert.equal(result.data.items[1].watchedEpisodes,1);
+});
 function frontend() {
   const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'index.html'), 'utf8');
   const source = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].at(-1)[1];
@@ -104,6 +110,7 @@ test('demo add/remove keeps mock paths and does not use real room API', async ()
 test('live list listens for insert/update in selected room and ignores old channels', () => {
   const source = frontend(), channels = [], removed = [], pending = new Map(), nodes = {}; let next = 0, listReads = 0;
   const ctx = vm.createContext({ mode: 'api', authSession: {}, me: { roomId: ROOM }, $: id => nodes[id] ??= { replaceChildren() {}, setAttribute() {} }, chat: async () => {}, list: async () => { listReads++; }, setTimeout(fn) { pending.set(++next, fn); return next; }, clearTimeout(id) { pending.delete(id); }, authClient: { removeChannel: async c => removed.push(c), channel() { const c = { listeners: [], on(type, filter, fn) { this.listeners.push({ type, filter, fn }); return this; }, subscribe(fn) { this.status = fn; } }; channels.push(c); return c; } } });
+  ctx.loadProgress = async () => {}; ctx.loadRoomInfo = async () => {};
   vm.runInContext(source.slice(source.indexOf('    let chatChannel ='), source.indexOf('    authClient.auth.onAuthStateChange')), ctx);
   ctx.startLiveChat();
   const listEvents = channels[0].listeners.filter(l => l.filter?.table === 'watch_room_list_items');

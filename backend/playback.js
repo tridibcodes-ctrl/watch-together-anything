@@ -59,7 +59,7 @@ function createPlaybackHandler({ authenticateUser = authenticate, fetchImpl = fe
             if (result.status !== 200) { sendJson(response, result.status, result.body); return true; }
             const title = result.body.title;
             args.p_action = 'media';
-            args.p_media = { mediaType: input.mediaType, tmdbId: input.tmdbId, title: title.title.slice(0, 500) };
+            args.p_media = { mediaType: input.mediaType, tmdbId: input.tmdbId, title: title.title.slice(0, 500), year:title.year, overview:title.overview, posterPath:title.posterPath };
             if (input.mediaType === 'tv') {
               const season = await readMetadata(`/api/titles/tv/${input.tmdbId}/seasons/${input.season}`);
               if (season.status !== 200) { sendJson(response, season.status, season.body); return true; }

@@ -22,6 +22,7 @@ function navigation({ signedIn = true, mode = 'api' } = {}) {
       querySelector: selector => element(selector) },
     isPlaybackExpanded: () => false, setChatOpen(open) { element('chat-panel').hidden = !open; }
   });
+  vm.runInContext(source.slice(source.indexOf('    function inviteFromHash('), source.indexOf('    function inviteCodeFromInput(')), context);
   vm.runInContext(source.slice(source.indexOf('    function route('), source.indexOf('    function renderExperience(')), context);
   return { context, nodes, views, links, scrolls, focused: () => focused };
 }

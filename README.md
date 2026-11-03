@@ -1,8 +1,8 @@
 # Multiplay — watch-together-anything
 
-A watch-together app for couples. Many couples can use the system; each private room has **at most two members**. User IDs are added through room creation and invitation, never hard-coded in the schema. An account can currently belong to multiple rooms.
+A watch-together app for couples. Each unique pair of accounts shares **one room with at most two members**. An account may have separate rooms with different partners. Inviting the same partner again returns the existing room; renaming keeps its list, chat and progress. User IDs are never hard-coded.
 
-This is a working development backend with a plain HTML starter. Authentication, profiles, rooms, invitations, saved/live chat, TMDB discovery, and shared room lists are implemented. Movies and selected TV episodes open in VidRift (primary), VidSpark, VidBolt, CineSrc, or CinemaOS. Native Play/Pause/Seek actions on controllable providers update the shared room. Both-ready buffering holds remain enabled. Paired stream experiments passed for the three new providers; real two-account/network acceptance and watched tracking remain outstanding.
+This is a working development backend with an HTML/JavaScript frontend. Authentication, profiles, room invitations, saved/live chat, TMDB discovery, shared lists, per-title/episode progress, resume, and both-partner watched confirmation are implemented. Movies and episodes open in VidRift (primary), VidSpark, VidBolt, CineSrc, or CinemaOS. Native controls update the shared room and both-ready buffering holds remain enabled. Phase 2 still requires applying its migration and live two-account/network acceptance testing.
 
 Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target design](#complete-target-design--planned-features) · [Local setup](#setup-from-a-fresh-clone) · [Implemented APIs](#implemented-http-api) · [Remaining work](#remaining-work-and-suggested-order)
 
@@ -10,11 +10,27 @@ Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target d
 
 The frontend now has Home, Discover, Our List, Watch Room and Profile views. Normal visits use the same-origin backend and show a simplified sign-in screen. Existing Supabase session restoration is retained. Home shows the room's current title and up to four saved titles; it does not claim to implement per-title Continue Watching history. Room seats use server-reported names/readiness where available, without presenting membership or readiness as proof of online presence.
 
-The watch view brings the video forward once a title is loaded. Chat docks beside the video on laptops, stacks beneath it on narrow screens, and stays available in expanded/fullscreen viewing. Opening chat or changing views does not recreate the player. Native controls, the both-ready buffering hold, retries, and shared commands retain their existing behavior. Source choices and backup shared controls are inside playback options; technical playback information is inside Connection details. Unimplemented completion buttons are hidden.
+The watch view brings the video forward once a title is loaded. Chat docks beside the video on laptops, stacks beneath it on narrow screens, and stays available in expanded/fullscreen viewing. Opening chat or changing views does not recreate the player. Native controls, the both-ready buffering hold, retries, and shared commands retain their existing behavior. Source choices and backup shared controls are inside playback options; technical playback information is inside Connection details. Phase 2 adds the completion panel described below.
 
 Developer settings and the API contract live at `http://127.0.0.1:3000/#developer`. Select Local Demo and Connect there to preview without an account. With Node off, serve `frontend/` with a static server and open `index.html#developer`, or open that local file directly. The browser SDK/fonts/styles still need internet access as before. Explicit demo selection persists across refresh; its sample lists/chat reset on reload. Back to sign-in exits preview and restores same-origin API mode. Development settings do not appear in the normal sign-in flow.
 
-Phase 1 changes require a hard refresh, not a database migration. Shared title/episode history, mutual choices, invitation links, watched confirmation, permanent room departure, signup/recovery and optional couple features remain future phases. Each next phase needs the owner's approval and an opportunity to omit changes. Verify two-account playback on separate devices before treating the redesign as live acceptance-tested.
+Phase 1 itself needs only a hard refresh. The approved Phase 2 below requires a database migration. Mutual interest and Tonight's shortlist were explicitly removed from scope. Permanent room departure, signup/recovery and optional couple features remain future work. Each next phase needs the owner's approval and an opportunity to omit changes.
+
+## Phase 2 — couples, resume and watched tracking
+
+For an existing installation with schema/playback already applied, run the complete `backend/phase2.sql` in Supabase SQL Editor. For a fresh database, run `schema.sql`, `playback.sql`, then `phase2.sql`. Always reapply Phase 2 last if rerunning the older files, because it upgrades room functions/triggers. Restart Node and hard-refresh both clients. This repository change does not apply SQL to your hosted Supabase project automatically.
+
+- **One room per couple:** `watch_couples` enforces a sorted, unique pair of user IDs. A transactionally enforced membership trigger prevents the same pair from forming a second room, including direct RPC requests. Repeated joins are safe even when a room is full. A different partner can form a different couple. A candidate room stays available for a different partner when its invitation resolves to an existing couple's room.
+- **Existing duplicate rooms:** the oldest room is canonical. Lists are combined, messages retain IDs/bodies and move to the canonical room, and old room records/list rows remain archived through `canonical_room_id`. Colliding message retry IDs are regenerated so both messages survive. Existing playback snapshots seed progress. Old invitation codes resolve to the canonical room; room list aliases preserve remembered selections. No room or chat history is deleted.
+- **Rename and invitations:** either member can rename their existing room. Room settings provide a copyable `#invite=CODE` link; the sign-in flow remembers and accepts it after authentication. Codes or complete links can be pasted into Join. Invalid/full invitations remain actionable and can be dismissed. Links use the current app address; a localhost link requires the partner's own local server. Remote use requires a deployed, reachable app address. Expiry/rotation and production deployment are separate work.
+- **Shared progress:** `watch_room_progress` stores each movie or exact TV season/episode. Positions come from the gated authoritative room clock, never arbitrary browser clock reports. Commands/title changes checkpoint immediately; progress polling checkpoints at most once per 15 seconds while otherwise playing. The readiness gate freezes expired sessions before saving. Abrupt disconnect recovery therefore resumes from the room's valid saved/frozen state rather than advancing through an offline interval. Selecting a previous title/episode restores its position paused; current-title Continue joins without creating another session. Playback still waits for both members.
+- **Shared list/history:** selecting a title automatically saves it to the room's list using server-fetched TMDB metadata. Our List has All/Planned/Watching/Watched filters. Movies become Watched only after both confirmations. TV cards show watched-episode counts and stay Watching; episode history identifies finished episodes separately. A TV card can appear in the Watched filter because it contains watched episodes, without declaring the series finished. Continue Watching Together skips completed episodes/movies.
+- **Finished together:** each member confirms separately for the current session and completion epoch. Repeated confirmation by one account counts once; both members must exist. The second confirmation marks the movie/episode complete and pauses playback in one transaction. Pending unfinished confirmations are invalidated when a new session starts for that media. Undo explicitly clears both confirmations and increments the epoch, so delayed old confirmation requests cannot finish it again. Old completed history persists until explicitly undone. Progress/confirmation writes are RPC-only, member-authorized, and serialized under the room lock.
+- **Delivery:** room-filtered progress events refresh the UI, with an eight-second automatic check alongside chat for missed events. Room names/member details refresh separately. Generation checks reject delayed history from another room/account. Local Demo previews progress and has an explicitly labelled simulated-partner confirmation button; the real API always derives the confirmer from authentication and ignores client-supplied partner identities.
+
+Implemented endpoints: `GET /api/rooms` includes canonical IDs and aliases; `GET /api/rooms/{id}/details`; `PATCH /api/rooms/{id}` with `{name}`; `GET /api/rooms/{id}/progress`; and `POST /api/rooms/{id}/completion` with `{sessionId,epoch,confirmed}`. A stale session/epoch returns 409. Progress entries include `{media,positionMs,updatedAt,completedAt,completionEpoch,confirmedBy}`. Undo sends `confirmed:false`; old `/api/sessions/.../complete` routes do not exist. List GET statuses are computed from saved progress; post-mutation clients should reload the list.
+
+Validation covers real PostgreSQL functions/RLS through PGlite, duplicate-room preservation, per-pair uniqueness, different partners, safe full-room rejoining, rename authorization, independent title/episode resume, both-user completion, stale undo/session handling, readiness-expiry clock freezes, authenticated HTTP handler validation, invitation parsing, and stale frontend history. Browser Local Demo covers the completion lifecycle, list filtering and per-episode history. Live Supabase migration/publication and two-device acceptance must still be checked with your accounts.
 
 ## Requirements and implementation status
 
@@ -40,7 +56,9 @@ The intended experience lets both partners control playback, maintain a shared m
 | Shared movie/show list | Implemented; live database validation pending | Room-scoped add/read/remove, duplicate protection, canonical TMDB snapshots, and member-only live updates. |
 | Shared playback | Implemented; live validation pending | Persisted sessions, member commands, safe retries, Realtime, polling, native controls, and drift correction on five controllable providers. |
 | Embedded playback | Implemented; two-account acceptance pending | VidSpark/VidRift/VidBolt passed isolated paired stream tests. All providers use the both-ready gate. |
-| Watched completion | Pending | Needs both-member confirmation, episode progress, and undo. |
+| Shared title/episode progress | Implemented; migration/live acceptance pending | Room-scoped history, authoritative checkpoints and Continue Watching Together. |
+| One room per couple and rename | Implemented; migration/live acceptance pending | Sorted account pair uniqueness, repeat-invite reuse and archive migration. |
+| Watched completion | Implemented; migration/live acceptance pending | Both-member confirmation, episode tracking, stale-request protection and undo. |
 | Public signup/recovery | Pending | Only sign-in UI exists; create test accounts in Supabase Dashboard. Check project signup settings separately. |
 | Production deployment | Pending | Node listens only on 127.0.0.1:3000. |
 
@@ -253,6 +271,11 @@ frontend/player.js         Provider URLs, iframe lifecycle, commands and validat
 frontend/shared-playback.js Room state, subscriptions, retries and drift correction
 backend/playback.js        Authenticated state/media/command API
 backend/playback.sql       Playback tables, transactional RPC, RLS and Realtime
+backend/phase2.sql         Couple uniqueness, archive migration, resume and watched RPCs
+backend/couple.js          Authenticated room details, rename, progress and completion API
+backend/phase2-db.test.js   PostgreSQL couple/progress/completion and upgrade checks
+backend/couple-api.test.js  API authorization and request validation
+backend/phase2-frontend.test.js Invitation parsing and history isolation
 backend/playback-db.test.js PostgreSQL permissions, revision and retry checks
 backend/shared-playback.test.js Simulated two-client synchronization checks
 backend/server.js          HTTP server, root page, profile and room APIs
@@ -288,7 +311,7 @@ Use `.env.example` as the configuration template. For TMDB, copy the **API Read 
 
 A fresh clone does not include the previous checkout's .env or installed dependencies. Keep local configuration in the checkout you actually run.
 
-1. Run the full `backend/schema.sql`, then `backend/playback.sql`, in Supabase SQL Editor. The playback migration was confirmed applied for this development project.
+1. Run `backend/schema.sql`, then `backend/playback.sql`, then `backend/phase2.sql`, in Supabase SQL Editor. Existing installations that already have the first two need the new Phase 2 file. Apply Phase 2 last on later upgrades as well.
 2. Create test email/password accounts under Supabase Authentication → Users. They must be able to sign in under the project's email-confirmation settings.
 3. Start Node from the repository root:
 
@@ -333,12 +356,16 @@ Content-Type is needed for JSON bodies. Errors use an object with an error strin
 | GET | /api/titles/tv/{tmdbId}/seasons/{seasonNumber} | Season 0–9999 (0 is specials) | {tmdbId,mediaType:"tv",seasonNumber,name,episodes:[{episodeNumber,name,overview,airDate,runtimeMinutes}]} |
 | GET | /api/me | — | {userId,profile:{displayName,avatarKey},groupId:null,roomId:null} |
 | PATCH | /api/me/profile | {displayName,avatarKey} | {profile:{displayName,avatarKey}} |
-| GET | /api/rooms | — | {items:[{roomId,name,inviteCode}]} |
+| GET | /api/rooms | — | {items:[{roomId,name,inviteCode,aliases}]} |
 | POST | /api/rooms | {name}; defaults if omitted | 201 {roomId,name,inviteCode,createdBy} |
-| POST | /api/rooms/join | {inviteCode} | {roomId,name,createdBy} — caveat below |
+| POST | /api/rooms/join | {inviteCode} | {roomId,name,reused,joinedBy} |
+| GET | /api/rooms/{roomId}/details | — | {roomId,name,inviteCode,members:[{userId,displayName,avatarKey}]} |
+| PATCH | /api/rooms/{roomId} | {name} | {roomId,name} |
+| GET | /api/rooms/{roomId}/progress | — | {items:[{media,positionMs,updatedAt,completedAt,completionEpoch,confirmedBy}]} |
+| POST | /api/rooms/{roomId}/completion | {sessionId,epoch,confirmed} | Updated progress; 409 for stale session/epoch |
 | GET | /api/rooms/{roomId}/messages | — | {items:[{id,senderId,senderName,body,sentAt}]} |
 | POST | /api/rooms/{roomId}/messages | {clientMessageId,body} | 201 {sent:true} |
-| GET | /api/rooms/{roomId}/list | — | {items:[{id,status:"planned",title:{tmdbId,mediaType,title,year,overview,posterPath}}]} |
+| GET | /api/rooms/{roomId}/list | — | {items:[{id,status,watchedEpisodes,title:{tmdbId,mediaType,title,year,overview,posterPath}}]}; status: planned/watching/watched |
 | POST | /api/rooms/{roomId}/list | {mediaType,tmdbId} | 201 {item} for new title; 200 for existing/restored title |
 | DELETE | /api/rooms/{roomId}/list/{itemId} | — | 204, or 404 if item does not belong to this room |
 
@@ -362,7 +389,7 @@ Details and season routes use the same authentication, bounded cache, timeout, a
 Contract caveats:
 
 - /api/me still returns null groupId/roomId placeholders. Choose a room using /api/rooms.
-- The join response's createdBy currently contains the requesting user's ID, not necessarily the creator. Correct it before relying on that field for ownership.
+- Join returns `joinedBy` for the requester; room creation returns `createdBy`. Neither response grants additional ownership privileges.
 - Legacy group-list APIs, general server presence, and session-completion APIs are not implemented. Join/Leave playback now report/clear a readiness lease; room membership is unchanged.
 
 ## Database model and access
@@ -484,21 +511,21 @@ Acceptance check: join one account first and queue Play; verify the room remains
 ## Remaining work and suggested order
 
 1. **TMDB — steps 1–3 implemented:** catalog/search, posters, pagination, title details, and season/episode selection. Token requests returned HTTP 200 for popular movies and TV search; the user confirmed real browsing works. Check the new details flow in the browser. The room-scoped shared list is implemented; apply its schema and verify two-account behavior next. Complete required TMDB attribution with an approved logo before publishing.
-2. **Room-scoped shared list — implemented:** apply the updated schema, verify adds/removals in two accounts, persistence, and room isolation. The backend uses room IDs; group-based list routes remain only in Local demo. Watching/Watched transitions are not part of this increment.
+2. **Room-scoped shared list — implemented:** apply all three SQL files in order, verify adds/removals, derived Watching/Watched status, two-account persistence and room isolation. Group-based mock paths remain only in Local Demo.
 3. **Playback sessions - implemented:** verify the applied migration and real two-account updates. Buffering coordination is implemented; general presence and command-ledger retention remain.
 4. **Player adapters - synchronization implemented, live validation pending:** validate native controls and buffering recovery with two accounts/devices on VidSpark, VidRift, and VidBolt. CineSrc/CinemaOS remain optional.
-5. **Watched progress:** require both partners' confirmation, track episodes separately from whole series, and support undo.
+5. **Phase 2 — implemented, live acceptance pending:** apply `phase2.sql`; test pair-room reuse, renaming, invitation sign-in, per-title/episode resume, both-partner completion, and undo with your two accounts. See the Phase 2 section for migration and API details. Mutual interest and Tonight's shortlist are excluded.
 6. **Product/operations:** frontend design, signup/confirmation/password reset, invite rotation/expiry, room departure/deletion, rate limits, deployment, configuration, monitoring and service quota checks.
 
 ## Known limitations and validation
 
 - Watchlist tests are committed and run with `npm --prefix backend test`; they cover mocked backend/auth/TMDB behavior, stale frontend responses, demo isolation, and Realtime subscription cleanup. Live Supabase RLS/publication verification is still required. There is no CI workflow or versioned migration history. Prior checks used syntax validation, mocked auth/chat/Realtime checks, and manual two-account flows. The developer reported profiles, rooms, saved chat, and live chat working; recheck against your own Supabase project.
-- Rejoining an already joined full room can hit the BEFORE INSERT capacity trigger before ON CONFLICT DO NOTHING. Handle existing membership explicitly before inserting.
+- Phase 2 fixes full-room rejoining and enforces one canonical room per pair. It must be applied after the older SQL files, which otherwise restore the older room functions.
 - Profiles default to avatar_key='default'; the frontend maps that legacy value to Moon for editing. The form and API both limit display names to 40 characters.
 - Creating or joining a room refreshes the selector and remembers that room. Reconnecting chooses a remembered room or the first returned room.
 - Invite codes have no expiry/rotation; there are no application rate limits or room-count limits. Members can read their room's invite code.
 - Supabase configuration is duplicated in .env and browser constants. Authentication and JSON parsing are duplicated across routes and should be extracted as the backend grows.
-- Some controls in the starter call future APIs. A visible control or successful demo action is not proof of a real backend feature.
+- Local Demo is not proof of live Supabase behavior. Its simulated second-person confirmation exists only in demo mode; the real completion endpoint authenticates each confirmer separately. Signup/recovery, invite expiry/rotation, permanent room departure and production hosting remain unimplemented.
 
 ## Working agreement
 

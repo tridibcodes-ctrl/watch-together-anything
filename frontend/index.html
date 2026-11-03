@@ -178,6 +178,10 @@
     .skip-link { position: fixed; top: -100px; left: 110px; z-index: 200; padding: 12px; background: #211e25; }.skip-link:focus { top: 8px; }
     .demo-banner { max-width: 1360px; margin: 16px auto; padding: 8px 14px; border: 1px dashed #a26b87; border-radius: 12px; color: #e5c4d6; font-size: 13px; }
     .demo-banner button { margin-left: 12px; background: transparent; }
+    #completion-panel, .episode-row { padding: 18px; margin: 18px 0; border: 1px solid #654052; border-radius: 14px; background: #211e25; }
+    .episode-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }.episode-row p { flex: 1; margin: 0; min-width: 180px; }
+    #list-filters { display: flex; flex-wrap: wrap; gap: 8px; }#list-filters button[aria-pressed="true"] { background: #e6a1bc; color: #24151e; }
+    #invite-link { width: min(600px, 100%); font-size: 13px; }#invitation-banner { border-style: solid; }
     .watching-view #room > h2 { font-size: 24px; }
     .watching-view #player-title { margin: 12px 0 0; }.watching-view #player-status { margin: 8px 0 12px; }
     @media (min-width: 1500px) { .chat-panel { flex-basis: 350px; width: 350px; } }
@@ -226,6 +230,8 @@
 
   <div id="status" class="app-notice" role="status" aria-live="polite" hidden></div>
   <div id="demo-banner" class="demo-banner" hidden>Local Demo · sample data, this browser only. <button id="exit-demo" type="button">Back to sign-in</button></div>
+  <div id="phase2-status" class="app-notice" role="status" hidden></div>
+  <div id="invitation-banner" class="demo-banner" hidden><span id="invitation-status">Your partner’s invitation is saved. Sign in to join.</span> <button id="accept-invitation" type="button">Join invited room</button><button id="dismiss-invitation" type="button">Dismiss invitation</button></div>
   <section id="auth" aria-labelledby="auth-heading">
     <p class="eyebrow">A little time for the two of you</p>
     <h2 id="auth-heading">Your next movie night starts here.</h2>
@@ -257,6 +263,9 @@
       <div class="section-heading"><h3>Saved for another night</h3><a href="#list">See our list</a></div>
       <div id="home-list" class="poster-grid"></div>
       <p id="home-list-empty">Save a few favourites from Discover. They’ll be here when you’re ready.</p>
+      <div class="section-heading"><h3>Continue watching together</h3></div>
+      <p id="progress-empty">Your shared movies and episodes will appear here once you start watching.</p>
+      <div id="continue-list" class="poster-grid"></div>
     </section>
     <section id="browse" data-view aria-labelledby="browse-heading" hidden>
       <p class="eyebrow">Find your next favourite</p>
@@ -299,9 +308,11 @@
       <p class="eyebrow">Good things to look forward to</p>
       <h2 id="list-heading" tabindex="-1">Our list</h2>
       <p>A shared collection for your next night together.</p>
+      <div id="list-filters" role="group" aria-label="Filter our list"><button type="button" data-filter="all" aria-pressed="true">All</button><button type="button" data-filter="planned" aria-pressed="false">Planned</button><button type="button" data-filter="watching" aria-pressed="false">Watching</button><button type="button" data-filter="watched" aria-pressed="false">Watched</button></div>
       <button id="refresh-list" type="button">Refresh list</button>
       <p id="list-status" role="status" aria-live="polite">Connect and select a room to load your shared list.</p>
       <div id="list-items"></div>
+      <h3>Episode history</h3><p>A finished episode stays here. Finishing one episode does not mark the whole show as watched.</p><div id="episode-history"></div>
     </section>
 
     <section id="room" data-view aria-labelledby="room-heading" hidden>
@@ -319,10 +330,13 @@
         <button>Create room</button>
       </form>
       <form id="join-room-form">
-        <label>Invite code <input id="invite-code" maxlength="32" required></label>
+        <label>Invite code or link <input id="invite-code" maxlength="512" required></label>
         <button>Join room by code</button>
       </form>
       <p id="room-invite" role="status" aria-live="polite"></p>
+      <label>Invitation link <input id="invite-link" type="url" readonly></label><button id="copy-invite" type="button">Copy invitation link</button>
+      <p id="invite-help">Send the link privately. If you already share a room, the invitation returns you both to that room.</p>
+      <form id="rename-room-form"><label>Room name <input id="rename-room-name" maxlength="60" required></label><button>Save room name</button></form>
       </details>
       <div class="room-actions"><button id="join" type="button">Join movie</button>
       <button id="leave" type="button">Leave movie</button><a href="#browse">Choose a title</a></div>
@@ -377,7 +391,7 @@
       <p>Use the video’s play, pause and seek controls to control both screens. Volume and subtitles are yours to choose. If prompted, press Play once to let your browser load the video. Playback waits until both people are ready.</p>
       <p>Having trouble? Try the reload icon, or choose another source below. Changing source affects both screens and keeps the room’s position. Pick episodes in the app so you stay on the same episode.</p>
       </details>
-      <div hidden><button id="complete" type="button">We finished together</button><button id="undo" type="button">Undo completion</button></div>
+      <section id="completion-panel" hidden><h3>Finished this together?</h3><p id="completion-status" role="status" aria-live="polite"></p><button id="complete" type="button">I’ve finished watching</button><button id="undo" type="button">Undo completion / clear confirmations</button><button id="demo-partner-confirm" type="button" hidden>Demo: simulate partner confirmation</button></section>
 
     </section>
 
@@ -430,10 +444,13 @@ POST /api/rooms/{id}/commands
 
 GET /api/rooms/{id}/messages → {items:[{id,senderName,body,createdAt}]}
 POST /api/rooms/{id}/messages ← {clientMessageId,body} → {message}
-// Planned (not implemented):
-POST /api/sessions/{id}/complete ← {commandId,confirmed:true}
-  → {completed,message}
-POST /api/sessions/{id}/undo-completion ← {commandId} → {completed:false}
+GET /api/rooms → {items:[{roomId,name,inviteCode,aliases}]}
+GET /api/rooms/{id}/details → {roomId,name,inviteCode,members:[{userId,displayName,avatarKey}]}
+PATCH /api/rooms/{id} ← {name} → {roomId,name}
+GET /api/rooms/{id}/progress
+  → {items:[{media,positionMs,updatedAt,completedAt,completionEpoch,confirmedBy:[{userId,displayName}]}]}
+POST /api/rooms/{id}/completion ← {sessionId,epoch,confirmed:true|false}
+  → updated progress; stale session/epoch → HTTP 409
 
 Errors: {error:string}; playback conflict: {error:string,state} with an appropriate HTTP status.
 Positions are milliseconds; timestamps are ISO UTC; TMDB IDs are numbers.
@@ -442,7 +459,7 @@ Serialize playback commands and deduplicate UUIDs on the backend.
 Completion must verify both users' confirmations; one request is not proof.
 TV completion applies to an episode, not automatically the entire series.</pre>
       <p>Room playback and chat use authenticated live updates with automatic checks for missed updates.
-        Completion tracking remains planned.</p>
+        Completion and progress are room-scoped. Apply schema.sql, playback.sql, then phase2.sql.</p>
     </details>
   </main>
 
@@ -461,11 +478,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       } catch { return null; }
     }
     const savedConnection = preference('multiplay.connection');
-    const developerEntry = location.hash === '#developer' || location.protocol === 'file:' || preference('multiplay.preview') === true;
+    const incomingInvite = inviteFromHash(location.hash);
+    let pendingInvite = incomingInvite || preference('multiplay.pendingInvite'), inviteBusy = false;
+    if (incomingInvite) { preference('multiplay.pendingInvite', incomingInvite); preference('multiplay.preview', false); }
+    const developerEntry = !incomingInvite && (location.hash === '#developer' || location.protocol === 'file:' || preference('multiplay.preview') === true);
     let mode = developerEntry ? (savedConnection?.mode || 'demo') : 'api', base = developerEntry ? (savedConnection?.base || '') : '', me, room, joined = false;
     let uiReady = false, currentView = '', savedList = [], detailsOrigin = null, detailsRequested = null, pendingNavigationFocus = null;
     if (developerEntry && mode === 'demo') preference('multiplay.preview', true);
     const viewScroll = new Map();
+    let progressItems = [], progressVersion = 0, progressLoaded = false, roomInfo = null, roomInfoAt = 0, roomInfoVersion = 0, listFilter = 'all';
     let localPlayback = null;
     let sharedView = { state: null, joined: false, busy: false, canControl: false, online: false };
     const embeddedPlayer = MultiplayPlayer.createPlayer({ container: $('player'), onState(state) {
@@ -477,6 +498,9 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (!state.media || previousProvider !== state.provider) $('provider').value = state.provider;
       controls();
       if (mode === 'api') sharedPlayback.playerEvent(state);
+      else if (uiReady && state.ready && demo.room.media && mediaKey(state.media) === mediaKey(demo.room.media)) {
+        demo.room.positionMs = Math.round(state.seconds*1000); demo.room.status = state.playing ? 'playing' : 'paused'; demo.room.anchorAt = new Date().toISOString();
+      }
     } });
     const sharedPlayback = MultiplaySync.createRoomSync({ request, player: embeddedPlayer,
       subscribe(roomId, refresh) {
@@ -508,7 +532,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       { tmdbId: 1396, mediaType: 'tv', title: 'Breaking Bad', year: '2008', overview: 'A chemistry teacher makes a life-changing choice.' }
     ];
     const demo = {
-      profile: { userId: 'demo-user', displayName: 'Your name', avatarKey: 'moon' }, list: [], messages: [],
+      profile: { userId: 'demo-user', displayName: 'Your name', avatarKey: 'moon' }, list: [], messages: [], progress: [],
       room: { roomId: 'demo-room', sessionId: null, media: null, provider: 'vidrift', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: 0 }
     };
     const uuid = () => crypto.randomUUID();
@@ -557,6 +581,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       renderChatNotifications();
     }
     function stopLiveChat() {
+      if (typeof resetCoupleView === 'function') resetCoupleView();
       resetChatNotifications();
       if (typeof sharedPlayback !== 'undefined') sharedPlayback.selectRoom(null);
       listVersion++; clearTimeout(listTimer); listTimer = null;
@@ -577,6 +602,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         $('chat-status').textContent = mode === 'demo' ? 'Live chat is off in Local demo.' : 'Select a room to start live chat.';
         return;
       }
+      void loadProgress(); void loadRoomInfo();
       const generation = chatGeneration, roomId = me.roomId;
       const current = () => generation === chatGeneration && mode === 'api' && me?.roomId === roomId;
       const reload = () => {
@@ -593,6 +619,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         clearTimeout(listTimer);
         listTimer = setTimeout(() => { if (current()) list().catch(() => {}); }, 80);
       };
+      const reloadProgress = () => { if (current()) void loadProgress(); };
       $('chat-status').textContent = 'Connecting live chat…';
       const channel = authClient.channel('room-chat:' + roomId + ':' + generation)
         .on('system', {}, payload => {
@@ -610,7 +637,9 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           reload();
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'watch_room_list_items', filter: 'room_id=eq.' + roomId }, reloadList)
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'watch_room_list_items', filter: 'room_id=eq.' + roomId }, reloadList);
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'watch_room_list_items', filter: 'room_id=eq.' + roomId }, reloadList)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'watch_room_progress', filter: 'room_id=eq.' + roomId }, reloadProgress)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'watch_room_progress', filter: 'room_id=eq.' + roomId }, reloadProgress);
       chatChannel = channel;
       channel.subscribe(status => {
         if (!current()) return;
@@ -626,7 +655,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           if (!current()) return;
           try { await chat(); }
           catch { if (current()) $('chat-status').textContent = 'Could not load messages. Retrying automatically…'; }
-          finally { if (current()) pollChat(); }
+          finally { if (current()) { void loadProgress(); if (Date.now()-roomInfoAt>30000) void loadRoomInfo(); pollChat(); } }
         }, 8000);
       }
       pollChat(); reload(); reloadList();
@@ -684,7 +713,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       for (const id of ['load-player', 'switch-provider', 'stop-player']) $(id).disabled = !localPlayback;
       $('provider').disabled = !localPlayback;
       for (const id of ['play', 'pause', 'seek']) $(id).disabled = mode !== 'api' || !sharedView.canControl;
-      for (const id of ['complete', 'undo']) $(id).disabled = mode === 'api' || !active;
+      for (const id of ['complete', 'undo']) $(id).disabled = true;
       $('join').disabled = mode === 'api' ? !sharedView.online || !room?.media || joined : !me || joined;
       $('leave').disabled = !joined;
       $('refresh-room').disabled = mode === 'api' ? !me?.roomId : !me;
@@ -696,7 +725,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (uiReady) renderExperience();
     }
     function route(focus = false) {
-      const requested = location.hash.slice(1) || 'home';
+      const requested = inviteFromHash(location.hash) ? 'room' : location.hash.slice(1) || 'home';
       const next = ['home', 'browse', 'list', 'room', 'profile', 'developer'].includes(requested) ? requested : 'home';
       if (currentView !== next) {
         if (currentView) viewScroll.set(currentView, window.scrollY);
@@ -725,7 +754,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('home-greeting').textContent = mode === 'demo' ? 'Local Demo · sample data only. Nothing is saved or shared.' : `Welcome back, ${name}. Make tonight a little time together.`;
       $('home-room-name').textContent = selected?.name || (mode === 'demo' ? 'Demo room' : 'A place for the two of you');
       $('lobby-name').textContent = selected?.name || (mode === 'demo' ? 'Demo room' : 'Create your private room');
-      const members = mode === 'api' ? room?.readiness?.members || [] : [{ userId: me?.userId || me?.profile?.userId, displayName: name, ready: joined }];
+      const members = mode === 'api' ? room?.readiness?.members || roomInfo?.members?.map(member => ({ ...member, ready: false })) || [] : [{ userId: me?.userId || me?.profile?.userId, displayName: name, ready: joined }];
       const partner = members.find(member => member.userId !== (me?.userId || me?.profile?.userId));
       $('home-partner').textContent = !hasRoom ? 'Create a room or join your partner’s invitation.' : mode === 'demo' ? 'This is a single-browser preview. A second participant is not connected.' : partner ? `${partner.displayName || 'Your partner'}: ${partner.ready ? 'video ready' : 'not ready to watch yet'}.` : 'Open your room to share the invite code. Readiness appears when a movie is selected.';
       const media = mode === 'demo' ? localPlayback?.media || room?.media : room?.media;
@@ -763,6 +792,118 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('details-watch').disabled = !selectedTitle || (selectedTitle.mediaType === 'tv' && $('episode').disabled);
       $('details-save').disabled = !selectedTitle;
       $('details-watch').textContent = mode === 'demo' ? 'Preview video' : 'Watch together';
+      renderCoupleExperience();
+    }
+    function inviteFromHash(hash) {
+      const match = /^#invite=([a-zA-Z0-9-]{1,32})$/.exec(hash || '');
+      return match ? match[1].toLowerCase() : null;
+    }
+    function inviteCodeFromInput(value) {
+      const trimmed = value.trim();
+      if (/^[a-zA-Z0-9-]{1,32}$/.test(trimmed)) return trimmed.toLowerCase();
+      try { return inviteFromHash(new URL(trimmed).hash); } catch { return null; }
+    }
+    function mediaKey(media) { return media ? [media.mediaType, media.tmdbId, media.season || 0, media.episode || 0].join(':') : ''; }
+    function progressFor(media) { return progressItems.find(item => mediaKey(item.media) === mediaKey(media)); }
+    function displayTime(ms) { const seconds = Math.floor(ms/1000); return Math.floor(seconds/60) + ':' + String(seconds%60).padStart(2,'0'); }
+    function resetCoupleView() {
+      progressVersion++; roomInfoVersion++; progressItems = []; progressLoaded = false; roomInfo = null; roomInfoAt = 0;
+      for (const id of ['continue-list','episode-history']) $(id).replaceChildren();
+      $('phase2-status').hidden = true;
+    }
+    async function loadProgress() {
+      const id = me?.roomId, user = me?.userId, version = ++progressVersion;
+      if (!id) return;
+      try {
+        const data = await request(`/api/rooms/${id}/progress`);
+        if (version !== progressVersion || id !== me?.roomId || user !== me?.userId) return;
+        progressItems = data.items; progressLoaded = true;
+        $('phase2-status').hidden = true;
+        renderSavedLists(); renderProgressHistory(); controls();
+      } catch (error) {
+        if (version !== progressVersion || id !== me?.roomId || user !== me?.userId) return;
+        progressLoaded = false;
+        $('phase2-status').textContent = 'Shared progress is unavailable. ' + friendlyError(error.message);
+        $('phase2-status').hidden = false; controls();
+      }
+    }
+    async function loadRoomInfo() {
+      const id = me?.roomId, user = me?.userId, version = ++roomInfoVersion;
+      if (!id || mode !== 'api') return;
+      try {
+        const data = await request(`/api/rooms/${id}/details`);
+        if (version !== roomInfoVersion || id !== me?.roomId || user !== me?.userId) return;
+        roomInfo = data; roomInfoAt = Date.now();
+        const item = me.rooms?.find(item => item.roomId === id);
+        if (item) { item.name = data.name; item.inviteCode = data.inviteCode; }
+        for (const option of $('room-select').options) if (option.value === id) option.textContent = data.name;
+        controls();
+      } catch { if (id === me?.roomId) $('invite-help').textContent = 'Room details could not be loaded. Reopen your room or try refreshing.'; }
+    }
+    function listProgress(item) {
+      const history = progressItems.filter(entry => entry.media.mediaType === item.title.mediaType && entry.media.tmdbId === item.title.tmdbId);
+      const watched = history.filter(entry => entry.completedAt);
+      return { ...item, status: item.title.mediaType === 'movie' && watched.length ? 'watched' : history.length ? 'watching' : 'planned', watchedEpisodes: item.title.mediaType === 'tv' ? watched.length : 0 };
+    }
+    function renderSavedLists() {
+      const items = savedList.map(listProgress);
+      const shown = items.filter(item => listFilter === 'all' || (listFilter === 'watched' ? item.status === 'watched' || item.watchedEpisodes > 0 : item.status === listFilter));
+      $('list-items').replaceChildren(...shown.map(item => card(item.title,item)));
+      $('home-list').replaceChildren(...items.filter(item => item.status !== 'watched').slice(0,4).map(item => card(item.title,item)));
+      $('home-list-empty').hidden = items.some(item => item.status !== 'watched');
+      if (items.length && !shown.length) $('list-status').textContent = 'No titles in this section yet.';
+      else if (items.length) $('list-status').textContent = shown.length + ' titles · shared by both of you.';
+      for (const control of document.querySelectorAll('[data-filter]')) control.setAttribute('aria-pressed', String(control.dataset.filter === listFilter));
+    }
+    function renderProgressHistory() {
+      const unfinished = progressItems.filter(item => !item.completedAt);
+      $('progress-empty').hidden = unfinished.length > 0;
+      $('continue-list').replaceChildren(...unfinished.slice(0,6).map(item => {
+        const title = savedList.find(saved => saved.title.mediaType === item.media.mediaType && saved.title.tmdbId === item.media.tmdbId)?.title || item.media;
+        const article = node('article'); article.className = 'home-room';
+        article.append(node('h3',item.media.title),node('p',(item.media.mediaType === 'tv' ? `S${item.media.season} E${item.media.episode} · ` : '')+'Saved at '+displayTime(item.positionMs)),button('Continue together',()=>watchTitle(title,item.media)));
+        return article;
+      }));
+      $('episode-history').replaceChildren(...progressItems.filter(item => item.media.mediaType === 'tv').map(item => {
+        const row = node('div'); row.className = 'episode-row';
+        row.append(node('p',`${item.media.title} · S${item.media.season} E${item.media.episode} · ${item.completedAt ? 'Watched together' : 'Watching · '+displayTime(item.positionMs)}`),button(item.completedAt ? 'Open episode' : 'Continue episode',()=>watchTitle(item.media,item.media)));
+        return row;
+      }));
+    }
+    function renderCoupleExperience() {
+      $('invitation-banner').hidden = !pendingInvite;
+      $('accept-invitation').disabled = mode !== 'api' || !me || inviteBusy;
+      $('invitation-status').textContent = me ? 'Your partner’s invitation is ready. Join to open your shared room.' : 'Your partner’s invitation is saved. Sign in to join.';
+      const selected = me?.rooms?.find(item => item.roomId === me.roomId);
+      const link = selected?.inviteCode ? location.href.split('#')[0]+'#invite='+selected.inviteCode : '';
+      $('invite-link').value = mode === 'api' ? link : '';
+      $('copy-invite').disabled = !link || mode !== 'api';
+      $('rename-room-form').querySelector('button').disabled = !selected || mode !== 'api';
+      if (document.activeElement !== $('rename-room-name')) $('rename-room-name').value = selected?.name || '';
+      const resume = progressItems.find(item => !item.completedAt);
+      if (resume) {
+        $('home-title').textContent = resume.media.title + (resume.media.mediaType === 'tv' ? ` · S${resume.media.season} E${resume.media.episode}` : '');
+        $('home-session-status').textContent = 'Your shared place is saved at '+displayTime(resume.positionMs)+'. Playback waits for both of you.';
+        $('home-watch').textContent = 'Continue watching together';
+      }
+      const item = progressFor(room?.media);
+      $('completion-panel').hidden = !room?.media;
+      $('demo-partner-confirm').hidden = mode !== 'demo' || !room?.media;
+      const confirmed = item?.confirmedBy || [], actor = me?.userId || me?.profile?.userId;
+      $('complete').disabled = !progressLoaded || !item || !!item.completedAt || confirmed.some(member=>member.userId===actor);
+      $('undo').disabled = !progressLoaded || !item || !item.completedAt && !confirmed.length;
+      $('completion-status').textContent = !progressLoaded ? 'Loading your shared progress…' : !item ? 'Start this title to save progress.' : item.completedAt ? 'You both finished '+(item.media.mediaType==='tv' ? 'this episode' : 'this movie')+' together.' : confirmed.length ? confirmed.map(member=>member.displayName).join(' and ')+' confirmed. Waiting for the other partner to confirm.' : 'Each of you confirms separately. A TV confirmation applies only to this episode.';
+    }
+    async function acceptInvitation(code = pendingInvite) {
+      if (!code || inviteBusy) return;
+      if (mode !== 'api' || !me) throw new Error('Sign in to accept this invitation.');
+      inviteBusy = true; controls();
+      try {
+        const result = await request('/api/rooms/join','POST',{inviteCode:code});
+        pendingInvite = null; preference('multiplay.pendingInvite',null);
+        await loadRooms(result.roomId); location.hash = 'room';
+        say(result.reused ? 'Welcome back to your existing shared room.' : 'You joined your partner’s room.');
+      } finally { inviteBusy = false; controls(); }
     }
     // The only HTTP function. Change endpoint paths here or in the callers below.
     async function request(path, method = 'GET', body) {
@@ -854,6 +995,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         $('home-list').replaceChildren(...savedList.slice(0, 4).map(i => card(i.title, i)));
         $('home-list-empty').hidden = savedList.length > 0;
         $('list-status').textContent = data.items.length ? data.items.length + ' title(s) in your shared list.' : 'Your list is empty. Add a movie or show from Browse.';
+        if (typeof renderSavedLists === 'function') { renderSavedLists(); renderProgressHistory(); }
       } catch (error) {
         if (current()) $('list-status').textContent = 'Could not load list: ' + error.message;
         throw error;
@@ -934,7 +1076,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         const data = await request(`/api/titles/tv/${title.tmdbId}/seasons/${season}`);
         if (version !== seasonVersion || selectedTitle !== title) return;
         selectedEpisodes = data.episodes;
-        for (const episode of selectedEpisodes) $('episode').add(new Option(`${episode.episodeNumber}. ${episode.name}`, episode.episodeNumber));
+        for (const episode of selectedEpisodes) $('episode').add(new Option(`${episode.episodeNumber}. ${episode.name}${progressFor({...title,season,episode:episode.episodeNumber})?.completedAt ? ' · watched together' : ''}`, episode.episodeNumber));
         $('episode').disabled = !selectedEpisodes.length;
         $('episode-status').textContent = selectedEpisodes.length ? `${selectedEpisodes.length} episodes. Choose an episode, then use Watch on this title.` : 'No episodes available for this season.';
         showEpisode();
@@ -951,9 +1093,12 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (!episode) return;
       $('episode-content').append(node('h4', episode.name), node('p', episode.overview || 'No episode summary available.'),
         node('p', `Air date: ${episode.airDate || 'Unknown'}${episode.runtimeMinutes ? ' · ' + episode.runtimeMinutes + ' minutes' : ''}`));
+      const progress = progressFor({...selectedTitle,season:Number($('season').value),episode:episode.episodeNumber});
+      if (progress) $('episode-content').append(node('p',progress.completedAt ? 'You watched this episode together.' : 'Continue together from '+displayTime(progress.positionMs)));
     }
     function card(title, item) {
       const article = document.createElement('article'); article.className = 'movie-card'; article.append(node('h3', title.title), node('p', `${title.year || 'Year unknown'} · ${title.mediaType === 'tv' ? 'TV show' : 'Movie'}${item ? ' · ' + item.status : ''}`));
+      if (item?.watchedEpisodes) article.append(node('p',item.watchedEpisodes+' episodes watched together'));
       const poster = node('p', title.title); poster.className = 'poster';
       if (typeof title.posterPath === 'string' && /^\/[a-zA-Z0-9._-]+$/.test(title.posterPath)) {
         const image = document.createElement('img');
@@ -972,10 +1117,12 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       for (const control of actions.querySelectorAll('button')) control.setAttribute('aria-label', control.textContent + ': ' + title.title);
       return article;
     }
-    async function watchTitle(title) {
+    async function watchTitle(title, resumeMedia = null) {
         if (!me) throw new Error('Connect and sign in first.');
         const media = { mediaType: title.mediaType, tmdbId: title.tmdbId, title: title.title };
         if (title.mediaType === 'tv') {
+          if (resumeMedia) { media.season = resumeMedia.season; media.episode = resumeMedia.episode; }
+          else {
           if (selectedTitle?.tmdbId !== title.tmdbId || selectedTitle?.mediaType !== 'tv') {
             await showDetails(title);
             say('Choose an episode in Details, then click Watch on the same show.');
@@ -983,10 +1130,17 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           }
           media.season = Number($('season').value); media.episode = Number($('episode').value);
           if ($('episode').disabled || !selectedEpisodes.some(episode => episode.episodeNumber === media.episode)) throw new Error('Choose an available episode in Details first.');
+          }
         }
-        if (mode === 'api') await sharedPlayback.watch(media);
-        else { embeddedPlayer.load(media); joined = true; await chat(); }
+        if (mode === 'api') {
+          if (mediaKey(media) === mediaKey(room?.media)) sharedPlayback.join();
+          else await sharedPlayback.watch(media);
+        } else {
+          apply(await request(`/api/rooms/${me.roomId}/media`,'POST',media));
+          embeddedPlayer.load(media,room.provider,room.positionMs/1000); joined = true; await chat();
+        }
         location.hash = 'room';
+        await loadProgress(); await list().catch(() => {});
         say(mode === 'api' ? 'Movie selected. Your partner can join from your Watch Room.' : 'Demo video opened in this browser.');
         controls();
     }
@@ -1042,7 +1196,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       for (const item of roomData.items) select.add(new Option(item.name, item.roomId));
       me.rooms = roomData.items;
       const rememberedRoom = preferredRoomId || preference('multiplay.room.' + me.userId);
-      me.roomId = roomData.items.find(item => item.roomId === rememberedRoom)?.roomId || roomData.items[0]?.roomId || null;
+      me.roomId = roomData.items.find(item => item.roomId === rememberedRoom || item.aliases?.includes(rememberedRoom))?.roomId || roomData.items[0]?.roomId || null;
       select.value = me.roomId || '';
       preference('multiplay.room.' + me.userId, me.roomId);
       const selected = roomData.items.find(item => item.roomId === me.roomId);
@@ -1057,14 +1211,17 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       me = await request('/api/me'); $('display-name').value = me.profile.displayName; $('avatar').value = me.profile.avatarKey === 'default' ? 'moon' : me.profile.avatarKey;
       if (mode === 'api') {
         await loadRooms();
+        let invitationFailed = false;
+        if (pendingInvite) { try { await acceptInvitation(); } catch (error) { invitationFailed = true; say('Could not join the invitation: '+friendlyError(error.message)); } }
         await catalog();
-        say('You’re connected. Your movie night is ready.');
+        if (!invitationFailed && location.hash.indexOf('#invite=') !== 0) say('You’re connected. Your movie night is ready.');
         return;
       }
       $('chat-status').textContent = 'Live chat is off in Local demo.';
       me.rooms = [{ roomId: 'demo-room', name: 'Demo room' }];
       $('room-select').replaceChildren(new Option('Demo room', 'demo-room')); $('room-select').disabled = true;
       await catalog(); await list(); apply(await request(`/api/rooms/${me.roomId}/state`));
+      await loadProgress();
       say(mode === 'demo' ? 'Local demo ready. Changes reset on reload; no backend is running.' : 'Backend connected.');
     }
     function bind(id, fn) { $(id).onclick = e => act(fn, e.currentTarget); }
@@ -1102,13 +1259,30 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     form('join-room-form', async () => {
       if (!me) throw new Error('Connect and sign in first.');
       if (mode !== 'api') throw new Error('Switch to Backend API mode to join a room.');
-      const inviteCode = $('invite-code').value.trim();
-      const result = await request('/api/rooms/join', 'POST', { inviteCode });
-      await loadRooms(result.roomId);
-      $('room-invite').textContent = `Joined ${result.name}.`;
-      $('room-status').textContent = `${result.name} · not watching yet`;
-      say('Joined your partner’s room.');
+      const inviteCode = inviteCodeFromInput($('invite-code').value);
+      if (!inviteCode) throw new Error('Enter an invitation code or a valid invitation link.');
+      await acceptInvitation(inviteCode);
     });
+    form('rename-room-form', async () => {
+      if (mode !== 'api' || !me?.roomId) throw new Error('Choose your live room first.');
+      const id = me.roomId;
+      await request('/api/rooms/'+id,'PATCH',{name:$('rename-room-name').value.trim()});
+      if (me?.roomId === id) { await loadRoomInfo(); say('Room name saved. Your list, chat and progress stay in the same room.'); }
+    });
+    bind('copy-invite', async () => {
+      const link = $('invite-link').value;
+      if (!link) return;
+      try { await navigator.clipboard.writeText(link); say('Invitation link copied. Send it privately to your partner.'); }
+      catch { $('invite-link').focus(); $('invite-link').select(); say('Copy the selected invitation link and send it privately to your partner.'); }
+    });
+    bind('accept-invitation', () => acceptInvitation());
+    bind('dismiss-invitation', () => { pendingInvite = null; preference('multiplay.pendingInvite',null); if (inviteFromHash(location.hash)) location.hash = 'home'; controls(); });
+    $('home-watch').onclick = event => {
+      const resume = progressItems.find(item => !item.completedAt);
+      if (!resume) return;
+      event.preventDefault(); act(() => watchTitle(resume.media,resume.media));
+    };
+    for (const control of document.querySelectorAll('[data-filter]')) control.onclick = () => { listFilter = control.dataset.filter; renderSavedLists(); };
     form('search-form', () => catalog()); bind('refresh-list', list);
     bind('catalog-previous', () => catalog(catalogState.page - 1, catalogState));
     bind('catalog-next', () => catalog(catalogState.page + 1, catalogState));
@@ -1188,12 +1362,38 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     });
     form('chat-form', async () => { const body = $('message').value.trim(); if (!body || (mode === 'api' ? !me?.roomId : !joined)) throw new Error('Select a room and enter a message.'); await request(`/api/rooms/${me.roomId}/messages`, 'POST', { clientMessageId: uuid(), body }); $('message').value = ''; await chat(); });
     form('profile-form', async () => { if (!me) throw new Error('Connect first.'); const displayName = $('display-name').value.trim(); if (!displayName) throw new Error('Enter your name.'); const result = await request('/api/me/profile', 'PATCH', { displayName, avatarKey: $('avatar').value }); me.profile = result.profile; say('Profile saved.'); });
-    bind('complete', async () => { const result = await request(`/api/sessions/${room.sessionId}/complete`, 'POST', { commandId: uuid(), confirmed: true }); say(result.message || (result.completed ? 'Moved to Watched.' : 'Waiting for your partner.')); await list(); });
-    bind('undo', async () => { await request(`/api/sessions/${room.sessionId}/undo-completion`, 'POST', { commandId: uuid() }); await list(); say('Completion correction saved.'); });
+    async function completion(confirmed, previewPartner = false) {
+      const item = progressFor(room?.media), id = me?.roomId, sessionId = room?.sessionId;
+      if (!item || !sessionId) throw new Error('Load this title’s shared progress first.');
+      if (!confirmed && !window.confirm('Clear both confirmations and move this movie or episode back to Watching?')) return;
+      try { await request(`/api/rooms/${id}/completion`, 'POST', { sessionId, epoch:item.completionEpoch, confirmed, ...(mode === 'demo' && previewPartner ? {previewPartner:true} : {}) }); }
+      finally { if (id === me?.roomId) { await loadProgress(); if (mode === 'api') await sharedPlayback.refresh(); } }
+    }
+    bind('complete', () => completion(true));
+    bind('undo', () => completion(false));
+    bind('demo-partner-confirm', () => { if (mode !== 'demo') throw new Error('This control is only for Local Demo.'); return completion(true,true); });
 
     // Local mock of the same endpoints. No persistent accounts or actual multi-user sync.
     function mock(path, method, body) {
       const snapshot = () => ({ ...structuredClone(demo.room), serverTime: new Date().toISOString() });
+      const checkpoint = () => {
+        if (!demo.room.media) return null;
+        let item = demo.progress.find(item => mediaKey(item.media) === mediaKey(demo.room.media));
+        if (!item) { item = {media:{...demo.room.media},positionMs:0,completedAt:null,completionEpoch:1,confirmedBy:[]}; demo.progress.unshift(item); }
+        item.positionMs = position(demo.room); item.updatedAt = new Date().toISOString(); return item;
+      };
+      if (path.endsWith('/progress')) { checkpoint(); demo.progress.sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt)); return {items:structuredClone(demo.progress)}; }
+      if (path.endsWith('/completion')) {
+        const item = checkpoint();
+        if (!item || body.sessionId !== demo.room.sessionId || body.epoch !== item.completionEpoch) throw new Error('The movie or completion status changed.');
+        if (!body.confirmed) { item.completedAt = null; item.confirmedBy = []; item.completionEpoch++; }
+        else {
+          const userId = body.previewPartner ? 'demo-partner' : demo.profile.userId;
+          if (!item.confirmedBy.some(person => person.userId === userId)) item.confirmedBy.push({userId,displayName:body.previewPartner ? 'Demo partner' : demo.profile.displayName});
+          if (item.confirmedBy.length === 2) { item.completedAt = new Date().toISOString(); demo.room.positionMs = position(demo.room); demo.room.status = 'paused'; demo.room.anchorAt = new Date().toISOString(); embeddedPlayer.command('pause'); }
+        }
+        return {items:structuredClone(demo.progress)};
+      }
       if (path === '/api/me') return { userId: demo.profile.userId, profile: { ...demo.profile }, groupId: 'demo-group', roomId: 'demo-room' };
       if (path === '/api/me/profile') { Object.assign(demo.profile, body); return { profile: { ...demo.profile } }; }
       if (path.startsWith('/api/catalog?') || path.startsWith('/api/search?')) { const q = new URL(path, 'http://demo').searchParams; return { items: samples.filter(t => t.mediaType === q.get('type') && t.title.toLowerCase().includes((q.get('q') || '').toLowerCase())), page: 1, hasMore: false }; }
@@ -1213,7 +1413,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         return { items: demo.list };
       }
       if (path.endsWith('/messages')) { if (method === 'POST') { const message = { id: body.clientMessageId, senderId: demo.profile.userId, senderName: demo.profile.displayName, senderAvatarKey: demo.profile.avatarKey, body: body.body, createdAt: new Date().toISOString() }; if (!demo.messages.some(m => m.id === message.id)) demo.messages.push(message); return { message }; } return { items: demo.messages }; }
-      if (path.endsWith('/media')) { const t = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); demo.room = { ...demo.room, sessionId: uuid(), media: { ...body, title: t.title }, provider: 'vidrift', status: 'paused', positionMs: 0, anchorAt: new Date().toISOString(), revision: demo.room.revision + 1 }; const item = demo.list.find(i => i.title.tmdbId === t.tmdbId && i.title.mediaType === t.mediaType); if (item.status !== 'watched') item.status = 'watching'; return snapshot(); }
+      if (path.endsWith('/media')) {
+        checkpoint();
+        const t = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType);
+        const saved = demo.progress.find(item => mediaKey(item.media) === mediaKey(body));
+        if (saved && !saved.completedAt && saved.confirmedBy.length) { saved.confirmedBy = []; saved.completionEpoch++; }
+        demo.room = {...demo.room,sessionId:uuid(),media:{...t,...body},provider:'vidrift',status:'paused',positionMs:saved?.positionMs || 0,anchorAt:new Date().toISOString(),revision:demo.room.revision+1};
+        if (!demo.list.some(item => item.title.tmdbId === t.tmdbId && item.title.mediaType === t.mediaType)) demo.list.push({id:uuid(),title:t,status:'watching'});
+        checkpoint(); return snapshot();
+      }
       if (path.endsWith('/commands')) { if (body.sessionId !== demo.room.sessionId) throw new Error('Stale session.'); demo.room.positionMs = body.action === 'seek' ? body.targetPositionMs : position(demo.room); if (body.action === 'play' || body.action === 'pause') demo.room.status = body.action === 'play' ? 'playing' : 'paused'; if (body.action === 'provider') { demo.room.provider = body.provider; demo.room.status = 'paused'; } demo.room.anchorAt = new Date().toISOString(); demo.room.revision++; return snapshot(); }
       if (path.endsWith('/complete') || path.endsWith('/undo-completion')) { const completed = path.endsWith('/complete'); if (demo.room.media?.mediaType === 'movie') demo.list.filter(i => i.title.tmdbId === demo.room.media.tmdbId && i.title.mediaType === 'movie').forEach(i => i.status = completed ? 'watched' : 'watching'); return { completed, message: 'Demo updated. Your backend must verify shared completion; TV updates only the selected episode.' }; }
       if (path.endsWith('/leave')) return null;
@@ -1273,7 +1481,19 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     });
     $('backend-contract').hidden = false;
     $('developer-contract').append($('backend-contract'));
-    window.addEventListener('hashchange', () => route(true));
+    window.addEventListener('hashchange', () => {
+      const code = inviteFromHash(location.hash);
+      if (code && code !== pendingInvite) { pendingInvite = code; preference('multiplay.pendingInvite',code); }
+      if (code && mode === 'demo') {
+        mode = 'api'; base = ''; me = null; room = null; joined = false; stopLiveChat(); unload();
+        preference('multiplay.preview',false); preference('multiplay.connection',{mode,base});
+        $('mode').value = mode; $('backend').value = base;
+        void act(initialize); return;
+      }
+      route(true);
+      if (code && me && mode === 'api' && !inviteBusy) void act(() => acceptInvitation());
+      if (uiReady) renderCoupleExperience();
+    });
     uiReady = true;
     route();
     act(initialize);
