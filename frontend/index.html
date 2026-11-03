@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Henny+Penny&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Life+Savers:wght@400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Neucha&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
   <style>
     :root { color-scheme: dark; font-family: 'Life Savers', cursive; background: #16151a; color: #dac4d0; --page-bg: #16151a; --surface: #211e25; --control-bg: #19181e; --accent-teal: #036264; --accent-mauve: #8f5774; --accent-rose: #e0829d; --text-soft: #dac4d0; }
@@ -288,6 +289,85 @@
     .presence-copy { display: flex; flex-direction: column; text-align: center; width: 100%; font-size: 10px; gap: 3px; }.presence-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }#presence-label { color: #c9b6c4; }
     @media (max-width: 1000px) { #discover-feature { width: calc(100% + 44px); margin-left: -22px; }.feature-copy { width: min(600px, 90%); }.hero-next button { width: 85px; }.hero-next img { display: none; }.hero-next button { min-height: 44px; }.hero-footer { gap: 12px; } }
     @media (max-width: 700px) { #discover-feature { width: calc(100% + 32px); margin-left: -16px; }.feature-card { min-height: 72svh; padding: 42px 24px 155px; }.feature-copy { width: 100%; }.feature-copy h3 { font-size: clamp(34px, 10vw, 52px); }.feature-copy p { font-size: 14px; }.hero-footer { flex-direction: column; align-items: stretch; bottom: 18px; inset-inline: 20px; gap: 14px; }.hero-next button { flex: 1; width: auto; }.hero-footer .carousel-controls { justify-content: flex-start; }.account-presence { flex: 0 0 42px; width: 42px; padding: 0; border: 0; }.presence-copy { width: 42px; }.presence-copy #presence-name { display: none; }.presence-avatar { width: 29px; height: 29px; }.side-nav { gap: 0; }.side-nav a { flex: 1; min-width: 0; }#title-details { max-height: calc(100dvh - 24px); width: calc(100vw - 20px); }.details-poster { width: 105px; }.hero-action { padding: 10px 14px; font-size: 14px; } }
+    /* Hand-drawn text actions, quiet icon controls, and centered personal views. */
+    :is(#main-content, #auth, #developer, #demo-banner, #invitation-banner, #title-details) .button-55:where(:not(.icon-button)) {
+      align-self: center;
+      background-color: #fff;
+      background-image: none;
+      background-position: 0 90%;
+      background-repeat: repeat no-repeat;
+      background-size: 4px 3px;
+      border: 2px solid #41403e;
+      border-radius: 15px 225px 255px 15px / 15px 255px 225px 15px;
+      border-bottom-left-radius: 15px 255px;
+      border-bottom-right-radius: 225px 15px;
+      border-top-left-radius: 255px 15px;
+      border-top-right-radius: 15px 225px;
+      box-shadow: rgb(0 0 0 / .2) 15px 28px 25px -18px;
+      box-sizing: border-box;
+      color: #41403e;
+      cursor: pointer;
+      display: inline-block;
+      font-family: 'Neucha', sans-serif;
+      font-size: 1rem;
+      font-weight: 400;
+      line-height: 23px;
+      outline: none;
+      padding: .75rem;
+      text-decoration: none;
+      transition: box-shadow 235ms ease-in-out, transform 235ms ease-in-out, border-color 235ms ease-in-out;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    :is(#main-content, #auth, #developer, #demo-banner, #invitation-banner, #title-details) .button-55:where(:not(.icon-button)):hover:not(:disabled) { box-shadow: rgb(0 0 0 / .3) 2px 8px 8px -5px; transform: translate3d(0, 2px, 0); }
+    :is(#main-content, #auth, #developer, #demo-banner, #invitation-banner, #title-details) .button-55:where(:not(.icon-button)):focus { box-shadow: rgb(0 0 0 / .3) 2px 8px 4px -6px; }
+    :is(#main-content, #auth, #developer, #demo-banner, #invitation-banner, #title-details) .button-55[aria-pressed="true"] { border-color: #e0829d; text-decoration: underline; text-underline-offset: 4px; }
+    :is(#main-content, #auth, #developer, #title-details) :is(.icon-button, .player-tool, .chat-toggle) {
+      display: inline-grid; place-items: center; background: transparent; color: #dac4d0;
+      border: .5px solid #dac4d033; border-radius: 8px; box-shadow: none;
+      width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 10px; margin: 0;
+      transform: none; transition: color 180ms ease, border-color 180ms ease;
+    }
+    :is(#main-content, #auth, #developer, #title-details) :is(.icon-button, .player-tool, .chat-toggle):hover:not(:disabled) { background: transparent; color: #e0829d; border-color: #e0829d80; box-shadow: none; transform: none; }
+    :is(#main-content, #auth, #developer, #title-details) :is(.button-55, .icon-button, .player-tool, .chat-toggle):focus-visible { outline: 2px solid #e0829d; outline-offset: 4px; }
+    .side-nav a, .side-nav a:is(:hover, :focus-visible, [aria-current="page"]) { background: transparent; box-shadow: none; }
+    .side-nav a:is(:hover, :focus-visible, [aria-current="page"]) { color: #e0829d; }
+    .side-nav a[aria-current="page"] .nav-label { text-decoration: underline; text-underline-offset: 5px; }
+    .seat-avatar, .chat-avatar, .chat-avatar.is-own, .presence-avatar { background: transparent; }
+    .chat-avatar.is-own, .seat-avatar { color: #e0829d; }
+    #home, #profile, #auth, #home :is(p, h1, h2, h3, h4, .eyebrow), #profile :is(p, label), #auth :is(p, label) { text-align: center; }
+    body:has(#home:not([hidden]), #profile:not([hidden])) :is(.demo-banner, .app-notice) { text-align: center; }
+    #home { max-width: 1440px; margin-inline: auto; }
+    #home .home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #home .home-session, #home .home-session.has-poster { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+    #home .home-poster { width: 140px; }
+    #home .poster-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 220px)); justify-content: center; }
+    #home .card-actions { justify-content: center; }
+    #profile-form { display: grid; grid-template-columns: minmax(0, 360px); justify-content: center; gap: 18px; }
+    #profile-form label { width: 100%; margin: 0; }
+    #profile-form :is(input, select) { width: 100%; min-width: 0; text-align: center; }
+    #profile-form button { justify-self: center; margin: 0; }
+    #discover-feature { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 16px; width: 100%; margin: 0 0 40px; overflow: visible; background: transparent; }
+    .discover-picture { position: relative; min-width: 0; border-radius: 20px; overflow: hidden; background: #211e25; }
+    .feature-card { justify-content: center; min-height: clamp(420px, 60svh, 640px); padding: 48px 32px; }
+    .feature-card::after { background: linear-gradient(0deg, #16151af2, #16151a99 55%, #16151a77); }
+    #home .feature-copy { width: min(720px, 100%); margin-inline: auto; }
+    #home .feature-copy h3 { margin-inline: auto; text-align: center; }
+    #home .feature-copy .card-actions { justify-content: center; }
+    .hero-footer { position: static; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; font-size: 12px; }
+    .hero-next { flex-wrap: wrap; justify-content: center; }
+    #hero-next .button-55 { display: flex; align-items: center; justify-content: center; width: 150px; gap: 10px; margin: 0; padding: 6px; text-align: center; font-size: 12px; }
+    #hero-next .button-55[aria-pressed="true"] { outline: 1px solid #e0829d; outline-offset: 2px; }
+    #genre-sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 4px 12px; margin-block: 20px; }
+    #genre-sections .genre-tab { display: block; width: 100%; min-height: 44px; margin: 0; padding: 8px 2px; background: transparent; background-image: none; border: 0; border-radius: 0; box-shadow: none; color: #c7b5c0; font-family: inherit; font-size: 12px; line-height: 1.4; text-align: center; transform: none; }
+    #genre-sections .genre-tab:hover, #genre-sections .genre-tab[aria-pressed="true"] { background: transparent; color: #e0829d; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 6px; }
+    #genre-sections .genre-tab:focus-visible { outline: 1px solid #e0829d; outline-offset: 2px; }
+    .watchlist-heading { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 12px; }
+    .watchlist-heading h2 { grid-column: 2; margin-bottom: 0; }
+    .watchlist-heading #refresh-list { grid-column: 3; justify-self: end; }
+    @media (max-width: 1000px) { #home .home-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 700px) { #discover-feature { grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 6px; margin-left: 0; width: 100%; }.feature-card { min-height: 440px; padding: 32px 18px; }#home .feature-copy h3 { font-size: clamp(26px, 7vw, 40px); }#main-content .carousel-arrow { width: 32px; min-width: 32px; padding-inline: 5px; }#hero-next .button-55 { width: calc(50% - 5px); }.hero-footer { padding: 12px; }#genre-sections { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 2px 8px; } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -357,8 +437,12 @@
   <main id="main-content" tabindex="-1">
     <section id="home" data-view aria-labelledby="home-heading" hidden>
       <section id="discover-feature" class="discover-feature" aria-roledescription="carousel" aria-label="Featured movies and shows" hidden>
-        <div id="discover-slide" class="discover-slide" aria-live="off"></div>
-        <div class="hero-footer"><div id="hero-next" class="hero-next" aria-label="Choose a featured title"></div><div class="carousel-controls"><button id="discover-previous" type="button" aria-label="Previous featured title">&#8249;</button><button id="discover-pause" type="button" aria-pressed="false">Pause rotation</button><span id="discover-count"></span><button id="discover-next" type="button" aria-label="Next featured title">&#8250;</button></div></div>
+        <button id="discover-previous" class="icon-button carousel-arrow" type="button" aria-label="Previous featured title" title="Previous featured title"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+        <div class="discover-picture">
+          <div id="discover-slide" class="discover-slide" aria-live="off"></div>
+          <div class="hero-footer"><div id="hero-next" class="hero-next" aria-label="Choose a featured title"></div><span id="discover-count"></span></div>
+        </div>
+        <button id="discover-next" class="icon-button carousel-arrow" type="button" aria-label="Next featured title" title="Next featured title"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
       </section>
       <p class="eyebrow">One room. Two people.</p>
       <h2 id="home-heading" tabindex="-1">Make a little time for each other.</h2>
@@ -424,10 +508,9 @@
 
     <section id="list" data-view aria-labelledby="list-heading" hidden>
       <p class="eyebrow">Good things to look forward to</p>
-      <h2 id="list-heading" tabindex="-1">Our list</h2>
+      <div class="watchlist-heading"><h2 id="list-heading" tabindex="-1">Our list</h2><button id="refresh-list" class="icon-button" type="button" aria-label="Refresh our list" title="Refresh our list"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M19.5 12a8 8 0 1 0-2.2 5.5M20 12l-3-4"/></svg></button></div>
       <p>A shared collection for your next night together.</p>
       <div id="list-filters" role="group" aria-label="Filter our list"><button type="button" data-filter="all" aria-pressed="true">All</button><button type="button" data-filter="planned" aria-pressed="false">Planned</button><button type="button" data-filter="watching" aria-pressed="false">Watching</button><button type="button" data-filter="watched" aria-pressed="false">Watched</button></div>
-      <button id="refresh-list" type="button">Refresh list</button>
       <p id="list-status" role="status" aria-live="polite">Connect and select a room to load your shared list.</p>
       <div id="list-items" class="kanban-board" aria-label="Shared watchlist board"></div>
       <h3>Episode history</h3><p>A finished episode stays here. Finishing one episode does not mark the whole show as watched.</p><div id="episode-history"></div>
@@ -586,7 +669,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     // Apply Bootstrap's standard control classes while retaining the app's dark theme.
     document.querySelectorAll('input').forEach((control) => control.classList.add('form-control'));
     document.querySelectorAll('select').forEach((control) => control.classList.add('form-select'));
-    document.querySelectorAll('button:not(.player-tool):not(.chat-toggle)').forEach((control) => control.classList.add('btn', 'btn-primary'));
+    document.querySelectorAll('#close-details, #close-chat').forEach(control => control.classList.add('icon-button'));
+    document.querySelectorAll('button:not(.icon-button):not(.player-tool):not(.chat-toggle), .primary-link').forEach(control => control.classList.add('button-55'));
 
     // Frontend logic only. Restyle or rearrange the HTML; retain IDs used below.
     const $ = id => document.getElementById(id);
@@ -827,7 +911,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function say(text) { $('status').textContent = friendlyError(text); $('status').hidden = !text; }
     function node(tag, text) { const item = document.createElement(tag); item.textContent = text; return item; }
-    function button(text, fn) { const b = node('button', text); b.type = 'button'; b.onclick = () => act(fn, b); return b; }
+    function button(text, fn) { const b = node('button', text); b.className = 'button-55'; b.type = 'button'; b.onclick = () => act(fn, b); return b; }
     function icon(name) {
       const paths = {
         details: ['M12 11v6', 'M12 7h.01'], save: ['M5 4h14v16l-7-4-7 4z'], play: ['m9 5 10 7-10 7z'],
@@ -1092,6 +1176,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('rename-room-form').querySelector('button').disabled = !selected || mode !== 'api';
       if (document.activeElement !== $('rename-room-name')) $('rename-room-name').value = selected?.name || '';
       const latest = progressItems[0];
+      $('home-watch').classList.toggle('icon-button', !!latest);
       renderHomePoster(latest?.media || room?.media);
       if (latest) {
         $('home-title').textContent = latest.media.title + (latest.media.mediaType === 'tv' ? ` · S${latest.media.season} E${latest.media.episode}` : '');
@@ -1163,7 +1248,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('genre').value = selected;
       $('genre-sections').replaceChildren(...[{ id: '', name: 'All genres' }, ...genres].map(genre => {
         const control = button('', () => { $('genre').value = String(genre.id); $('query').value = ''; closeSuggestions(); return catalog(); });
-        control.append(icon('movie'), document.createTextNode(genre.name));
+        control.className = 'genre-tab'; control.textContent = genre.name;
         control.setAttribute('aria-pressed', String(String(genre.id) === String(selected))); return control;
       }));
     }
@@ -1195,8 +1280,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       }
       const copy = node('div', ''); copy.className = 'feature-copy';
       const actions = node('div', ''); actions.className = 'card-actions';
-      const watch = button('',()=>watchTitle(title)); watch.className = 'hero-action'; watch.append(icon('play'),node('span','Watch together'));
-      const details = button('',()=>showDetails(title)); details.className = 'hero-action'; details.append(icon('details'),node('span','More info'));
+      const watch = iconButton('Watch together: '+title.title,'play',()=>watchTitle(title)); watch.classList.add('hero-action');
+      const details = iconButton('More info: '+title.title,'details',()=>showDetails(title)); details.classList.add('hero-action');
       const save = iconButton('Save: '+title.title,'save',()=>add(title)); save.classList.add('hero-action'); actions.append(watch,details,save);
       const kicker = node('p','TONIGHT, TOGETHER'); kicker.className = 'eyebrow';
       const meta = node('p',(title.mediaType === 'tv' ? 'TV series' : 'Movie')+' · '+(title.year || 'Discover something new')); meta.className = 'hero-meta';
@@ -1212,8 +1297,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       }));
       if (hadPickerFocus) $('hero-next').querySelector('[aria-pressed="true"]')?.focus({preventScroll:true});
       $('discover-count').textContent = (featureIndex + 1) + ' / ' + featureItems.length;
-      $('discover-pause').textContent = featurePaused ? 'Resume rotation' : 'Pause rotation';
-      $('discover-pause').setAttribute('aria-pressed', String(featurePaused));
       $('discover-next').disabled = $('discover-previous').disabled = featureItems.length < 2;
     }
     async function ensureHomeFeature() {
@@ -1641,7 +1724,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     $('media-type').addEventListener('change', () => { closeSuggestions(); $('genre').value = ''; void act(() => catalog()); });
     $('genre').addEventListener('change', () => { closeSuggestions(); void act(() => catalog()); });
     bind('discover-previous', () => advanceFeature(-1)); bind('discover-next', () => advanceFeature(1));
-    bind('discover-pause', () => { featurePaused = !featurePaused; $('discover-pause').textContent = featurePaused ? 'Resume rotation' : 'Pause rotation'; $('discover-pause').setAttribute('aria-pressed', String(featurePaused)); scheduleFeature(); });
     $('discover-feature').addEventListener('mouseenter', () => clearTimeout(featureTimer));
     $('discover-feature').addEventListener('mouseleave', scheduleFeature);
     $('discover-feature').addEventListener('focusin', () => clearTimeout(featureTimer));
