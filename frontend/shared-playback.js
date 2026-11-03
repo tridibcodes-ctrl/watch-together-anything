@@ -19,6 +19,7 @@
     let pendingCommand = null, preparationKey = null, pauseIssued = false;
     let clientId = null, reporting = false, reportQueued = false, lastReport = null;
     let nativeQueue = [], nativeSending = false, nativeBlocked = false;
+    let joinIntent = 0;
     const epochKey = () => state ? `${state.sessionId}:${state.provider}:${state.readyEpoch}` : '';
     function localReady() {
       const actual = player.getStatus();
@@ -126,7 +127,7 @@
       }
     }
     function selectRoom(id) {
-      release(); generation++; stopSubscription(); clearIntervalImpl(poll); clearIntervalImpl(correction);
+      release(); generation++; joinIntent++; stopSubscription(); clearIntervalImpl(poll); clearIntervalImpl(correction);
       roomId = id || null; state = null; joined = false; loadedKey = null; online = false; busy = false;
       fetching = false; refreshQueued = false; pendingCommand = null; preparationKey = null; pauseIssued = false;
       clientId = null; reporting = false; reportQueued = false; lastReport = null;
@@ -141,15 +142,15 @@
       }, 2000);
       void refresh();
     }
-    async function send(route, body) {
+    async function send(route, body, selectionIntent = null) {
       if (!roomId || !state || !online) throw new Error('Load the room playback state first.');
       if (busy) throw new Error('Wait for the current playback command.');
       const version = generation, selected = roomId, started = now(); busy = true; emit();
-      pendingCommand = { route, body };
+      pendingCommand = { route, body, selectionIntent };
       try {
         const next = await request(`/api/rooms/${selected}/${route}`, 'POST', body);
         if (version !== generation) return;
-        pendingCommand = null; accept(next, started, route === 'media');
+        pendingCommand = null; accept(next, started, route === 'media' && selectionIntent === joinIntent);
         if (route === 'media' && state?.sessionId !== next.sessionId) throw new Error('Your partner selected another movie. Open their invitation or choose yours again.');
       } catch (error) {
         if (version !== generation) return;
@@ -198,25 +199,30 @@
       selectRoom, refresh, command,
       async watch(media) {
         if (!state || !online) throw new Error('Playback is not ready. Refresh the room or apply the playback migration.');
-        const version = generation;
-        await send('media', { ...media, commandId: commandId(), expectedRevision: state.revision });
-        if (version === generation) { ensureJoined(); reconcile(); }
+        const version = generation, intent = ++joinIntent;
+        await send('media', { ...media, commandId: commandId(), expectedRevision: state.revision }, intent);
+        if (version === generation && intent === joinIntent) { ensureJoined(); reconcile(); return true; }
+        return false;
       },
-      join() { if (!state?.media) throw new Error('Choose a title first.'); ensureJoined(); reconcile(); },
+      join() { if (!state?.media) throw new Error('Choose a title first.'); joinIntent++; ensureJoined(); reconcile(); },
       async joinSession(expectedSessionId) {
-        const version = generation, selected = roomId, started = now();
+        const version = generation, intent = ++joinIntent, selected = roomId, started = now();
         if (!selected) throw new Error('Choose your shared room first.');
         const next = await request(`/api/rooms/${selected}/state`);
-        if (version !== generation) throw new Error('Your selected room changed. Open the invitation again.');
+        if (version !== generation || intent !== joinIntent) throw new Error('Joining was cancelled or your room changed. Open the invitation again.');
         accept(next, started);
         if (!online || state?.sessionId !== expectedSessionId) throw new Error('The movie changed. Ask your partner for another invitation.');
         ensureJoined(); reconcile();
       },
-      leave() { release(); joined = false; clientId = null; reporting = false; reportQueued = false; lastReport = null; nativeQueue = []; nativeSending = false; nativeBlocked = false; loadedKey = null; preparationKey = null; player.clear(); emit(); },
+      leave() { release(); joinIntent++; pendingCommand = null; joined = false; clientId = null; reporting = false; reportQueued = false; lastReport = null; nativeQueue = []; nativeSending = false; nativeBlocked = false; loadedKey = null; preparationKey = null; player.clear(); emit(); },
       retryPlayer() { if (joined && state?.media) { loadedKey = null; preparationKey = null; pauseIssued = false; reconcile(); } },
       async retryCommand() {
         if (!pendingCommand) return;
-        try { await send(pendingCommand.route, pendingCommand.body); }
+        const retry = pendingCommand, version = generation;
+        try {
+          await send(retry.route, retry.body, retry.selectionIntent);
+          if (retry.route === 'media' && version === generation && retry.selectionIntent === joinIntent) { ensureJoined(); reconcile(); }
+        }
         finally { if (!pendingCommand) nativeBlocked = false; reconcile(); }
       },
       playerEvent(event) {

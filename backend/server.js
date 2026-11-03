@@ -7,6 +7,7 @@ const { handleWatchlist } = require("./watchlist");
 const { handlePlayback } = require("./playback");
 const { handleCouple } = require("./couple");
 const { handleInvitations } = require("./invitations");
+const { handlePresence } = require("./presence");
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -23,6 +24,7 @@ const server = http.createServer(async (request, response) => {
   if (await handlePlayback(request, response, sendJson)) return;
   if (await handleCouple(request, response, sendJson)) return;
   if (await handleInvitations(request, response, sendJson)) return;
+  if (await handlePresence(request, response, sendJson)) return;
   if (request.method === "GET" && ["/player.js", "/shared-playback.js"].includes(request.url)) {
     fs.readFile(path.join(__dirname, "..", "frontend", request.url.slice(1)), (error, script) => {
       if (error) { sendJson(response, 500, { error: "Could not load player integration" }); return; }

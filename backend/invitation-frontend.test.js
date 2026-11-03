@@ -38,7 +38,7 @@ test('notifications stay interactive inside a details modal or fullscreen player
 });
 
 test('decline stays on the current page; accept verifies the exact session before navigation and can retry a failed join',async()=>{
-  let joins=0,leaves=0,fail=false;const context=vm.createContext({mode:'api',me:{userId:'b',roomId:'room'},joined:false,room:{sessionId:'session'},currentView:'browse',location:{hash:'#browse'},dismissedMovieInvites:new Set(),
+  let joins=0,leaves=0,fail=false;const context=vm.createContext({mode:'api',watchActionIntent:0,me:{userId:'b',roomId:'room'},joined:false,room:{sessionId:'session'},currentView:'browse',location:{hash:'#browse'},dismissedMovieInvites:new Set(),
     request:async(_url,_method,body)=>({roomId:'room',sessionId:'session',status:body.accept?'accepted':'declined'}),
     sharedPlayback:{async joinSession(id){assert.equal(id,'session');if(fail)throw new Error('movie changed');joins++;},leave(){leaves++;}},
     $:()=>({open:false}),say(){}});
@@ -66,7 +66,7 @@ test('a delayed invitation inbox cannot reopen notifications after sign-out',asy
 
 test('new title selection relies on its atomic invitation and never re-sends after a fast acceptance',async()=>{
   const calls=[];let selections=0,setupFails=false;
-  const context=vm.createContext({mode:'api',me:{userId:'user',roomId:'room'},room:{sessionId:null,media:null},location:{hash:'#browse'},invitationWatch:{refresh(){}},
+  const context=vm.createContext({mode:'api',watchActionIntent:0,me:{userId:'user',roomId:'room'},room:{sessionId:null,media:null},location:{hash:'#browse'},invitationWatch:{refresh(){}},
     mediaKey:media=>media?`${media.mediaType}:${media.tmdbId}`:'',
     request:async(path,method)=>{calls.push({path,method});if(setupFails)throw new Error('Invitation setup required');return {invited:true};},
     loadProgress:async()=>{},list:async()=>{},closeDetails(){},say(){},controls(){}});
@@ -76,4 +76,21 @@ test('new title selection relies on its atomic invitation and never re-sends aft
   await context.watchTitle(movie);assert.equal(selections,1);assert.equal(calls.filter(call=>call.method==='POST').length,0);
   await context.watchTitle(movie);assert.equal(selections,1);assert.equal(calls.filter(call=>call.method==='POST').length,1);
   setupFails=true;await assert.rejects(context.watchTitle({...movie,tmdbId:27205}),/setup required/);assert.equal(selections,1);
+});
+
+test('leaving during invitation setup cancels the later movie-selection action',async()=>{
+  let resolve,selections=0;const context=vm.createContext({mode:'api',watchActionIntent:0,me:{userId:'user',roomId:'room'},room:{},location:{hash:'#home'},
+    request:()=>new Promise(done=>resolve=done),sharedPlayback:{watch(){selections++;}},mediaKey:()=>'',
+    closeDetails(){},loadProgress:async()=>{},list:async()=>{},controls(){},say(){}});
+  vm.runInContext(source.slice(source.indexOf('    async function watchTitle('),source.indexOf('    async function command(')),context);
+  const pending=context.watchTitle({mediaType:'movie',tmdbId:155,title:'Movie'});context.watchActionIntent++;resolve({items:[]});await pending;
+  assert.equal(selections,0);assert.equal(context.location.hash,'#home');
+});
+
+test('leaving during the invitation response cannot start a later player join',async()=>{
+  let resolve,joins=0;const context=vm.createContext({mode:'api',watchActionIntent:0,me:{userId:'b',roomId:'room'},location:{hash:'#home'},
+    request:()=>new Promise(done=>resolve=done),sharedPlayback:{joinSession(){joins++;}},dismissedMovieInvites:new Set()});
+  vm.runInContext(source.slice(source.indexOf('    async function respondMovieInvitation('),source.indexOf('    function renderPartnerPresence(')),context);
+  const pending=context.respondMovieInvitation(invite,true);context.watchActionIntent++;resolve({roomId:'room',sessionId:'session'});await pending;
+  assert.equal(joins,0);assert.equal(context.location.hash,'#home');
 });

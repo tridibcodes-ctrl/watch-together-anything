@@ -455,6 +455,52 @@
     @media (hover: none) { #main-content .movie-card .card-image .card-play { opacity: 1; } }
     @media (max-width: 700px) { #main-content #hero-next { gap: 16px 12px; }#main-content #hero-next .feature-pick { flex-basis: calc(50% - 6px); }.hero-footer { padding: 18px 10px; }#main-content #discover-feature .carousel-arrow { top: 220px; } }
     @media (prefers-reduced-motion: reduce) { .card-art img, #main-content .movie-card .card-play { transition: none; } }
+    /* All actions are text or icons; focus rings remain for keyboard navigation. */
+    body button, body .primary-link {
+      background: transparent !important; background-image: none !important; border: 0 !important;
+      border-radius: 0 !important; box-shadow: none !important; backdrop-filter: none !important;
+      color: #f3eaf8 !important; transform: none !important; text-decoration: none !important;
+    }
+    body button:is(:hover, :active):not(:disabled), body button:is([aria-pressed="true"], [aria-selected="true"]),
+    body .primary-link:is(:hover, :active) { text-decoration: underline !important; text-underline-offset: 6px; }
+    body button:focus-visible, body .primary-link:focus-visible { outline: 2px solid #d9b7f1 !important; outline-offset: 4px; }
+    body :is(.icon-button, .player-tool, .chat-toggle):not(.carousel-arrow) { position: relative; }
+    body :is(.icon-button, .player-tool, .chat-toggle):not(.carousel-arrow)::after {
+      content: ''; position: absolute; bottom: 3px; left: calc(50% - 9px); width: 18px;
+      border-bottom: 1px solid currentColor; opacity: 0; pointer-events: none;
+    }
+    body :is(.icon-button, .player-tool, .chat-toggle):is(:hover, :active, [aria-pressed="true"]):not(.carousel-arrow)::after { opacity: 1; }
+    #main-content .movie-card .card-image .icon-button { position: absolute; filter: drop-shadow(0 1px 3px #000); }
+    #main-content .movie-card .card-image .card-play { transform: translate(-50%, -50%) !important; }
+    #main-content #discover-feature .carousel-arrow { transform: translateY(-50%) !important; }
+    #couple-presence { display: flex; flex-direction: column; gap: 8px; width: 76px; }
+    #couple-presence .account-presence { border: 0; padding-top: 4px; }
+    #partner-presence-avatar svg { width: 22px; height: 22px; }
+    #home .home-grid { align-items: start; }
+    #home #home-session { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; width: 100%; min-width: 0; min-height: 180px; padding: 28px; background: #211c28; }
+    #home #home-session.has-poster { min-height: 300px; aspect-ratio: 16/9; }
+    #home #home-poster { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; }
+    #home-poster .card-art { width: 100%; height: 100%; border-radius: 0; aspect-ratio: auto; }
+    #home-session.has-poster::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, #15101cf5, #211528b3 50%, #21152808); }
+    #home #home-session .home-session-copy, #home #home-session :is(h3,p,.eyebrow) { text-align: left; margin-left: 0; }
+    #home #home-session h3 { font-size: clamp(26px, 3vw, 38px); color: #fff; }
+    #home #home-session .quiet-link { margin: 12px; }
+    #home #continue-list { grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr)); }
+    #main-content .movie-card.is-resume { position: relative; isolation: isolate; justify-content: flex-end; width: 100%; min-width: 0; min-height: 280px; aspect-ratio: 16/9; padding: 24px; overflow: hidden; border-radius: 18px; }
+    .movie-card.is-resume .card-image { position: absolute; inset: 0; height: 100%; z-index: -1; }
+    .movie-card.is-resume .card-art { height: 100%; aspect-ratio: auto; border-radius: 0; }
+    .movie-card.is-resume .card-image::after { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, #18101ff5, #211528aa 45%, #21152800 85%); pointer-events: none; }
+    #main-content .movie-card.is-resume .card-image .icon-button { z-index: 2; }
+    #main-content .movie-card.is-resume h3 { font-size: 23px; margin: 0 0 8px; color: #fff; pointer-events: none; }
+    .movie-card.is-resume .title-meta, #main-content .movie-card.is-resume .card-note { color: #eee3f5; pointer-events: none; }
+    @media (max-width: 700px) {
+      #couple-presence { flex: 0 0 88px; width: 88px; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 0; }
+      #couple-presence .account-presence { width: 44px; }
+      #couple-presence .presence-copy { width: 44px; font-size: 8px; }
+      #couple-presence #presence-name { display: block; }
+      #couple-presence :is(#presence-label, #partner-presence-label) { display: none; }
+      #home #home-session { padding: 22px; }#home #home-session.has-poster { min-height: 300px; }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -475,7 +521,10 @@
     <a href="#browse" aria-label="Discover" title="Discover"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg></a>
     <a href="#list" aria-label="Watchlist" title="Watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-7-4-7 4z"/></svg></a>
     <a class="nav-profile" href="#profile" aria-label="Profile" title="Profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3-7 8-7s8 3 8 7"/></svg></a>
-    <div id="account-presence" class="account-presence" data-state="connecting" role="status" aria-live="polite"><span class="presence-avatar" aria-hidden="true"><span id="presence-initial">M</span><span class="presence-dot"></span></span><span class="presence-copy"><span id="presence-name">Your account</span><span id="presence-label">Connecting</span></span></div>
+    <div id="couple-presence" aria-label="Your profiles">
+      <div id="account-presence" class="account-presence" data-state="connecting" role="status" aria-live="polite"><span class="presence-avatar" aria-hidden="true"><span id="presence-initial">M</span><span class="presence-dot"></span></span><span class="presence-copy"><span id="presence-name">Your account</span><span id="presence-label">Connecting</span></span></div>
+      <div id="partner-presence" class="account-presence" data-state="connecting" role="status" aria-live="polite" hidden><span class="presence-avatar" aria-hidden="true"><span id="partner-presence-avatar"></span><span class="presence-dot"></span></span><span class="presence-copy"><span id="partner-presence-name"></span><span id="partner-presence-label">Checking</span></span></div>
+    </div>
   </nav>
 
   <section id="developer" data-view aria-labelledby="connection-heading" hidden>
@@ -527,7 +576,6 @@
         <button id="discover-previous" class="icon-button carousel-arrow" type="button" aria-label="Previous featured title" title="Previous featured title"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
         <div class="discover-picture">
           <div id="discover-slide" class="discover-slide" aria-live="off"></div>
-          <div class="hero-footer"><div id="hero-next" class="hero-next" aria-label="Choose a featured title"></div></div>
         </div>
         <button id="discover-next" class="icon-button carousel-arrow" type="button" aria-label="Next featured title" title="Next featured title"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
       </section>
@@ -535,7 +583,7 @@
       <h2 id="home-heading" tabindex="-1">Make a little time for each other.</h2>
       <p id="home-greeting">A favourite film. A new series. A little time together.</p>
       <div class="home-grid">
-        <article class="home-session">
+        <article id="home-session" class="home-session">
           <div id="home-poster" class="home-poster" hidden></div>
           <div class="home-session-copy">
           <span class="eyebrow">Your shared screen</span>
@@ -771,7 +819,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     if (incomingInvite) { preference('multiplay.pendingInvite', incomingInvite); preference('multiplay.preview', false); }
     const developerEntry = !incomingInvite && (location.hash === '#developer' || location.protocol === 'file:' || preference('multiplay.preview') === true);
     let mode = developerEntry ? (savedConnection?.mode || 'demo') : 'api', base = developerEntry ? (savedConnection?.base || '') : '', me, room, joined = false;
-    let uiReady = false, currentView = '', savedList = [], detailsOrigin = null, detailsRequested = null, pendingNavigationFocus = null;
+    let uiReady = false, currentView = '', savedList = [], detailsOrigin = null, detailsRequested = null, pendingNavigationFocus = null, watchActionIntent = 0;
     if (developerEntry && mode === 'demo') preference('multiplay.preview', true);
     const viewScroll = new Map();
     let progressItems = [], progressVersion = 0, progressLoaded = false, roomInfo = null, roomInfoAt = 0, roomInfoVersion = 0, listFilter = 'all';
@@ -838,6 +886,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Qed9LYz9rBBnUK3sMhrQwg_OzznRQO6";
     const authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     let authSession = null;
+    const presenceClientId = uuid();
+    let partnerPresence = null, presenceMembers = [], presenceConfirmedAt = 0, presenceGeneration = 0;
     let chatChannel = null, chatGeneration = 0, chatTimer = null, chatPoll = null, chatRequestVersion = 0;
     let listVersion = 0, listTimer = null;
     let invitationWatch = null, invitationOwner = null, movieInvitationGeneration = 0;
@@ -964,11 +1014,12 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     async function respondMovieInvitation(invitation, accept) {
       const userId = me?.userId;
       if (mode !== 'api' || userId !== invitation.recipientId) throw new Error('Sign in to the invited account first.');
+      const intent = ++watchActionIntent;
       const result = await request('/api/watch-invitations/'+invitation.id+'/response','POST',{accept});
-      if (mode !== 'api' || me?.userId !== userId) return;
+      if (mode !== 'api' || me?.userId !== userId || intent !== watchActionIntent) return;
       if (accept) {
         if (me.roomId !== result.roomId) await loadRooms(result.roomId);
-        if (me?.userId !== userId || mode !== 'api') return;
+        if (me?.userId !== userId || mode !== 'api' || intent !== watchActionIntent) return;
         await sharedPlayback.joinSession(result.sessionId);
         if ($('title-details').open) closeDetails(false);
         location.hash = 'room'; say('');
@@ -978,7 +1029,61 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       dismissedMovieInvites.add(invitation.id+':pending');
       if (accept) dismissedMovieInvites.add(invitation.id+':accepted');
     }
+    function renderPartnerPresence() {
+      const host = $('partner-presence');
+      host.hidden = mode !== 'api' || !authSession || !me?.roomId;
+      if (host.hidden) return;
+      const partner = presenceMembers.find(member=>member.userId!==me.userId) || roomInfo?.members?.find(member=>member.userId!==me.userId);
+      host.hidden = !partner; if (!partner) return;
+      const verified = presenceMembers.find(member=>member.userId===partner.userId);
+      const fresh = Date.now()-presenceConfirmedAt < 45000 && navigator.onLine && !partnerPresence?.error;
+      const label = !fresh || !verified ? 'Checking' : verified.online ? 'Online' : 'Offline';
+      const state = label === 'Online' ? 'online' : label === 'Offline' ? 'offline' : 'connecting';
+      const name = partner.displayName || 'Your partner', avatar = partner.avatarKey || 'moon';
+      const signature = [partner.userId,name,avatar,state].join(':');
+      if (host.dataset.signature === signature) return;
+      host.dataset.signature = signature; host.dataset.state = state; host.title = name+' · '+label;
+      $('partner-presence-name').textContent = name; $('partner-presence-label').textContent = label;
+      $('partner-presence-avatar').replaceChildren(icon(avatar));
+    }
+    function stopPartnerPresence() {
+      const previous = partnerPresence; partnerPresence = null;
+      if (previous) { clearInterval(previous.timer); if (previous.channel) authClient.removeChannel(previous.channel).catch(()=>{}); }
+      presenceMembers = []; presenceConfirmedAt = 0; renderPartnerPresence();
+    }
+    function releasePartnerPresence() {
+      if (mode !== 'api' || !authSession?.access_token || !me) return;
+      // Best effort only; leases also expire when a browser/device disappears without this event.
+      void fetch(base+'/api/presence',{method:'POST',keepalive:true,headers:{Authorization:'Bearer '+authSession.access_token,apikey:SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({clientId:presenceClientId,online:false})}).catch(()=>{});
+    }
+    function startPartnerPresence() {
+      stopPartnerPresence();
+      if (mode !== 'api' || !authSession || !me) return;
+      const watcher = { user:me.userId, room:me.roomId, busy:false, queuedRead:false, queuedWrite:false, error:null, channel:null };
+      partnerPresence = watcher;
+      const current = () => partnerPresence === watcher && mode === 'api' && me?.userId === watcher.user && me?.roomId === watcher.room;
+      watcher.refresh = async (heartbeat = true) => {
+        if (!current()) return;
+        if (watcher.busy) { watcher.queuedWrite ||= heartbeat; watcher.queuedRead ||= !heartbeat; return; }
+        watcher.busy = true;
+        try {
+          const result = heartbeat ? await request('/api/presence','POST',{clientId:presenceClientId,online:true,roomId:watcher.room || null}) : await request('/api/presence'+(watcher.room ? '?roomId='+encodeURIComponent(watcher.room) : ''));
+          if (!current()) return;
+          presenceMembers = result.members; presenceConfirmedAt = Date.now(); watcher.error = null; renderPartnerPresence();
+        } catch (error) { if (current()) { watcher.error = error.message; renderPartnerPresence(); } }
+        finally {
+          watcher.busy = false;
+          if (current() && (watcher.queuedWrite || watcher.queuedRead)) { const write = watcher.queuedWrite; watcher.queuedWrite = watcher.queuedRead = false; void watcher.refresh(write); }
+        }
+      };
+      watcher.channel = authClient.channel('partner-presence:'+watcher.user+':'+(++presenceGeneration))
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'watch_presence_leases'},()=>void watcher.refresh(false))
+        .on('postgres_changes',{event:'UPDATE',schema:'public',table:'watch_presence_leases'},()=>void watcher.refresh(false))
+        .subscribe(status=>{if(status==='SUBSCRIBED')void watcher.refresh(false);});
+      watcher.timer = setInterval(()=>void watcher.refresh(true),15000); void watcher.refresh(true);
+    }
     function stopLiveChat() {
+      stopPartnerPresence();
       stopMovieInvitations();
       if (typeof resetCoupleView === 'function') resetCoupleView();
       resetChatNotifications();
@@ -993,6 +1098,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function startLiveChat() {
       stopLiveChat();
       startMovieInvitations();
+      startPartnerPresence();
       if (typeof sharedPlayback !== 'undefined' && mode === 'api' && me?.roomId) sharedPlayback.selectRoom(me.roomId);
       $('messages').replaceChildren();
       $('list-items').replaceChildren();
@@ -1148,7 +1254,16 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       host.hidden = !media; host.closest('.home-session').classList.toggle('has-poster', !!media);
       if (host.dataset.mediaKey === key) return;
       host.dataset.mediaKey = key;
-      if (media) hydratePoster(host, media); else host.replaceChildren();
+      if (!media) { host.replaceChildren(); return; }
+      const title = savedList.find(item=>item.title.mediaType===media.mediaType && item.title.tmdbId===media.tmdbId)?.title || media;
+      const art = landscapeArtwork(title); host.replaceChildren(art);
+      if (!title.backdropPath && mode === 'api') {
+        const cacheKey = media.mediaType+':'+media.tmdbId, userId = me?.userId;
+        if (!posterRequests.has(cacheKey)) posterRequests.set(cacheKey,request(`/api/titles/${media.mediaType}/${media.tmdbId}`).then(data=>data.title).catch(()=>{posterRequests.delete(cacheKey);return null;}));
+        void posterRequests.get(cacheKey).then(result=>{
+          if (result && host.isConnected && host.dataset.mediaKey===key && me?.userId===userId) host.replaceChildren(landscapeArtwork(result));
+        });
+      }
     }
     function landscapeArtwork(title, tag = 'div') {
       const art = node(tag, ''); art.className = 'card-art';
@@ -1235,6 +1350,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function renderExperience() {
       route();
       renderConnection();
+      renderPartnerPresence();
       const selected = me?.rooms?.find(item => item.roomId === me.roomId);
       const hasRoom = !!me?.roomId;
       const name = me?.profile?.displayName || 'you';
@@ -1508,16 +1624,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const meta = node('p',(title.mediaType === 'tv' ? 'TV series' : 'Movie')+' · '+(title.year || 'Discover something new')); meta.className = 'hero-meta';
       copy.append(kicker,node('h3', title.title),meta,node('p', title.overview || 'Find out more about this title.'), actions);
       article.append(copy); $('discover-slide').replaceChildren(article);
-      const hadPickerFocus = $('hero-next').contains(document.activeElement), pickerStart = Math.floor(featureIndex/4)*4;
-      $('hero-next').replaceChildren(...featureItems.slice(pickerStart,pickerStart+4).map((item,index)=>{
-        const actualIndex=pickerStart+index;
-        const pick = node('button',''); pick.type = 'button'; pick.className = 'feature-pick';
-        pick.onclick = () => { featureIndex=actualIndex; paintFeature(); scheduleFeature(); };
-        pick.setAttribute('aria-label','Show featured title: '+item.title); pick.setAttribute('aria-pressed',String(actualIndex===featureIndex));
-        const label = node('span',item.title); label.className = 'pick-title';
-        pick.append(landscapeArtwork(item,'span'),label,titleMetadata(item,'span')); return pick;
-      }));
-      if (hadPickerFocus) $('hero-next').querySelector('[aria-pressed="true"]')?.focus({preventScroll:true});
       $('discover-next').disabled = $('discover-previous').disabled = featureItems.length < 2;
     }
     async function ensureHomeFeature() {
@@ -1746,7 +1852,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (progress) $('episode-content').append(node('p',progress.completedAt ? 'You watched this episode together.' : 'Continue together from '+displayTime(progress.positionMs)));
     }
     function card(title, item, resume = null) {
-      const article = node('article',''); article.className = 'movie-card';
+      const article = node('article',''); article.className = 'movie-card'+(resume ? ' is-resume' : '');
       const image = node('div',''); image.className = 'card-image'; image.append(landscapeArtwork(title));
       const play = iconButton((resume ? 'Continue watching '+title.title+' together' : (mode === 'api' ? 'Watch together: ' : 'Preview video: ')+title.title), 'play', () => watchTitle(title,resume?.media));
       play.classList.add('card-play');
@@ -1761,6 +1867,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     async function watchTitle(title, resumeMedia = null) {
         if (!me) throw new Error('Connect and sign in first.');
+        const intent = ++watchActionIntent;
         const watchingUser = me.userId, watchingRoom = me.roomId;
         let reusedSession = false;
         const media = { mediaType: title.mediaType, tmdbId: title.tmdbId, title: title.title };
@@ -1780,14 +1887,14 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           if (!me.roomId) { location.hash = 'home'; $('room-management').open = true; $('room-name').focus(); throw new Error('Create your shared room or join your partner first.'); }
           // Verify invitation setup before changing a movie. New-session invitations are atomic in SQL.
           await request('/api/watch-invitations');
-          if (me?.userId !== watchingUser || me?.roomId !== watchingRoom) return;
+          if (me?.userId !== watchingUser || me?.roomId !== watchingRoom || intent !== watchActionIntent) return;
           if (mediaKey(media) === mediaKey(room?.media)) { reusedSession = true; sharedPlayback.join(); }
-          else await sharedPlayback.watch(media);
+          else if (await sharedPlayback.watch(media) === false) return;
         } else {
           apply(await request(`/api/rooms/${me.roomId}/media`,'POST',media));
           embeddedPlayer.load(media,room.provider,room.positionMs/1000); joined = true; await chat();
         }
-        if (me?.userId !== watchingUser || me?.roomId !== watchingRoom) return;
+        if (me?.userId !== watchingUser || me?.roomId !== watchingRoom || intent !== watchActionIntent) return;
         const selectedSession = room.sessionId;
         location.hash = 'room';
         closeDetails();
@@ -1866,6 +1973,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       startLiveChat();
     }
     async function connect() {
+      watchActionIntent++;
       connectionHealth = 'connecting';
       stopLiveChat();
       resetCatalog();
@@ -1903,6 +2011,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     });
     $('room-select').onchange = () => {
       if (!me) return;
+      watchActionIntent++;
       me.roomId = $('room-select').value || null;
       preference('multiplay.room.' + me.userId, me.roomId);
       const selected = me.rooms?.find(item => item.roomId === me.roomId);
@@ -2001,6 +2110,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     bind('retry-season', loadSeason);
     bind('join', async () => { if (mode === 'api') { sharedPlayback.join(); location.hash = 'room'; return; } const state = await request(`/api/rooms/${me.roomId}/join`, 'POST', {}); joined = true; apply(state); location.hash = 'room'; await chat(); });
     function leaveMovie() {
+      watchActionIntent++;
       leaveCinemaFullscreen();
       if (mode === 'api') sharedPlayback.leave();
       else { joined = false; unload(); controls(); }
@@ -2185,6 +2295,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       }
     });
     bind('sign-out', async () => {
+      releasePartnerPresence();
       const { error } = await authClient.auth.signOut();
       if (error) throw new Error(error.message);
       authSession = null;
@@ -2219,9 +2330,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     $('home-room-controls').append(document.querySelector('.room-lobby'), $('playback-diagnostics'));
     const listTools = node('div'); listTools.className = 'watchlist-tools';
     $('list-filters').before(listTools); listTools.append($('list-filters'), $('refresh-list'));
-    window.addEventListener('online', () => void checkConnection());
-    window.addEventListener('offline', renderConnection);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) void checkConnection(); });
+    window.addEventListener('online', () => { void checkConnection(); void partnerPresence?.refresh(true); });
+    window.addEventListener('offline', () => { renderConnection(); renderPartnerPresence(); });
+    window.addEventListener('pagehide', releasePartnerPresence);
+    window.addEventListener('pageshow', () => { void partnerPresence?.refresh(true); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { void checkConnection(); void partnerPresence?.refresh(true); } });
     setInterval(() => { if (!document.hidden) void checkConnection(); }, 30000);
     window.addEventListener('hashchange', () => {
       const code = inviteFromHash(location.hash);

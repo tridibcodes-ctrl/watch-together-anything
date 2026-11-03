@@ -114,6 +114,7 @@ test('live list listens for insert/update in selected room and ignores old chann
   vm.runInContext(source.slice(source.indexOf('    let chatChannel ='), source.indexOf('    authClient.auth.onAuthStateChange')), ctx);
   // Invitations have their own account-wide channel; this fixture isolates room-list delivery.
   ctx.startMovieInvitations = () => {}; ctx.stopMovieInvitations = () => {};
+  ctx.startPartnerPresence = () => {}; ctx.stopPartnerPresence = () => {};
   ctx.startLiveChat();
   const listEvents = channels[0].listeners.filter(l => l.filter?.table === 'watch_room_list_items');
   assert.deepEqual(listEvents.map(l => l.filter.event), ['INSERT', 'UPDATE']);

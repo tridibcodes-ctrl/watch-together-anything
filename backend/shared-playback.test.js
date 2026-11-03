@@ -40,6 +40,32 @@ test('a delayed selection response cannot join a newer partner-selected session'
   await assert.rejects(selecting,/partner selected another/);assert.equal(app.events.at(-1).joined,false);assert.equal(app.loads.length,1);
   app.sync.destroy();
 });
+
+test('leaving while movie selection is pending cannot reopen the player on its late response',async()=>{
+  let resolve;const app=client(async(path,method,body)=>method==='POST'&&body.tmdbId?new Promise(done=>resolve=done):{...initial},{requireSessionConsent:true});
+  app.sync.selectRoom('room');await flush();
+  const selecting=app.sync.watch({mediaType:'movie',tmdbId:27205,title:'Next'});
+  app.sync.leave();resolve({...initial,revision:2,sessionId:'next',media:{mediaType:'movie',tmdbId:27205,title:'Next'}});await selecting;
+  assert.equal(app.events.at(-1).joined,false);assert.equal(app.loads.length,0);app.sync.destroy();
+});
+
+test('leaving while accepting an invitation prevents its delayed response from joining',async()=>{
+  let resolve,delay=false;const app=client(async()=>delay?new Promise(done=>resolve=done):{...initial});
+  app.sync.selectRoom('room');await flush();delay=true;
+  const accepting=app.sync.joinSession('session');app.sync.leave();resolve({...initial});
+  await assert.rejects(accepting,/cancelled|changed/);assert.equal(app.events.at(-1).joined,false);assert.equal(app.loads.length,0);app.sync.destroy();
+});
+
+test('retrying a failed movie selection reuses its identity and joins only while that choice is still active',async()=>{
+  let fail=true;const bodies=[];
+  const app=client(async(_path,method,body)=>{
+    if(method==='POST'&&body.tmdbId){bodies.push(body);if(fail){fail=false;throw new Error('network');}return {...initial,revision:2,sessionId:'chosen',media:body};}
+    return {...initial};
+  },{requireSessionConsent:true});
+  app.sync.selectRoom('room');await flush();await assert.rejects(app.sync.watch({mediaType:'movie',tmdbId:27205,title:'Next'}),/network/);
+  assert.equal(app.events.at(-1).joined,false);await app.sync.retryCommand();assert.equal(app.events.at(-1).joined,true);assert.equal(bodies[0].commandId,bodies[1].commandId);
+  app.sync.leave();await app.sync.retryCommand();assert.equal(app.events.at(-1).joined,false);app.sync.destroy();
+});
 test('both members apply committed seek/play and provider changes; nonjoined clients do not autoplay',async()=>{
   let state={...initial};
   const request=async(path,method,body)=>{
