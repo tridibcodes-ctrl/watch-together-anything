@@ -21,6 +21,7 @@ function normalizeTitle(item, mediaType) {
     year: typeof date === "string" ? date.slice(0, 4) : "",
     overview: item.overview || "",
     posterPath: item.poster_path || null,
+    genreIds: item.genre_ids || (item.genres || []).map(genre => genre.id),
   };
 }
 
@@ -45,7 +46,8 @@ function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch,
   return async function handleTmdb(request, response, sendJson) {
     const url = new URL(request.url, "http://localhost:3000");
     const details = /^\/api\/titles\/([^/]+)\/([^/]+)(?:\/seasons\/([^/]+))?$/.exec(url.pathname);
-    if (!details && !["/api/catalog", "/api/search"].includes(url.pathname)) return false;
+    const isGenres = url.pathname === "/api/genres";
+    if (!details && !["/api/catalog", "/api/search", "/api/genres"].includes(url.pathname)) return false;
     if (request.method !== "GET") {
       response.setHeader("Allow", "GET");
       sendJson(response, 405, { error: "Use GET for TMDB metadata" });
@@ -58,6 +60,11 @@ function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch,
     const page = Number(pageText);
     const isSearch = url.pathname === "/api/search";
     const query = (url.searchParams.get("q") || "").trim();
+    const genre = url.searchParams.get("genre") || "";
+    if (genre && !/^[1-9]\d{0,5}$/.test(genre)) {
+      sendJson(response, 400, { error: "Genre must be a positive integer" });
+      return true;
+    }
     if (!["movie", "tv"].includes(mediaType)) {
       sendJson(response, 400, { error: "Type must be movie or tv" });
       return true;
@@ -96,10 +103,11 @@ function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch,
       return true;
     }
 
-    const upstreamPath = details ? `${mediaType}/${details[2]}${isSeason ? '/season/' + details[3] : ''}` : isSearch ? `search/${mediaType}` : `${mediaType}/popular`;
+    const upstreamPath = details ? `${mediaType}/${details[2]}${isSeason ? '/season/' + details[3] : ''}` : isGenres ? `genre/${mediaType}/list` : isSearch ? `search/${mediaType}` : genre ? `discover/${mediaType}` : `${mediaType}/popular`;
     const upstreamUrl = new URL(upstreamPath, TMDB_BASE);
     upstreamUrl.searchParams.set("language", "en-US");
-    if (!details) upstreamUrl.searchParams.set("page", String(page));
+    if (!details && !isGenres) upstreamUrl.searchParams.set("page", String(page));
+    if (genre && !isSearch) upstreamUrl.searchParams.set("with_genres", genre);
     if (isSearch) {
       upstreamUrl.searchParams.set("query", query);
       upstreamUrl.searchParams.set("include_adult", "false");
@@ -134,7 +142,10 @@ function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch,
       }
       const payload = await result.json();
       let body;
-      if (isSeason) {
+      if (isGenres) {
+        if (!Array.isArray(payload.genres)) throw new Error("Invalid genres response");
+        body = { items: payload.genres.map(genre => ({ id: genre.id, name: genre.name })) };
+      } else if (isSeason) {
         if (!Array.isArray(payload.episodes)) throw new Error("Invalid season details");
         body = { tmdbId: Number(details[2]), mediaType: "tv", seasonNumber: Number(details[3]), name: payload.name || "", episodes: payload.episodes.map(episode => ({
           episodeNumber: episode.episode_number, name: episode.name || "", overview: episode.overview || "",
@@ -147,7 +158,7 @@ function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch,
           throw new Error("Invalid TMDB response");
         }
         body = {
-          items: payload.results.map(item => normalizeTitle(item, mediaType)),
+          items: payload.results.filter(item => !genre || !isSearch || item.genre_ids?.includes(Number(genre))).map(item => normalizeTitle(item, mediaType)),
           page,
           hasMore: page < Math.min(payload.total_pages, MAX_PAGE),
         };

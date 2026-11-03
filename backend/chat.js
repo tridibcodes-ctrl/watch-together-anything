@@ -39,7 +39,8 @@ function createChatHandler({ authenticateUser = authenticate, fetchImpl = fetch 
         return true;
       }
       if (request.method === "GET") {
-        const result = await upstream(`/watch_room_messages?room_id=eq.${roomId}&select=id,sender_id,sender_name,body,kind,created_at&order=created_at.desc,id.desc&limit=100`);
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const result = await upstream(`/watch_room_messages?room_id=eq.${roomId}&created_at=gt.${cutoff}&select=id,sender_id,sender_name,body,kind,created_at&order=created_at.desc,id.desc&limit=100`);
         if (!result.ok) throw new Error("Message lookup failed");
         const rows = await result.json();
         const senderIds = [...new Set(rows.map(row => row.sender_id))];

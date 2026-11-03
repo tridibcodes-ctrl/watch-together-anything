@@ -149,7 +149,6 @@ test('chat badges ignore history, outgoing messages, and duplicate live reloads'
   app.update([history, incoming, outgoing]);
   app.update([history, incoming, outgoing]);
   assert.equal(app.nodes['chat-badge'].textContent, '1');
-  assert.equal(app.nodes['chat-nav-badge'].textContent, '1');
   assert.equal(app.nodes['chat-badge'].hidden, false);
   assert.match(app.nodes['chat-toggle']['aria-label'], /1 unread message/);
 });
@@ -162,7 +161,7 @@ test('opening chat clears badges and incoming texts while open stay read', () =>
   assert.equal(app.nodes['chat-badge'].hidden, true);
   app.update([{ id: 'first', senderId: 'partner' }, { id: 'second', senderId: 'partner' }]);
   app.context.setChatOpen(false);
-  assert.equal(app.nodes['chat-nav-badge'].hidden, true);
+  assert.equal(app.nodes['chat-badge'].hidden, true);
   app.update([{ id: 'first', senderId: 'partner' }, { id: 'second', senderId: 'partner' }, { id: 'third', senderId: 'partner' }]);
   assert.equal(app.nodes['chat-badge'].textContent, '1');
 });

@@ -111,7 +111,11 @@ const server = http.createServer(async (request, response) => {
             "Content-Type": "application/json",
             Prefer: "return=representation",
           },
-          body: JSON.stringify({ user_id: userId }),
+          body: JSON.stringify({
+            user_id: userId,
+            display_name: typeof data.userClaims.userMetadata?.display_name === 'string' ? data.userClaims.userMetadata.display_name.trim().slice(0, 40) : '',
+            avatar_key: ['moon', 'sun', 'star', 'heart'].includes(data.userClaims.userMetadata?.avatar_key) ? data.userClaims.userMetadata.avatar_key : 'moon',
+          }),
         });
 
         if (profileResponse.ok) {

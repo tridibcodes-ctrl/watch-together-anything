@@ -188,6 +188,64 @@
     @media (max-width: 1000px) { body { padding: 0 22px 40px 118px; }.home-grid { grid-template-columns: 1fr; }.playback-stage { flex-wrap: wrap; }.video-pane { flex-basis: 100%; }.chat-panel { flex: 1 1 100%; border-left: 0; border-top: 1px solid #654052; height: 400px; }.playback-stage:fullscreen, .playback-stage.is-expanded { flex-wrap: nowrap; }.playback-stage:fullscreen .video-pane, .playback-stage.is-expanded .video-pane { flex-basis: 0; }.playback-stage:fullscreen .chat-panel, .playback-stage.is-expanded .chat-panel { flex: 0 0 280px; } }
     @media (max-width: 700px) { body { padding: 0 16px 104px; }.side-nav { inset: auto 0 0; width: auto; padding: 4px; height: 76px; }.side-nav a { width: 55px; height: 60px; }.side-nav .nav-brand { display: flex; font-size: 20px; margin: 0; }.side-nav .nav-profile { margin: 0; }.side-nav svg { width: 20px; height: 20px; }.app-header { padding-top: 20px; }.app-header p { max-width: 135px; font-size: 12px; }.home-session, .home-room { padding: 20px; }main > section { padding: 24px 0; }#auth { padding: 22px; margin: 24px auto; }#search-form { grid-template-columns: 1fr 110px; }#search-form button { grid-column: 1/-1; }.partner-seats { grid-template-columns: 1fr; }.section-heading { align-items: flex-start; flex-wrap: wrap; }.room-lobby { padding: 16px; }#catalog, #list-items, .poster-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }.details-poster { width: 90px; margin-right: 16px; }.playback-stage:fullscreen, .playback-stage.is-expanded { flex-direction: column; }.playback-stage:fullscreen .video-pane, .playback-stage.is-expanded .video-pane { flex: 1; min-height: 0; width: 100%; }.playback-stage:fullscreen .chat-panel, .playback-stage.is-expanded .chat-panel { flex: 0 0 40%; width: 100%; min-height: 0; }.playback-stage:fullscreen #messages, .playback-stage.is-expanded #messages { min-height: 40px; }.playback-stage:fullscreen #chat-status, .playback-stage.is-expanded #chat-status { display: none; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+    /* Discovery, shared history, and the live watchlist board. */
+    h1, h2, h3, h4, h5, h6, .app-header h1, .movie-card h3, #details-heading { text-align: center; }
+    .section-heading { justify-content: center; flex-wrap: wrap; }
+    .section-heading h3 { flex: 1 1 100%; }
+    .app-header { flex-direction: column; align-items: center; gap: 8px; }
+    .app-header p { text-align: center; max-width: none; }
+    .home-session { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 24px; }
+    .home-session.has-poster { grid-template-columns: 150px minmax(0, 1fr); }
+    .home-session h3 { margin-inline: auto; }
+    .home-session-copy { text-align: center; }
+    .home-poster .poster { margin: 0; border-radius: 12px; overflow: hidden; aspect-ratio: 2/3; background: #332633; }
+    .home-poster img { width: 100%; height: 100%; object-fit: cover; }
+    .ui-icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+    .icon-button { display: inline-grid; place-items: center; min-width: 44px; padding: 10px; }
+    .card-actions .icon-button { flex: 0 0 44px; }
+    .card-actions { justify-content: center; }
+    .resume-card { text-align: center; }
+    .resume-card .poster { border-radius: 12px; margin-bottom: 16px; overflow: hidden; aspect-ratio: 2/3; }
+    .seat-avatar svg { width: 24px; height: 24px; }
+    #search-form { grid-template-columns: minmax(180px, 1fr) 110px 160px auto; }
+    .search-field { position: relative; min-width: 0; }
+    .search-field label { display: block; margin: 0 0 6px; }
+    #search-suggestions { position: absolute; top: calc(100% + 6px); inset-inline: 0; z-index: 25; max-height: 330px; overflow-y: auto; list-style: none; margin: 0; padding: 6px; border: 1px solid #a26b87; border-radius: 12px; background: #211e25; box-shadow: 0 14px 36px #0009; text-align: left; }
+    #search-suggestions li { padding: 10px 12px; border-radius: 8px; cursor: pointer; }
+    #search-suggestions li[aria-selected="true"], #search-suggestions li:hover { background: #713e59; color: #fff0f6; }
+    .genre-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 20px; }
+    .genre-chips button { display: inline-flex; align-items: center; gap: 8px; margin: 0; background: #211e25; }
+    .genre-chips button[aria-pressed="true"] { background: #713e59; border-color: #e0829d; }
+    #catalog { display: block; text-align: left; }
+    .genre-section { margin-block: 28px; }
+    .genre-section h3 { display: flex; justify-content: center; align-items: center; gap: 10px; }
+    .genre-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 22px; justify-content: start; }
+    .discover-feature { background: linear-gradient(115deg, #352432, #211e25); border: 1px solid #70465d; border-radius: 20px; margin-block: 24px; padding: 20px; }
+    .discover-slide { opacity: 1; transition: opacity .4s ease; }
+    .discover-slide.is-fading { opacity: 0; }
+    .feature-card { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: 24px; min-height: 230px; }
+    .feature-card .poster { margin: 0; border-radius: 12px; overflow: hidden; aspect-ratio: 2/3; }
+    .feature-card h3 { margin-top: 0; font-size: clamp(20px, 2.4vw, 30px); }
+    .feature-card .card-actions { margin: 0; }
+    .feature-copy p { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .carousel-controls { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; font-size: 13px; }
+    #list-items.kanban-board { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); align-items: start; gap: 18px; overflow-x: auto; padding-bottom: 12px; }
+    #list-items.kanban-board.is-filtered { grid-template-columns: minmax(240px, 420px); }
+    .kanban-column { min-width: 0; background: #1b181f; border: 1px solid #654052; border-radius: 16px; padding: 14px; }
+    .kanban-column h3 { font-size: 17px; margin: 4px 0 18px; }
+    .kanban-column[data-status="watching"] { border-top: 3px solid #e0829d; }
+    .kanban-column[data-status="planned"] { border-top: 3px solid #8f5774; }
+    .kanban-column[data-status="watched"] { border-top: 3px solid #036264; }
+    .kanban-cards { display: grid; gap: 16px; }
+    .kanban-column .poster { max-height: 250px; }
+    .kanban-empty { font-size: 13px; text-align: center; }
+    .auth-options { display: flex; gap: 10px; margin-block: 20px; }
+    .auth-options button { flex: 1; }
+    .auth-options button[aria-pressed="true"] { background: #e0829d; color: #16151a; }
+    #auth #sign-up-form { display: grid; }
+    .chat-retention { margin: 4px 0; font-size: 11px; }
+    @media (prefers-reduced-motion: reduce) { .discover-slide { transition: none; } }
+    @media (max-width: 700px) { #search-form { grid-template-columns: 1fr 1fr; }.search-field { grid-column: 1/-1; }.home-session.has-poster { grid-template-columns: 100px minmax(0, 1fr); gap: 14px; }.feature-card { grid-template-columns: 90px minmax(0, 1fr); gap: 14px; min-height: 180px; }.genre-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }#list-items.kanban-board { grid-template-columns: repeat(3, minmax(250px, 1fr)); }.carousel-controls { gap: 4px; } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -208,7 +266,6 @@
     <a href="#browse" aria-label="Discover" title="Discover"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg></a>
     <a href="#list" aria-label="Watchlist" title="Watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-7-4-7 4z"/></svg></a>
     <a href="#room" aria-label="Room" title="Room"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg></a>
-    <a id="chat-nav" href="#chat" aria-label="Chat" title="Chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/><path d="M8 10h8M8 13h5"/></svg><span id="chat-nav-badge" class="chat-badge" aria-hidden="true" hidden></span></a>
     <a class="nav-profile" href="#profile" aria-label="Profile" title="Profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3-7 8-7s8 3 8 7"/></svg></a>
   </nav>
 
@@ -236,14 +293,23 @@
     <p class="eyebrow">A little time for the two of you</p>
     <h2 id="auth-heading">Your next movie night starts here.</h2>
     <p>Sign in to your account to join your partner. Each private room has space for two.</p>
+    <div class="auth-options" role="group" aria-label="Account options"><button id="show-sign-in" type="button" aria-pressed="true">Sign in</button><button id="show-sign-up" type="button" aria-pressed="false">Create account</button></div>
     <form id="sign-in-form">
       <label>Email <input id="auth-email" type="email" autocomplete="username" required></label>
       <label>Password <input id="auth-password" type="password" autocomplete="current-password" required></label>
       <button type="submit">Sign in</button>
     </form>
+    <form id="sign-up-form" hidden>
+      <label>Display name <input id="signup-name" maxlength="40" autocomplete="nickname" required></label>
+      <label>Avatar <select id="signup-avatar"><option value="moon">Moon</option><option value="sun">Sun</option><option value="star">Star</option><option value="heart">Heart</option></select></label>
+      <label>Email <input id="signup-email" type="email" autocomplete="email" required></label>
+      <label>Password <input id="signup-password" type="password" minlength="8" autocomplete="new-password" required></label>
+      <label>Confirm password <input id="signup-confirm" type="password" minlength="8" autocomplete="new-password" required></label>
+      <button type="submit">Create account</button>
+      <p class="muted">Use at least 8 characters. We may email you a link to confirm your account.</p>
+    </form>
     <p id="auth-status" role="status" aria-live="polite">Not signed in.</p>
     <button id="retry-connection" type="button">Try connecting again</button>
-    <p class="muted">Use an existing account. Account registration and password recovery are coming later.</p>
   </section>
   <main id="main-content" tabindex="-1">
     <section id="home" data-view aria-labelledby="home-heading" hidden>
@@ -252,11 +318,14 @@
       <p id="home-greeting">A favourite film. A new series. A little time together.</p>
       <div class="home-grid">
         <article class="home-session">
+          <div id="home-poster" class="home-poster" hidden></div>
+          <div class="home-session-copy">
           <span class="eyebrow">Your shared screen</span>
           <h3 id="home-title">Something good starts with the two of you.</h3>
           <p id="home-session-status">Create a room or join your partner to get started.</p>
           <a id="home-watch" class="primary-link" href="#room">Open your room</a>
           <a class="quiet-link" href="#browse">Find something to watch</a>
+          </div>
         </article>
         <article class="home-room"><span class="eyebrow">Your place together</span><h3 id="home-room-name">Your room</h3><p id="home-partner">Open your room to invite your partner.</p><a href="#room">Room and invitation</a></article>
       </div>
@@ -271,13 +340,19 @@
       <p class="eyebrow">Find your next favourite</p>
       <h2 id="browse-heading" tabindex="-1">What are we watching?</h2>
       <form id="search-form">
-        <label>Search <input id="query" type="search"></label>
+        <div class="search-field"><label for="query">Search</label><input id="query" type="search" maxlength="200" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-suggestions"><ul id="search-suggestions" role="listbox" aria-label="Suggested movies and TV series" hidden></ul><span id="suggestion-status" class="visually-hidden" role="status"></span></div>
         <label>Type <select id="media-type">
             <option value="movie">Movie</option>
             <option value="tv">TV</option>
           </select></label>
+        <label>Genre <select id="genre"><option value="">All genres</option></select></label>
         <button>Search</button>
       </form>
+      <section id="discover-feature" class="discover-feature" aria-label="Featured discoveries" hidden>
+        <div id="discover-slide" class="discover-slide" aria-live="off"></div>
+        <div class="carousel-controls"><button id="discover-previous" type="button" aria-label="Previous featured title">&#8249;</button><button id="discover-pause" type="button" aria-pressed="false">Pause rotation</button><span id="discover-count"></span><button id="discover-next" type="button" aria-label="Next featured title">&#8250;</button></div>
+      </section>
+      <div id="genre-sections" class="genre-chips" role="group" aria-label="Browse by genre"></div>
       <p>Explore together, save a favourite, or pick something for tonight.</p>
       <button id="retry-catalog" type="button" hidden>Try loading titles again</button>
       <div id="catalog"></div>
@@ -311,7 +386,7 @@
       <div id="list-filters" role="group" aria-label="Filter our list"><button type="button" data-filter="all" aria-pressed="true">All</button><button type="button" data-filter="planned" aria-pressed="false">Planned</button><button type="button" data-filter="watching" aria-pressed="false">Watching</button><button type="button" data-filter="watched" aria-pressed="false">Watched</button></div>
       <button id="refresh-list" type="button">Refresh list</button>
       <p id="list-status" role="status" aria-live="polite">Connect and select a room to load your shared list.</p>
-      <div id="list-items"></div>
+      <div id="list-items" class="kanban-board" aria-label="Shared watchlist board"></div>
       <h3>Episode history</h3><p>A finished episode stays here. Finishing one episode does not mark the whole show as watched.</p><div id="episode-history"></div>
     </section>
 
@@ -366,6 +441,7 @@
           <p id="chat-status" role="status" aria-live="polite">Live chat is off in Local demo.</p>
           <p id="chat-playback-status" role="status" aria-live="polite" hidden></p>
           <ol id="messages"></ol>
+          <p class="muted chat-retention">Messages disappear after 24 hours.</p>
           <form id="chat-form">
             <label>Message <input id="message" maxlength="2000" required></label>
             <button>Send</button>
@@ -524,12 +600,16 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       onError(message) { $('player-diagnostics').textContent = message; $('sync-status').textContent = 'We couldn’t update playback. Check your connection, then use Retry in Connection details.'; }
     });
     let catalogState = null, catalogLoading = false, catalogVersion = 0;
+    const genreCache = new Map(), posterRequests = new Map();
+    let catalogGenres = [], featureItems = [], featureIndex = 0, featureTimer = null, featureFade = null;
+    let featurePaused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let suggestionTimer = null, suggestionVersion = 0, suggestions = [], suggestionIndex = -1;
     let selectedTitle = null, selectedEpisodes = [], detailsVersion = 0, seasonVersion = 0;
     $('mode').value = mode; $('backend').value = base;
     const samples = [
-      { tmdbId: 155, mediaType: 'movie', title: 'The Dark Knight', year: '2008', posterPath: '/qJ2tW6WMUDux911r6m7haRef0WH.jpg', overview: 'A new threat arrives in Gotham.' },
-      { tmdbId: 27205, mediaType: 'movie', title: 'Inception', year: '2010', posterPath: '/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg', overview: 'An unusual assignment inside dreams.' },
-      { tmdbId: 1396, mediaType: 'tv', title: 'Breaking Bad', year: '2008', overview: 'A chemistry teacher makes a life-changing choice.' }
+      { tmdbId: 155, mediaType: 'movie', title: 'The Dark Knight', year: '2008', genreIds: [28, 80], posterPath: '/qJ2tW6WMUDux911r6m7haRef0WH.jpg', overview: 'A new threat arrives in Gotham.' },
+      { tmdbId: 27205, mediaType: 'movie', title: 'Inception', year: '2010', genreIds: [878, 28], posterPath: '/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg', overview: 'An unusual assignment inside dreams.' },
+      { tmdbId: 1396, mediaType: 'tv', title: 'Breaking Bad', year: '2008', genreIds: [18, 80], posterPath: '/3xnWaLQjelJDDF7LT1WBo6f4BRe.jpg', overview: 'A chemistry teacher makes a life-changing choice.' }
     ];
     const demo = {
       profile: { userId: 'demo-user', displayName: 'Your name', avatarKey: 'moon' }, list: [], messages: [], progress: [],
@@ -546,15 +626,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function renderChatNotifications() {
       const count = chatNotifications.unread.size;
       const suffix = count ? `, ${count} unread message${count === 1 ? '' : 's'}` : '';
-      for (const id of ['chat-badge', 'chat-nav-badge']) {
+      for (const id of ['chat-badge']) {
         $(id).hidden = count === 0;
         $(id).textContent = count > 99 ? '99+' : String(count);
       }
       const label = ($('chat-panel').hidden ? 'Open chat' : 'Close chat') + suffix;
       $('chat-toggle').setAttribute('aria-label', label);
       $('chat-toggle').title = label;
-      $('chat-nav').setAttribute('aria-label', 'Chat' + suffix);
-      $('chat-nav').title = 'Chat' + suffix;
       const announcement = count ? `${count} unread message${count === 1 ? '' : 's'}. Open chat to read.` : '';
       if ($('chat-alert').textContent !== announcement) $('chat-alert').textContent = announcement;
     }
@@ -576,6 +654,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           }
         }
       } else chatNotifications.seen = new Set();
+      const visibleIds = new Set(items.map(message => message.id));
+      for (const id of chatNotifications.unread) if (!visibleIds.has(id)) chatNotifications.unread.delete(id);
       for (const message of items) if (message.id) chatNotifications.seen.add(message.id);
       if (!$('chat-panel').hidden) chatNotifications.unread.clear();
       renderChatNotifications();
@@ -655,7 +735,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           if (!current()) return;
           try { await chat(); }
           catch { if (current()) $('chat-status').textContent = 'Could not load messages. Retrying automatically…'; }
-          finally { if (current()) { void loadProgress(); if (Date.now()-roomInfoAt>30000) void loadRoomInfo(); pollChat(); } }
+          finally { if (current()) { void loadProgress(); void list().catch(() => {}); if (Date.now()-roomInfoAt>30000) void loadRoomInfo(); pollChat(); } }
         }, 8000);
       }
       pollChat(); reload(); reloadList();
@@ -704,6 +784,52 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function say(text) { $('status').textContent = friendlyError(text); $('status').hidden = !text; }
     function node(tag, text) { const item = document.createElement(tag); item.textContent = text; return item; }
     function button(text, fn) { const b = node('button', text); b.type = 'button'; b.onclick = () => act(fn, b); return b; }
+    function icon(name) {
+      const paths = {
+        details: ['M12 11v6', 'M12 7h.01'], save: ['M5 4h14v16l-7-4-7 4z'], play: ['m9 5 10 7-10 7z'],
+        remove: ['M6 6l12 12M18 6 6 18'], movie: ['M3 7h18v14H3z', 'M3 7V3h18v4M7 3l-2 4M13 3l-2 4M19 3l-2 4'],
+        moon: ['M20 14a8 8 0 0 1-10-10 8 8 0 1 0 10 10z'], sun: ['M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5'],
+        star: ['m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z'],
+        heart: ['M20.8 5.7a5 5 0 0 0-7.1 0L12 7.4l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 21l8.8-8.2a5 5 0 0 0 0-7.1z'],
+        user: ['M4 21c0-4 3-7 8-7s8 3 8 7']
+      };
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('class', 'ui-icon'); svg.setAttribute('aria-hidden', 'true');
+      for (const d of paths[name] || paths.user) { const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', d); svg.append(path); }
+      if (['details', 'sun', 'user'].includes(name)) { const circle = document.createElementNS(svg.namespaceURI, 'circle'); circle.setAttribute('cx', '12'); circle.setAttribute('cy', name === 'user' ? '7' : '12'); circle.setAttribute('r', name === 'details' ? '9' : '4'); svg.prepend(circle); }
+      return svg;
+    }
+    function iconButton(label, name, action) {
+      const control = button('', action); control.className = 'icon-button';
+      control.setAttribute('aria-label', label); control.title = label; control.append(icon(name)); return control;
+    }
+    function posterNode(title) {
+      const poster = node('p', title.title); poster.className = 'poster';
+      if (typeof title.posterPath === 'string' && /^\/[a-zA-Z0-9._-]+$/.test(title.posterPath)) {
+        const image = document.createElement('img'); image.alt = 'Poster for ' + title.title;
+        image.width = 342; image.height = 513; image.loading = 'lazy'; image.decoding = 'async';
+        image.src = 'https://image.tmdb.org/t/p/w342' + title.posterPath;
+        image.onerror = () => poster.replaceChildren(node('span', title.title)); poster.replaceChildren(image);
+      }
+      return poster;
+    }
+    function hydratePoster(host, media) {
+      const title = savedList.find(item => item.title.mediaType === media.mediaType && item.title.tmdbId === media.tmdbId)?.title || media;
+      const poster = posterNode(title); host.replaceChildren(poster);
+      if (title.posterPath) return;
+      const key = media.mediaType + ':' + media.tmdbId, roomId = me?.roomId, userId = me?.userId;
+      if (!posterRequests.has(key)) posterRequests.set(key, request(`/api/titles/${media.mediaType}/${media.tmdbId}`).then(data => data.title).catch(() => { posterRequests.delete(key); return null; }));
+      void posterRequests.get(key).then(result => {
+        if (result?.posterPath && host.isConnected && host.firstChild === poster && roomId === me?.roomId && userId === me?.userId) host.replaceChildren(posterNode(result));
+      });
+    }
+    function renderHomePoster(media) {
+      const host = $('home-poster'), key = (me?.roomId || '') + ':' + mediaKey(media);
+      host.hidden = !media; host.closest('.home-session').classList.toggle('has-poster', !!media);
+      if (host.dataset.mediaKey === key) return;
+      host.dataset.mediaKey = key;
+      if (media) hydratePoster(host, media); else host.replaceChildren();
+    }
     async function act(fn, b) { if (b) b.disabled = true; try { await fn(); } catch (e) { say(e.message); } finally { if (b) b.disabled = false; controls(); } }
     function controls() {
       $('fullscreen-player').disabled = !localPlayback && !isPlaybackExpanded();
@@ -726,10 +852,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function route(focus = false) {
       const requested = inviteFromHash(location.hash) ? 'room' : location.hash.slice(1) || 'home';
-      const next = ['home', 'browse', 'list', 'room', 'profile', 'developer'].includes(requested) ? requested : 'home';
+      if (requested === 'signup') showAuthForm(true);
+      const next = requested === 'signup' ? 'profile' : ['home', 'browse', 'list', 'room', 'profile', 'developer'].includes(requested) ? requested : 'home';
       if (currentView !== next) {
         if (currentView) viewScroll.set(currentView, window.scrollY);
         currentView = next;
+        if (typeof closeSuggestions === 'function') closeSuggestions();
+        if (typeof scheduleFeature === 'function') scheduleFeature();
         window.scrollTo(0, viewScroll.get(next) || 0);
       }
       for (const view of document.querySelectorAll('[data-view]')) view.hidden = view.id !== next || (mode === 'api' && !me && next !== 'developer');
@@ -754,22 +883,22 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('home-greeting').textContent = mode === 'demo' ? 'Local Demo · sample data only. Nothing is saved or shared.' : `Welcome back, ${name}. Make tonight a little time together.`;
       $('home-room-name').textContent = selected?.name || (mode === 'demo' ? 'Demo room' : 'A place for the two of you');
       $('lobby-name').textContent = selected?.name || (mode === 'demo' ? 'Demo room' : 'Create your private room');
-      const members = mode === 'api' ? room?.readiness?.members || roomInfo?.members?.map(member => ({ ...member, ready: false })) || [] : [{ userId: me?.userId || me?.profile?.userId, displayName: name, ready: joined }];
+      const members = mode === 'api' ? (room?.readiness?.members?.length ? room.readiness.members : roomInfo?.members?.map(member => ({ ...member, ready: false })) || []) : [{ userId: me?.userId || me?.profile?.userId, displayName: name, ready: joined }];
       const partner = members.find(member => member.userId !== (me?.userId || me?.profile?.userId));
       $('home-partner').textContent = !hasRoom ? 'Create a room or join your partner’s invitation.' : mode === 'demo' ? 'This is a single-browser preview. A second participant is not connected.' : partner ? `${partner.displayName || 'Your partner'}: ${partner.ready ? 'video ready' : 'not ready to watch yet'}.` : 'Open your room to share the invite code. Readiness appears when a movie is selected.';
       const media = mode === 'demo' ? localPlayback?.media || room?.media : room?.media;
       $('home-title').textContent = media ? media.title + (media.mediaType === 'tv' ? ` · S${media.season} E${media.episode}` : '') : 'What shall we watch tonight?';
       $('home-session-status').textContent = media ? (mode === 'demo' ? 'Preview this title in your demo room.' : sharedView.online ? (joined ? 'Your shared movie is open in the Watch Room.' : 'Your room has a title selected. Join the movie when you’re ready.') : 'Reconnecting to your shared screen…') : 'Discover something new, or choose a favourite from your list.';
       $('home-watch').textContent = media ? 'Return to your movie' : hasRoom ? 'Open your room' : 'Create or join a room';
-      const seats = members.slice(0, 2).map(member => ({ name: member.displayName || 'Partner', state: mode === 'demo' ? 'Demo preview' : !sharedView.online ? 'Connection unavailable' : member.ready ? 'Video ready' : 'Not ready yet', own: member.userId === (me?.userId || me?.profile?.userId) }));
-      if (!seats.some(seat => seat.own)) seats.unshift({ name, state: !hasRoom ? 'Choose a room' : !media ? 'Choose a movie' : joined ? 'Preparing your video' : 'Join the movie', own: true });
+      const seats = members.slice(0, 2).map(member => ({ name: member.displayName || 'Partner', avatarKey: member.userId === (me?.userId || me?.profile?.userId) ? me?.profile?.avatarKey : roomInfo?.members?.find(profile => profile.userId === member.userId)?.avatarKey || member.avatarKey || 'moon', state: mode === 'demo' ? 'Demo preview' : !sharedView.online ? 'Connection unavailable' : member.ready ? 'Video ready' : 'Not ready yet', own: member.userId === (me?.userId || me?.profile?.userId) }));
+      if (!seats.some(seat => seat.own)) seats.unshift({ name, avatarKey: me?.profile?.avatarKey || 'moon', state: !hasRoom ? 'Choose a room' : !media ? 'Choose a movie' : joined ? 'Preparing your video' : 'Join the movie', own: true });
       if (seats.length < 2) seats.push({ name: 'Your partner', state: mode === 'demo' ? 'Not connected in Local Demo' : !media ? 'Readiness appears after a title is selected' : 'Waiting for your partner’s readiness' });
       const signature = JSON.stringify(seats.slice(0, 2));
       if ($('partner-seats').dataset.signature !== signature) {
         $('partner-seats').dataset.signature = signature;
         $('partner-seats').replaceChildren(...seats.slice(0, 2).map(seat => {
           const card = node('div'); card.className = 'partner-seat';
-          const avatar = node('span', seat.name.slice(0, 1).toUpperCase()); avatar.className = 'seat-avatar'; avatar.setAttribute('aria-hidden', 'true');
+          const avatar = node('span', ''); avatar.className = 'seat-avatar'; avatar.setAttribute('aria-hidden', 'true'); avatar.append(icon(seat.avatarKey === 'default' ? 'moon' : seat.avatarKey || 'user'));
           const content = node('div'); content.append(node('strong', seat.name + (seat.own ? ' (you)' : '')), node('p', seat.state)); card.append(avatar, content); return card;
         }));
       }
@@ -843,12 +972,20 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function listProgress(item) {
       const history = progressItems.filter(entry => entry.media.mediaType === item.title.mediaType && entry.media.tmdbId === item.title.tmdbId);
       const watched = history.filter(entry => entry.completedAt);
-      return { ...item, status: item.title.mediaType === 'movie' && watched.length ? 'watched' : history.length ? 'watching' : 'planned', watchedEpisodes: item.title.mediaType === 'tv' ? watched.length : 0 };
+      return { ...item, status: item.title.mediaType === 'movie' && watched.length ? 'watched' : history.length ? 'watching' : item.status || 'planned', watchedEpisodes: item.title.mediaType === 'tv' ? Math.max(watched.length, item.watchedEpisodes || 0) : 0 };
     }
     function renderSavedLists() {
       const items = savedList.map(listProgress);
-      const shown = items.filter(item => listFilter === 'all' || (listFilter === 'watched' ? item.status === 'watched' || item.watchedEpisodes > 0 : item.status === listFilter));
-      $('list-items').replaceChildren(...shown.map(item => card(item.title,item)));
+      const shown = items.filter(item => listFilter === 'all' || item.status === listFilter);
+      const board = $('list-items'); board.classList.toggle('is-filtered', listFilter !== 'all');
+      board.replaceChildren(...[['planned', 'Planned'], ['watching', 'Watching'], ['watched', 'Watched']].map(([status, label]) => {
+        const column = node('section', ''); column.className = 'kanban-column'; column.dataset.status = status;
+        column.hidden = listFilter !== 'all' && listFilter !== status;
+        const entries = items.filter(item => item.status === status), heading = node('h3', label + ' (' + entries.length + ')');
+        const cards = node('div', ''); cards.className = 'kanban-cards'; cards.append(...entries.map(item => card(item.title, item)));
+        if (!entries.length) { const empty = node('p', status === 'planned' ? 'Save a title from Discover.' : status === 'watching' ? 'Start a movie or an episode together.' : 'Confirm a completed movie together.'); empty.className = 'kanban-empty'; cards.append(empty); }
+        column.append(heading, cards); return column;
+      }));
       $('home-list').replaceChildren(...items.filter(item => item.status !== 'watched').slice(0,4).map(item => card(item.title,item)));
       $('home-list-empty').hidden = items.some(item => item.status !== 'watched');
       if (items.length && !shown.length) $('list-status').textContent = 'No titles in this section yet.';
@@ -860,8 +997,9 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('progress-empty').hidden = unfinished.length > 0;
       $('continue-list').replaceChildren(...unfinished.slice(0,6).map(item => {
         const title = savedList.find(saved => saved.title.mediaType === item.media.mediaType && saved.title.tmdbId === item.media.tmdbId)?.title || item.media;
-        const article = node('article'); article.className = 'home-room';
-        article.append(node('h3',item.media.title),node('p',(item.media.mediaType === 'tv' ? `S${item.media.season} E${item.media.episode} · ` : '')+'Saved at '+displayTime(item.positionMs)),button('Continue together',()=>watchTitle(title,item.media)));
+        const article = node('article'); article.className = 'home-room resume-card';
+        const poster = node('div', ''); hydratePoster(poster, title);
+        article.append(poster,node('h3',item.media.title),node('p',(item.media.mediaType === 'tv' ? `S${item.media.season} E${item.media.episode} · ` : '')+'Saved at '+displayTime(item.positionMs)),iconButton('Continue watching ' + item.media.title + ' together', 'play', ()=>watchTitle(title,item.media)));
         return article;
       }));
       $('episode-history').replaceChildren(...progressItems.filter(item => item.media.mediaType === 'tv').map(item => {
@@ -880,11 +1018,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('copy-invite').disabled = !link || mode !== 'api';
       $('rename-room-form').querySelector('button').disabled = !selected || mode !== 'api';
       if (document.activeElement !== $('rename-room-name')) $('rename-room-name').value = selected?.name || '';
-      const resume = progressItems.find(item => !item.completedAt);
-      if (resume) {
-        $('home-title').textContent = resume.media.title + (resume.media.mediaType === 'tv' ? ` · S${resume.media.season} E${resume.media.episode}` : '');
-        $('home-session-status').textContent = 'Your shared place is saved at '+displayTime(resume.positionMs)+'. Playback waits for both of you.';
-        $('home-watch').textContent = 'Continue watching together';
+      const latest = progressItems[0];
+      renderHomePoster(latest?.media || room?.media);
+      if (latest) {
+        $('home-title').textContent = latest.media.title + (latest.media.mediaType === 'tv' ? ` · S${latest.media.season} E${latest.media.episode}` : '');
+        $('home-session-status').textContent = latest.completedAt ? 'The last title you watched together.' : 'Your shared place is saved at '+displayTime(latest.positionMs)+'. Playback waits for both of you.';
+        $('home-watch').replaceChildren(icon('play'));
+        $('home-watch').setAttribute('aria-label', 'Open ' + latest.media.title + ' together'); $('home-watch').title = 'Open ' + latest.media.title + ' together';
       }
       const item = progressFor(room?.media);
       $('completion-panel').hidden = !room?.media;
@@ -939,8 +1079,93 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('room-status').textContent = `${room.media?.title || 'No title selected'} · ${room.status} · ${room.provider} · ${joined ? 'joined' : 'not joined'}`;
       controls();
     }
+    async function getGenres(type) {
+      const key = mode + ':' + type;
+      if (!genreCache.has(key)) genreCache.set(key, request('/api/genres?type=' + type).then(data => data.items).catch(error => { genreCache.delete(key); throw error; }));
+      return genreCache.get(key);
+    }
+    function renderGenreControls(selected) {
+      const genres = [...catalogGenres].sort((a, b) => a.name.localeCompare(b.name));
+      $('genre').replaceChildren(new Option('All genres', ''), ...genres.map(genre => new Option(genre.name, genre.id)));
+      $('genre').value = selected;
+      $('genre-sections').replaceChildren(...[{ id: '', name: 'All genres' }, ...genres].map(genre => {
+        const control = button('', () => { $('genre').value = String(genre.id); $('query').value = ''; closeSuggestions(); return catalog(); });
+        control.append(icon('movie'), document.createTextNode(genre.name));
+        control.setAttribute('aria-pressed', String(String(genre.id) === String(selected))); return control;
+      }));
+    }
+    function renderCatalog(items, selected) {
+      const groups = new Map();
+      for (const title of items) {
+        const genre = catalogGenres.find(genre => selected ? String(genre.id) === String(selected) : title.genreIds?.includes(genre.id));
+        const name = genre?.name || (title.mediaType === 'tv' ? 'TV series' : 'Movies');
+        if (!groups.has(name)) groups.set(name, []);
+        groups.get(name).push(title);
+      }
+      $('catalog').replaceChildren(...[...groups].sort(([a], [b]) => a.localeCompare(b)).map(([name, titles]) => {
+        const section = node('section', ''); section.className = 'genre-section';
+        const heading = node('h3', ''); heading.append(icon('movie'), document.createTextNode(name));
+        const grid = node('div', ''); grid.className = 'genre-grid'; grid.append(...titles.map(title => card(title))); section.append(heading, grid); return section;
+      }));
+    }
+    function paintFeature() {
+      const title = featureItems[featureIndex]; $('discover-feature').hidden = !title;
+      $('discover-slide').classList.remove('is-fading');
+      if (!title) { $('discover-slide').replaceChildren(); return; }
+      const article = node('article', ''); article.className = 'feature-card';
+      const copy = node('div', ''); copy.className = 'feature-copy';
+      const actions = node('div', ''); actions.className = 'card-actions';
+      actions.append(iconButton('Details: ' + title.title, 'details', () => showDetails(title)), iconButton('Save: ' + title.title, 'save', () => add(title)), iconButton('Watch together: ' + title.title, 'play', () => watchTitle(title)));
+      copy.append(node('h3', title.title), node('p', title.overview || 'Find out more about this title.'), actions);
+      article.append(posterNode(title), copy); $('discover-slide').replaceChildren(article);
+      $('discover-count').textContent = (featureIndex + 1) + ' / ' + featureItems.length;
+      $('discover-pause').textContent = featurePaused ? 'Resume rotation' : 'Pause rotation';
+      $('discover-pause').setAttribute('aria-pressed', String(featurePaused));
+      $('discover-next').disabled = $('discover-previous').disabled = featureItems.length < 2;
+    }
+    function scheduleFeature() {
+      clearTimeout(featureTimer);
+      if (featurePaused || featureItems.length < 2 || currentView !== 'browse' || document.hidden || $('discover-feature').matches(':hover') || $('discover-feature').contains(document.activeElement)) return;
+      featureTimer = setTimeout(() => advanceFeature(1), 3000);
+    }
+    function advanceFeature(direction) {
+      clearTimeout(featureTimer); clearTimeout(featureFade);
+      if (!featureItems.length) return;
+      $('discover-slide').classList.add('is-fading');
+      featureFade = setTimeout(() => { featureIndex = (featureIndex + direction + featureItems.length) % featureItems.length; paintFeature(); scheduleFeature(); }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 400);
+    }
+    function closeSuggestions() {
+      suggestionVersion++; clearTimeout(suggestionTimer); suggestions = []; suggestionIndex = -1;
+      $('search-suggestions').hidden = true; $('search-suggestions').replaceChildren();
+      $('query').setAttribute('aria-expanded', 'false'); $('query').removeAttribute('aria-activedescendant');
+    }
+    function chooseSuggestion(index) {
+      const title = suggestions[index]; if (!title) return;
+      closeSuggestions(); $('query').value = title.title; $('media-type').value = title.mediaType; $('genre').value = '';
+      void act(async () => { await catalog(); await showDetails(title); });
+    }
+    async function suggestTitles() {
+      const q = $('query').value.trim(), version = ++suggestionVersion, userId = me?.userId, requestMode = mode;
+      if (q.length < 2 || !me) { closeSuggestions(); return; }
+      $('suggestion-status').textContent = 'Finding matching titles.';
+      try {
+        const results = await Promise.all(['movie', 'tv'].map(type => request(`/api/search?type=${type}&q=${encodeURIComponent(q)}&page=1`)));
+        if (version !== suggestionVersion || userId !== me?.userId || requestMode !== mode || q !== $('query').value.trim() || currentView !== 'browse') return;
+        suggestions = results.flatMap(result => result.items).sort((a, b) => Number(b.title.toLowerCase().startsWith(q.toLowerCase())) - Number(a.title.toLowerCase().startsWith(q.toLowerCase()))).slice(0, 8);
+        suggestionIndex = -1;
+        $('search-suggestions').replaceChildren(...suggestions.map((title, index) => {
+          const option = node('li', title.title + ' · ' + (title.year || '') + ' · ' + (title.mediaType === 'tv' ? 'TV' : 'Movie'));
+          option.id = 'suggestion-' + index; option.setAttribute('role', 'option'); option.setAttribute('aria-selected', 'false');
+          option.onpointerdown = event => event.preventDefault(); option.onclick = () => chooseSuggestion(index); return option;
+        }));
+        $('search-suggestions').hidden = !suggestions.length; $('query').setAttribute('aria-expanded', String(suggestions.length > 0));
+        $('suggestion-status').textContent = suggestions.length ? suggestions.length + ' suggestions. Use the arrow keys to select.' : 'No matching titles found.';
+      } catch { if (version === suggestionVersion) { closeSuggestions(); $('suggestion-status').textContent = 'Suggestions unavailable. You can still submit a search.'; } }
+    }
     function resetCatalog() {
       closeDetails();
+      closeSuggestions(); clearTimeout(featureTimer); clearTimeout(featureFade); featureItems = []; $('discover-feature').hidden = true;
+      $('genre-sections').replaceChildren();
       catalogVersion++; catalogState = null; catalogLoading = false;
       $('catalog').replaceChildren();
       $('catalog-page').textContent = 'No page loaded';
@@ -950,16 +1175,21 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     async function catalog(page = 1, selection = null) {
       const type = selection?.type || $('media-type').value;
       const q = selection?.q ?? $('query').value.trim();
+      const genre = selection?.genre ?? $('genre').value;
       const version = ++catalogVersion;
       catalogLoading = true; controls();
       $('catalog').setAttribute('aria-busy', 'true');
       $('catalog-status').textContent = 'Loading titles…';
       $('retry-catalog').hidden = true;
       try {
-        const data = await request(`/api/${q ? 'search' : 'catalog'}?type=${type}&page=${page}${q ? '&q=' + encodeURIComponent(q) : ''}`);
+        const [data, genres] = await Promise.all([
+          request(`/api/${q ? 'search' : 'catalog'}?type=${type}&page=${page}${q ? '&q=' + encodeURIComponent(q) : ''}${genre ? '&genre=' + encodeURIComponent(genre) : ''}`),
+          getGenres(type).catch(() => [])
+        ]);
         if (version !== catalogVersion) return;
-        $('catalog').replaceChildren(...data.items.map(t => card(t)));
-        catalogState = { type, q, page: data.page, hasMore: data.hasMore };
+        catalogGenres = genres; renderGenreControls(genre); renderCatalog(data.items, genre);
+        catalogState = { type, q, genre, page: data.page, hasMore: data.hasMore };
+        featureItems = data.items.slice(0, 8); featureIndex = 0; clearTimeout(featureFade); paintFeature(); scheduleFeature();
         $('catalog-page').textContent = `Page ${data.page}`;
         $('catalog-status').textContent = data.items.length ? `${data.items.length} ${type === 'tv' ? 'TV shows' : 'movies'}${q ? ' matching “' + q + '”' : ' · popular titles'}.` : 'No results. Try another search.';
       } catch (error) {
@@ -1099,22 +1329,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function card(title, item) {
       const article = document.createElement('article'); article.className = 'movie-card'; article.append(node('h3', title.title), node('p', `${title.year || 'Year unknown'} · ${title.mediaType === 'tv' ? 'TV show' : 'Movie'}${item ? ' · ' + item.status : ''}`));
       if (item?.watchedEpisodes) article.append(node('p',item.watchedEpisodes+' episodes watched together'));
-      const poster = node('p', title.title); poster.className = 'poster';
-      if (typeof title.posterPath === 'string' && /^\/[a-zA-Z0-9._-]+$/.test(title.posterPath)) {
-        const image = document.createElement('img');
-        image.alt = `Poster for ${title.title}`;
-        image.width = 185; image.height = 278; image.loading = 'lazy'; image.decoding = 'async';
-        image.onerror = () => poster.replaceChildren(node('span', title.title));
-        image.src = 'https://image.tmdb.org/t/p/w185' + title.posterPath;
-        poster.replaceChildren(image);
-      }
+      const poster = posterNode(title);
       article.prepend(poster);
       const actions = node('div'); actions.className = 'card-actions'; article.append(actions);
-      actions.append(button('Details', () => showDetails(title)));
-      if (!item) actions.append(button('Save', () => add(title)));
-      actions.append(button(mode === 'api' ? 'Watch together' : 'Preview video', () => watchTitle(title)));
-      if (item && item.status !== 'watched') actions.append(button('Remove', () => removeListItem(item.id)));
-      for (const control of actions.querySelectorAll('button')) control.setAttribute('aria-label', control.textContent + ': ' + title.title);
+      actions.append(iconButton('Details: ' + title.title, 'details', () => showDetails(title)));
+      if (!item) actions.append(iconButton('Save: ' + title.title, 'save', () => add(title)));
+      actions.append(iconButton((mode === 'api' ? 'Watch together: ' : 'Preview video: ') + title.title, 'play', () => watchTitle(title)));
+      if (item) actions.append(iconButton('Remove from our list: ' + title.title, 'remove', () => removeListItem(item.id)));
       return article;
     }
     async function watchTitle(title, resumeMedia = null) {
@@ -1149,7 +1370,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       apply(await request(`/api/rooms/${me.roomId}/commands`, 'POST', { commandId: uuid(), sessionId: room.sessionId, action, ...extra }));
       if (['play','pause'].includes(action)) {
         demo.messages.push({ id: uuid(), senderId: demo.profile.userId, senderName: demo.profile.displayName,
-          kind: 'playback', body: demo.profile.displayName + (action === 'pause' ? ' has paused.' : ' has started playback.') });
+          kind: 'playback', createdAt: new Date().toISOString(), body: demo.profile.displayName + (action === 'pause' ? ' has paused.' : ' has started playback.') });
         await chat();
       }
     }
@@ -1159,12 +1380,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const data = await request('/api/rooms/' + selectedRoomId + '/messages');
       if (me?.roomId !== selectedRoomId || me?.userId !== selectedUserId || version !== chatRequestVersion) return;
       if ($('chat-status').textContent?.startsWith('Could not load messages.')) $('chat-status').textContent = 'Messages are up to date.';
-      updateChatNotifications(data.items, selectedRoomId, selectedUserId || me.profile?.userId);
+      const visibleItems = data.items.filter(message => !message.sentAt && !message.createdAt || Date.parse(message.sentAt || message.createdAt) > Date.now() - 24 * 60 * 60 * 1000);
+      updateChatNotifications(visibleItems, selectedRoomId, selectedUserId || me.profile?.userId);
       const messages = $('messages');
       const wasAtBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
-      messages.replaceChildren(...data.items.map(m => {
+      messages.replaceChildren(...visibleItems.map(m => {
         const notice = m.kind && m.kind !== 'message';
         const item = node('li');
+        if (m.sentAt || m.createdAt) item.setAttribute('data-expires-at', Date.parse(m.sentAt || m.createdAt) + 24 * 60 * 60 * 1000);
+        if (m.id) item.setAttribute('data-message-id', m.id);
         if (notice) {
           item.className = 'chat-notice';
           item.textContent = m.body;
@@ -1278,12 +1502,33 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     bind('accept-invitation', () => acceptInvitation());
     bind('dismiss-invitation', () => { pendingInvite = null; preference('multiplay.pendingInvite',null); if (inviteFromHash(location.hash)) location.hash = 'home'; controls(); });
     $('home-watch').onclick = event => {
-      const resume = progressItems.find(item => !item.completedAt);
+      const resume = progressItems[0];
       if (!resume) return;
       event.preventDefault(); act(() => watchTitle(resume.media,resume.media));
     };
     for (const control of document.querySelectorAll('[data-filter]')) control.onclick = () => { listFilter = control.dataset.filter; renderSavedLists(); };
-    form('search-form', () => catalog()); bind('refresh-list', list);
+    form('search-form', () => { closeSuggestions(); return catalog(); }); bind('refresh-list', list);
+    $('query').addEventListener('input', () => { closeSuggestions(); suggestionTimer = setTimeout(suggestTitles, 250); });
+    $('query').addEventListener('keydown', event => {
+      if (event.key === 'Escape') { closeSuggestions(); return; }
+      if ($('search-suggestions').hidden || !suggestions.length) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault(); suggestionIndex = (suggestionIndex + (event.key === 'ArrowDown' ? 1 : -1) + suggestions.length) % suggestions.length;
+        [...$('search-suggestions').children].forEach((option, index) => option.setAttribute('aria-selected', String(index === suggestionIndex)));
+        const selected = $('search-suggestions').children[suggestionIndex]; $('query').setAttribute('aria-activedescendant', selected.id); selected.scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'Enter' && suggestionIndex >= 0) { event.preventDefault(); chooseSuggestion(suggestionIndex); }
+    });
+    document.addEventListener('pointerdown', event => { if (!event.target.closest('.search-field')) closeSuggestions(); });
+    $('query').addEventListener('blur', () => { setTimeout(closeSuggestions, 150); });
+    $('media-type').addEventListener('change', () => { closeSuggestions(); $('genre').value = ''; void act(() => catalog()); });
+    $('genre').addEventListener('change', () => { closeSuggestions(); void act(() => catalog()); });
+    bind('discover-previous', () => advanceFeature(-1)); bind('discover-next', () => advanceFeature(1));
+    bind('discover-pause', () => { featurePaused = !featurePaused; $('discover-pause').textContent = featurePaused ? 'Resume rotation' : 'Pause rotation'; $('discover-pause').setAttribute('aria-pressed', String(featurePaused)); scheduleFeature(); });
+    $('discover-feature').addEventListener('mouseenter', () => clearTimeout(featureTimer));
+    $('discover-feature').addEventListener('mouseleave', scheduleFeature);
+    $('discover-feature').addEventListener('focusin', () => clearTimeout(featureTimer));
+    $('discover-feature').addEventListener('focusout', () => { setTimeout(scheduleFeature, 0); });
+    document.addEventListener('visibilitychange', scheduleFeature);
     bind('catalog-previous', () => catalog(catalogState.page - 1, catalogState));
     bind('catalog-next', () => catalog(catalogState.page + 1, catalogState));
     bind('close-details', () => closeDetails(true));
@@ -1354,7 +1599,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     $('chat-toggle').addEventListener('click', () => setChatOpen($('chat-panel').hidden));
     $('close-chat').addEventListener('click', () => setChatOpen(false));
-    document.querySelector('.side-nav a[href="#chat"]').addEventListener('click', event => { event.preventDefault(); location.hash = 'room'; route(); setChatOpen(true); });
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
       if (!$('chat-panel').hidden) setChatOpen(false);
@@ -1396,7 +1640,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       }
       if (path === '/api/me') return { userId: demo.profile.userId, profile: { ...demo.profile }, groupId: 'demo-group', roomId: 'demo-room' };
       if (path === '/api/me/profile') { Object.assign(demo.profile, body); return { profile: { ...demo.profile } }; }
-      if (path.startsWith('/api/catalog?') || path.startsWith('/api/search?')) { const q = new URL(path, 'http://demo').searchParams; return { items: samples.filter(t => t.mediaType === q.get('type') && t.title.toLowerCase().includes((q.get('q') || '').toLowerCase())), page: 1, hasMore: false }; }
+      if (path.startsWith('/api/genres?')) { const type = new URL(path, 'http://demo').searchParams.get('type'); return {items: type === 'movie' ? [{id:28,name:'Action'},{id:80,name:'Crime'},{id:878,name:'Science Fiction'}] : [{id:18,name:'Drama'},{id:80,name:'Crime'}]}; }
+      if (path.startsWith('/api/catalog?') || path.startsWith('/api/search?')) { const q = new URL(path, 'http://demo').searchParams; return { items: samples.filter(t => t.mediaType === q.get('type') && (!q.get('genre') || t.genreIds?.includes(Number(q.get('genre')))) && t.title.toLowerCase().includes((q.get('q') || '').toLowerCase())), page: 1, hasMore: false }; }
       const titlePath = /^\/api\/titles\/(movie|tv)\/(\d+)(?:\/seasons\/(\d+))?$/.exec(path);
       if (titlePath) {
         const title = samples.find(item => item.mediaType === titlePath[1] && item.tmdbId === Number(titlePath[2]));
@@ -1412,7 +1657,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (method === 'POST') { let item = demo.list.find(i => i.title.tmdbId === body.tmdbId && i.title.mediaType === body.mediaType); if (!item) { const title = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType); if (!title) throw new Error('Unknown demo title.'); item = { id: uuid(), title, status: 'planned' }; demo.list.push(item); } return { item }; }
         return { items: demo.list };
       }
-      if (path.endsWith('/messages')) { if (method === 'POST') { const message = { id: body.clientMessageId, senderId: demo.profile.userId, senderName: demo.profile.displayName, senderAvatarKey: demo.profile.avatarKey, body: body.body, createdAt: new Date().toISOString() }; if (!demo.messages.some(m => m.id === message.id)) demo.messages.push(message); return { message }; } return { items: demo.messages }; }
+      if (path.endsWith('/messages')) { demo.messages = demo.messages.filter(message => Date.parse(message.createdAt) > Date.now() - 24 * 60 * 60 * 1000); if (method === 'POST') { const message = { id: body.clientMessageId, senderId: demo.profile.userId, senderName: demo.profile.displayName, senderAvatarKey: demo.profile.avatarKey, body: body.body, createdAt: new Date().toISOString() }; if (!demo.messages.some(m => m.id === message.id)) demo.messages.push(message); return { message }; } return { items: demo.messages }; }
       if (path.endsWith('/media')) {
         checkpoint();
         const t = samples.find(t => t.tmdbId === body.tmdbId && t.mediaType === body.mediaType);
@@ -1428,6 +1673,32 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (path.endsWith('/join') || path.endsWith('/state')) return snapshot();
       throw new Error('Demo endpoint not implemented.');
     }
+    function showAuthForm(signUp) {
+      $('sign-in-form').hidden = signUp; $('sign-up-form').hidden = !signUp;
+      $('show-sign-in').setAttribute('aria-pressed', String(!signUp)); $('show-sign-up').setAttribute('aria-pressed', String(signUp));
+    }
+    async function signUp() {
+      const displayName = $('signup-name').value.trim(), avatarKey = $('signup-avatar').value;
+      const email = $('signup-email').value.trim(), password = $('signup-password').value;
+      if (!displayName || displayName.length > 40) throw new Error('Enter a display name of 1 to 40 characters.');
+      if (password.length < 8) throw new Error('Use a password with at least 8 characters.');
+      if (password !== $('signup-confirm').value) throw new Error('The passwords do not match.');
+      $('auth-status').textContent = 'Creating your account…';
+      try {
+        const { data, error } = await authClient.auth.signUp({ email, password, options: { data: { display_name: displayName, avatar_key: avatarKey }, ...(location.protocol.startsWith('http') ? { emailRedirectTo: location.origin + '/' } : {}) } });
+        if (error) throw error;
+        $('signup-password').value = ''; $('signup-confirm').value = ''; $('auth-email').value = email;
+        if (!data.session) { $('auth-status').textContent = 'Check your email for a confirmation link, then sign in. If you already have an account, use Sign in.'; return; }
+        authSession = data.session; await checkBackendIdentity(authSession);
+        mode = 'api'; base = ''; $('mode').value = mode; $('backend').value = base;
+        preference('multiplay.preview', false); preference('multiplay.connection', { mode, base });
+        await connect();
+        const result = await request('/api/me/profile', 'PATCH', { displayName, avatarKey }); me.profile = result.profile;
+        $('display-name').value = displayName; $('avatar').value = avatarKey; controls(); say('Welcome, ' + displayName + '. Your account is ready.');
+      } catch (error) { $('auth-status').textContent = 'Could not create your account: ' + friendlyError(error.message); throw error; }
+    }
+    bind('show-sign-in', () => showAuthForm(false)); bind('show-sign-up', () => showAuthForm(true));
+    form('sign-up-form', signUp);
     form('sign-in-form', async () => {
       const email = $('auth-email').value.trim();
       const password = $('auth-password').value;
@@ -1494,6 +1765,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (code && me && mode === 'api' && !inviteBusy) void act(() => acceptInvitation());
       if (uiReady) renderCoupleExperience();
     });
+    setInterval(() => {
+      let removed = false;
+      for (const message of document.querySelectorAll('#messages > li[data-expires-at]')) {
+        if (Number(message.dataset.expiresAt) <= Date.now()) { chatNotifications.unread.delete(message.dataset.messageId); message.remove(); removed = true; }
+      }
+      if (removed) renderChatNotifications();
+    }, 1000);
     uiReady = true;
     route();
     act(initialize);
