@@ -22,6 +22,7 @@ function normalizeTitle(item, mediaType) {
     overview: item.overview || "",
     posterPath: item.poster_path || null,
     backdropPath: item.backdrop_path || null,
+    rating: Number.isFinite(item.vote_average) && item.vote_average >= 0 && item.vote_average <= 10 && item.vote_count > 0 ? item.vote_average : null,
     genreIds: item.genre_ids || (item.genres || []).map(genre => genre.id),
   };
 }

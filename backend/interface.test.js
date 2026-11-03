@@ -16,12 +16,14 @@ const reply = data => ({ ok: true, status: 200, json: async () => data });
 test('genre discovery authenticates, filters upstream, preserves genre IDs and separates cached genres', async () => {
   let allowed = true; const urls = [];
   const handler = createTmdbHandler({ authenticateUser: async () => allowed ? { data: { userClaims: { id: USER } } } : { error: {} }, getToken: () => 'test-token',
-    fetchImpl: async address => { const url = new URL(address); urls.push(url); return reply(url.pathname.includes('/genre/') ? { genres: [{ id: 28, name: 'Action' }] } : { results: [{ id: 155, title: 'Movie', genre_ids: [28, 80] }], total_pages: 2 }); } });
+    fetchImpl: async address => { const url = new URL(address); urls.push(url); return reply(url.pathname.includes('/genre/') ? { genres: [{ id: 28, name: 'Action' }] } : { results: [{ id: 155, title: 'Movie', genre_ids: [28, 80], backdrop_path: '/art.jpg', vote_average: 8.6, vote_count: 123 }, { id: 156, title: 'Unrated', vote_average: 0, vote_count: 0 }], total_pages: 2 }); } });
   const call = async url => { let result; await handler({ method: 'GET', url, headers: {} }, { setHeader() {} }, (_r, status, body) => { result = { status, body }; }); return result; };
   assert.equal((await call('/api/genres?type=movie')).body.items[0].name, 'Action');
   const titles = await call('/api/catalog?type=movie&genre=28');
   assert.equal(urls[1].pathname, '/3/discover/movie'); assert.equal(urls[1].searchParams.get('with_genres'), '28');
   assert.deepEqual(titles.body.items[0].genreIds, [28, 80]);
+  assert.equal(titles.body.items[0].backdropPath, '/art.jpg'); assert.equal(titles.body.items[0].rating, 8.6);
+  assert.equal(titles.body.items[1].rating, null);
   assert.equal((await call('/api/catalog?type=movie&genre=invalid')).status, 400);
   allowed = false; assert.equal((await call('/api/genres?type=movie')).status, 401); assert.equal(urls.length, 2);
 });
