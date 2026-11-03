@@ -476,9 +476,9 @@
     #couple-presence { display: flex; flex-direction: column; gap: 8px; width: 76px; }
     #couple-presence .account-presence { border: 0; padding-top: 4px; }
     #partner-presence-avatar svg { width: 22px; height: 22px; }
-    #home .home-grid { align-items: start; }
+    #home .home-grid { align-items: stretch; }
     #home #home-session { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-end; width: 100%; min-width: 0; min-height: 180px; padding: 28px; background: #211c28; }
-    #home #home-session.has-poster { min-height: 300px; aspect-ratio: 16/9; }
+    #home #home-session.has-poster { min-height: 300px; aspect-ratio: auto; }
     #home #home-poster { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; }
     #home-poster .card-art { width: 100%; height: 100%; border-radius: 0; aspect-ratio: auto; }
     #home-session.has-poster::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, #15101cf5, #211528b3 50%, #21152808); }
@@ -501,6 +501,7 @@
       #couple-presence :is(#presence-label, #partner-presence-label) { display: none; }
       #home #home-session { padding: 22px; }#home #home-session.has-poster { min-height: 300px; }
     }
+    @media (max-width: 1000px) { #home .home-grid { align-items: start; }#home #home-session.has-poster { aspect-ratio: 16/9; } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -595,9 +596,6 @@
         </article>
         <article class="home-room"><span class="eyebrow">Your place together</span><h3 id="home-room-name">Your room</h3><p id="home-partner">Invite your partner to your place together.</p><div id="home-room-controls"></div></article>
       </div>
-      <div class="section-heading"><h3>Saved for another night</h3><a href="#list">See our list</a></div>
-      <div id="home-list" class="poster-grid"></div>
-      <p id="home-list-empty">Save a few favourites from Discover. They’ll be here when you’re ready.</p>
       <div class="section-heading"><h3>Continue watching together</h3></div>
       <p id="progress-empty">Your shared movies and episodes will appear here once you start watching.</p>
       <div id="continue-list" class="poster-grid"></div>
@@ -1102,7 +1100,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (typeof sharedPlayback !== 'undefined' && mode === 'api' && me?.roomId) sharedPlayback.selectRoom(me.roomId);
       $('messages').replaceChildren();
       $('list-items').replaceChildren();
-      savedList = []; $('home-list').replaceChildren(); $('home-list-empty').hidden = false;
+      savedList = [];
       $('list-status').textContent = 'Connect and select a room to load your shared list.';
       if (mode !== 'api' || !authSession || !me?.roomId) {
         $('chat-status').textContent = mode === 'demo' ? 'Live chat is off in Local demo.' : 'Select a room to start live chat.';
@@ -1481,8 +1479,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (!entries.length) { const empty = node('p', status === 'planned' ? 'Save a title from Discover.' : status === 'watching' ? 'Start a movie or an episode together.' : 'Confirm a completed movie together.'); empty.className = 'kanban-empty'; cards.append(empty); }
         column.append(heading, cards); return column;
       }));
-      $('home-list').replaceChildren(...items.filter(item => item.status !== 'watched').slice(0,4).map(item => card(item.title,item)));
-      $('home-list-empty').hidden = items.some(item => item.status !== 'watched');
       if (items.length && !shown.length) $('list-status').textContent = 'No titles in this section yet.';
       else if (items.length) $('list-status').textContent = shown.length + ' titles · shared by both of you.';
       for (const control of document.querySelectorAll('[data-filter]')) control.setAttribute('aria-pressed', String(control.dataset.filter === listFilter));
@@ -1739,8 +1735,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (!current()) return;
         $('list-items').replaceChildren(...data.items.map(i => card(i.title, i)));
         savedList = data.items;
-        $('home-list').replaceChildren(...savedList.slice(0, 4).map(i => card(i.title, i)));
-        $('home-list-empty').hidden = savedList.length > 0;
         $('list-status').textContent = data.items.length ? data.items.length + ' title(s) in your shared list.' : 'Your list is empty. Add a movie or show from Browse.';
         if (typeof renderSavedLists === 'function') { renderSavedLists(); renderProgressHistory(); }
       } catch (error) {
