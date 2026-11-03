@@ -8,6 +8,7 @@ const { handlePlayback } = require("./playback");
 const { handleCouple } = require("./couple");
 const { handleInvitations } = require("./invitations");
 const { handlePresence } = require("./presence");
+const { handlePicker } = require("./picker");
 
 function sendJson(response, status, body) {
   response.writeHead(status, {
@@ -25,6 +26,13 @@ const server = http.createServer(async (request, response) => {
   if (await handleCouple(request, response, sendJson)) return;
   if (await handleInvitations(request, response, sendJson)) return;
   if (await handlePresence(request, response, sendJson)) return;
+  if (await handlePicker(request, response, sendJson)) return;
+  if (request.method === 'GET' && ['/picker.js','/favicon.svg'].includes(request.url)) {
+    fs.readFile(path.join(__dirname,'..','frontend',request.url.slice(1)),(error,file)=>{
+      if(error){sendJson(response,404,{error:'Asset not found'});return;}
+      response.writeHead(200,{'Content-Type':request.url.endsWith('.svg')?'image/svg+xml':'text/javascript; charset=utf-8','Cache-Control':'no-store'});response.end(file);
+    });return;
+  }
   if (request.method === "GET" && ["/player.js", "/shared-playback.js"].includes(request.url)) {
     fs.readFile(path.join(__dirname, "..", "frontend", request.url.slice(1)), (error, script) => {
       if (error) { sendJson(response, 500, { error: "Could not load player integration" }); return; }

@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#16151a">
   <title>Multiplay</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Henny+Penny&display=swap" rel="stylesheet">
@@ -525,11 +526,35 @@
     #main-content #search-form .search-field { grid-column: auto; }
     .invite-code-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .invite-code-row #room-invite { margin:0; }
+    .picker-layout { display:grid; grid-template-columns:minmax(280px, 480px) minmax(0, 1fr); gap:32px; align-items:center; margin:28px auto; max-width:1000px; }
+    .picker-wheel { position:relative; width:100%; aspect-ratio:1; margin:auto; }
+    #picker-rotor { width:100%; height:100%; transform-origin:50% 50%; }
+    #picker-svg { display:block; width:100%; height:100%; }
+    .wheel-pointer { position:absolute; z-index:2; left:calc(50% - 13px); top:0; width:0; height:0; border-left:13px solid transparent; border-right:13px solid transparent; border-top:28px solid #f7d9ec; filter:drop-shadow(0 2px 3px #0008); }
+    .wheel-hub { position:absolute; display:grid; place-items:center; inset:calc(50% - 30px); width:60px; height:60px; border-radius:50%; background:#211a29; border:2px solid #b599bd; font-size:28px; pointer-events:none; }
+    .picker-mode-actions, .picker-controls { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
+    #picker-options { padding-left:22px; max-height:340px; overflow:auto; text-align:left; }#picker-options li { padding:4px; }#picker-options small { display:block; color:#cbb5d0; font-size:12px; }#picker-options s { color:#9f8ba5; }
+    #picker-result { padding:20px; border:1px solid #9672a0; border-radius:16px; margin-top:24px; }
+    #picker-members { display:flex; flex-wrap:wrap; justify-content:center; gap:16px; }
+    #picker-error, #picker-dialog-error { color:#ffbfd3; }
+    #picker-dialog { width:min(660px, calc(100vw - 24px)); max-width:none; max-height:calc(100dvh - 40px); overflow:auto; padding:28px; border:1px solid #9f79a8; border-radius:20px; background:#251e2c; color:#f2e6f6; }
+    #picker-dialog::backdrop { background:#0d0913c9; backdrop-filter:blur(5px); }
+    #picker-dialog-heading { font-size:25px; padding-right:35px; }
+    #picker-close { float:right; min-width:44px; min-height:44px; font-size:26px; }
+    #picker-genre-choices { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:20px 0; }
+    #picker-genre-choices label { display:flex; align-items:center; gap:10px; margin:0; }#picker-genre-choices input { width:18px; height:18px; flex:0 0 18px; }
+    #picker-genre-choices label:has(input:checked) { text-decoration:line-through; color:#b39bbd; }
+    #picker-title-query { width:100%; min-width:0; }#picker-search-results { display:grid; gap:6px; text-align:left; margin:12px 0; }#picker-search-results button { text-align:left; min-height:44px; }
+    #picker-selected { text-align:left; padding-left:20px; }#picker-selected button { margin-left:10px; }
+    #picker-notice { position:fixed; z-index:30; right:20px; bottom:24px; max-width:350px; padding:18px; border:1px solid #926f9e; border-radius:16px; background:#2d2335; box-shadow:0 10px 40px #0006; }
+    #picker-nav-badge { position:absolute; top:5px; right:7px; width:8px; height:8px; border-radius:50%; background:#edb7d1; }
+    @media(max-width:700px){.picker-layout {grid-template-columns:minmax(0,1fr);gap:16px;}.picker-wheel {max-width:400px;}#picker-notice {bottom:92px;right:16px;left:16px;max-width:none;}#picker-genre-choices {grid-template-columns:1fr;}#picker-dialog {padding:20px;}.side-nav a {font-size:10px;} }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
   <script src="./player.js"></script>
   <script src="./shared-playback.js"></script>
+  <script src="./picker.js"></script>
 </head>
 
 <body>
@@ -544,6 +569,7 @@
     <a class="nav-brand" href="#home" aria-label="Multiplay home" title="Home">M<span class="nav-label">Home</span></a>
     <a href="#browse" aria-label="Discover" title="Discover"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg></a>
     <a href="#list" aria-label="Watchlist" title="Watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-7-4-7 4z"/></svg></a>
+    <a href="#picker" aria-label="Picker" title="Picker wheel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/><circle cx="12" cy="12" r="2"/></svg><span id="picker-nav-badge" hidden></span></a>
     <a class="nav-profile" href="#profile" aria-label="Profile" title="Profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3-7 8-7s8 3 8 7"/></svg></a>
     <div id="couple-presence" aria-label="Your profiles">
       <div id="account-presence" class="account-presence" data-state="connecting" role="status" aria-live="polite"><span class="presence-avatar" aria-hidden="true"><span id="presence-initial">M</span><span class="presence-dot"></span></span><span class="presence-copy"><span id="presence-name">Your account</span><span id="presence-label">Connecting</span></span></div>
@@ -744,6 +770,16 @@
 
     </section>
 
+    <section id="picker" data-view aria-labelledby="picker-heading" hidden>
+      <h2 id="picker-heading" tabindex="-1">Picker wheel</h2>
+      <div class="picker-mode-actions"><button id="picker-genre" type="button">Genre wheel</button><button id="picker-title" type="button">Title wheel</button><button id="picker-trending" type="button">Can’t decide? Use Trending This Week</button></div>
+      <p id="picker-status" role="status" aria-live="polite"></p><p id="picker-error" role="status"></p>
+      <div id="picker-members"></div>
+      <div class="picker-layout"><div>
+        <div class="picker-wheel"><div class="wheel-pointer" aria-hidden="true"></div><div id="picker-rotor"><svg id="picker-svg" viewBox="0 0 440 440" aria-hidden="true"></svg></div><div class="wheel-hub" aria-hidden="true">✦</div></div>
+        <div class="picker-controls"><button id="picker-choose" type="button" disabled>Add my choices</button><button id="picker-spin" type="button" disabled>Spin</button><button id="picker-demo-partner" type="button" hidden>Demo: enter partner’s choices</button></div>
+      </div><div><h3>On the wheel</h3><ol id="picker-options"></ol><div id="picker-result" role="status" aria-live="polite" hidden><h3 id="picker-winner"></h3><button id="picker-result-action" type="button">View title details</button></div></div></div>
+    </section>
     <section id="profile" data-view aria-labelledby="profile-heading" hidden>
       <p class="eyebrow">Make yourself at home</p>
       <h2 id="profile-heading" tabindex="-1">Your profile</h2>
@@ -811,6 +847,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     </details>
   </main>
 
+  <aside id="picker-notice" hidden><p id="picker-notice-text"></p><button id="picker-open-notice" type="button">Open picker</button></aside>
+  <dialog id="picker-dialog" aria-labelledby="picker-dialog-heading">
+    <button id="picker-close" type="button" aria-label="Close picker choices">×</button><h3 id="picker-dialog-heading" tabindex="-1">Your choices</h3>
+    <p id="picker-dialog-error" role="status"></p>
+    <div id="picker-genre-choices"></div>
+    <div id="picker-search-area" hidden><label for="picker-title-query">Search movies and TV series</label><input id="picker-title-query" type="search" autocomplete="off" maxlength="200"><div id="picker-search-results"></div><p id="picker-title-count"></p><ul id="picker-selected"></ul></div>
+    <p id="picker-trending-help" hidden>Use this week’s trending movies and TV series. Both partners confirm before spinning.</p>
+    <button id="picker-submit" type="button">Ready</button>
+  </dialog>
   <script>
     // Apply Bootstrap's standard control classes while retaining the app's dark theme.
     document.querySelectorAll('input').forEach((control) => control.classList.add('form-control'));
@@ -899,6 +944,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Qed9LYz9rBBnUK3sMhrQwg_OzznRQO6";
     const authClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     let authSession = null;
+    let pickerController = null;
     const presenceClientId = uuid();
     let partnerPresence = null, presenceMembers = [], presenceConfirmedAt = 0, presenceGeneration = 0;
     let chatChannel = null, chatGeneration = 0, chatTimer = null, chatPoll = null, chatRequestVersion = 0;
@@ -1096,6 +1142,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       watcher.timer = setInterval(()=>void watcher.refresh(true),15000); void watcher.refresh(true);
     }
     function stopLiveChat() {
+      if (typeof pickerController !== 'undefined') pickerController?.stop();
       stopPartnerPresence();
       stopMovieInvitations();
       if (typeof resetCoupleView === 'function') resetCoupleView();
@@ -1110,6 +1157,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function startLiveChat() {
       stopLiveChat();
+      if (typeof pickerController !== 'undefined') pickerController?.start();
       startMovieInvitations();
       startPartnerPresence();
       if (typeof sharedPlayback !== 'undefined' && mode === 'api' && me?.roomId) sharedPlayback.selectRoom(me.roomId);
@@ -1337,8 +1385,9 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function route(focus = false) {
       const requested = inviteFromHash(location.hash) ? 'home' : location.hash.slice(1) || 'home';
       if (requested === 'signup') showAuthForm(true);
-      const next = requested === 'signup' ? 'profile' : requested === 'room' && !joined ? 'home' : ['home', 'browse', 'list', 'room', 'profile', 'developer'].includes(requested) ? requested : 'home';
+      const next = requested === 'signup' ? 'profile' : requested === 'room' && !joined ? 'home' : ['home', 'browse', 'list', 'room', 'picker', 'profile', 'developer'].includes(requested) ? requested : 'home';
       if (currentView !== next) {
+        if (typeof pickerController !== 'undefined') pickerController?.close();
         if ($('title-details').open) closeDetails();
         if (currentView) viewScroll.set(currentView, window.scrollY);
         currentView = next;
@@ -2057,6 +2106,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       await catalog(); await list(); apply(await request(`/api/rooms/${me.roomId}/state`));
       await ensureHomeFeature();
       await loadProgress();
+      pickerController?.start();
       say('');
     }
     function bind(id, fn) { $(id).onclick = e => act(fn, e.currentTarget); }
@@ -2417,6 +2467,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       }
       if (removed) renderChatNotifications();
     }, 1000);
+    if (window.MultiplayPicker) pickerController = MultiplayPicker.create({
+      request,
+      getContext:()=>({mode,userId:me?.userId || me?.profile?.userId,roomId:me?.roomId,name:me?.profile?.displayName,view:currentView}),
+      onTitle:title=>void act(()=>showDetails(title)),
+      onGenre:name=>{ selectedGenre=name; $('query').value=''; location.hash='browse'; void act(()=>catalog()); }
+    });
+    else $('picker-error').textContent='Restart the backend and refresh to load the picker.';
     uiReady = true;
     setInterval(refreshDiscoveryIfDue,60000);
     document.addEventListener('visibilitychange',refreshDiscoveryIfDue);

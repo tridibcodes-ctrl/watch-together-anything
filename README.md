@@ -573,6 +573,18 @@ Acceptance check: join one account first and queue Play; verify the room remains
 - Supabase configuration is duplicated in .env and browser constants. Authentication and JSON parsing are duplicated across routes and should be extracted as the backend grows.
 - Local Demo is not proof of live Supabase behavior. Its simulated second-person confirmation exists only in demo mode; the real completion endpoint authenticates each confirmer separately. Signup/recovery, invite expiry/rotation, permanent room departure and production hosting remain unimplemented.
 
+## Shared picker wheel
+
+The Picker navigation icon opens a room-scoped wheel. Both authenticated members must submit their own choices before either can spin. Genre mode removes a genre when **either** partner excludes it; the legend strikes it out and names the person who excluded it. If every genre is excluded, edit the choices or use Trending This Week. Title mode searches movies and TV series and requires two to ten distinct titles from each person. The combined pool deduplicates shared choices, while keeping movie and TV identities separate. Trending This Week uses a snapshot of TMDB's weekly trending movie/TV results and asks both people to confirm readiness.
+
+**Required setup:** apply the complete [backend/picker.sql](backend/picker.sql) in Supabase SQL Editor after the existing room migrations, restart Node, and hard-refresh both browsers. The migration adds a member-readable picker table and authenticated RPCs; existing rooms, messages, lists, and progress are preserved. It is safe to reapply. No new API key or package is required.
+
+`GET /api/rooms/{roomId}/picker` reads the current round. `POST` accepts `start` (mode, new roundId, expectedRoundId), `submit` (roundId, choices), or `spin` (roundId). Identity comes from the bearer token. The HTTP handler checks membership and loads canonical TMDB genres/title metadata. SQL serializes changes under the room lock, rejects stale rounds, and saves one result per round, so simultaneous spins return the same winner. A new round clears both submissions.
+
+The frontend polls the selected room every three seconds, cancels stale responses on room/account changes, and animates against the saved server start time. Late clients catch up to the same result. Reduced-motion preferences are respected. A navbar badge and in-app notice invite the partner to enter choices. Result actions browse the selected genre or open title details; they do not automatically start playback. Local Demo provides an explicitly labelled partner simulation for offline frontend work, with no account impersonation in API mode.
+
+The outlined Henny Penny M is also the tab favicon; its font license is included beside the SVG. Validation includes PostgreSQL/RLS tests for readiness, either-person vetoes, title counts, deduplication, authorization, stale rounds, and repeat spins, plus HTTP canonicalization and wheel geometry tests. Local browser checks cover the modal and wheel flow. Hosted migration and two-account/device acceptance still need to be checked with your Supabase project.
+
 ## Working agreement
 
 Keep Local demo available for independent frontend work. Preserve element IDs unless updating their JavaScript handlers too. Keep the frontend in dark mode, with icon navigation and chat accessible during playback. Work in the actual cloned repository, keep credentials out of Git, and update this README whenever APIs or schema change.
