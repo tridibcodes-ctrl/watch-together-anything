@@ -42,7 +42,14 @@ function createChatHandler({ authenticateUser = authenticate, fetchImpl = fetch 
         const result = await upstream(`/watch_room_messages?room_id=eq.${roomId}&select=id,sender_id,sender_name,body,kind,created_at&order=created_at.desc,id.desc&limit=100`);
         if (!result.ok) throw new Error("Message lookup failed");
         const rows = await result.json();
-        sendJson(response, 200, { items: rows.reverse().map(row => ({ id: row.id, senderId: row.sender_id, senderName: row.sender_name, body: row.body, kind: row.kind, sentAt: row.created_at })) });
+        const senderIds = [...new Set(rows.map(row => row.sender_id))];
+        let avatarByUserId = new Map();
+        if (senderIds.length) {
+          const profileResult = await upstream(`/profiles?user_id=in.(${senderIds.join(",")})&select=user_id,avatar_key`);
+          if (!profileResult.ok) throw new Error("Sender avatar lookup failed");
+          avatarByUserId = new Map((await profileResult.json()).map(profile => [profile.user_id, profile.avatar_key]));
+        }
+        sendJson(response, 200, { items: rows.reverse().map(row => ({ id: row.id, senderId: row.sender_id, senderName: row.sender_name, senderAvatarKey: avatarByUserId.get(row.sender_id) || "moon", body: row.body, kind: row.kind, sentAt: row.created_at })) });
         return true;
       }
       let raw = "";

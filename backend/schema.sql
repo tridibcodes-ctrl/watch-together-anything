@@ -98,6 +98,17 @@ create policy "Room members can read membership"
 on public.watch_room_members for select to authenticated
 using (public.is_room_member(room_id));
 
+drop policy if exists "Room members can read shared profile avatars" on public.profiles;
+create policy "Room members can read shared profile avatars"
+on public.profiles for select to authenticated
+using (exists (
+  select 1
+  from public.watch_room_members viewer
+  join public.watch_room_members subject using (room_id)
+  where viewer.user_id = (select auth.uid())
+    and subject.user_id = profiles.user_id
+));
+
 -- Room creation and invite endpoints will add members dynamically. Keep user IDs out of this schema.
 -- Invite codes let the second authenticated user join the room.
 alter table public.watch_rooms add column if not exists invite_code text;
