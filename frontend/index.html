@@ -502,6 +502,19 @@
       #home #home-session { padding: 22px; }#home #home-session.has-poster { min-height: 300px; }
     }
     @media (max-width: 1000px) { #home .home-grid { align-items: start; }#home #home-session.has-poster { aspect-ratio: 16/9; } }
+    #main-content #search-form { grid-template-columns: minmax(0, 1fr) 130px auto; }
+    #main-content #genre-sections { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 18px; scrollbar-width: thin; padding-bottom: 8px; }
+    #main-content #genre-sections .genre-tab { flex: 0 0 auto; width: auto; white-space: nowrap; }
+    .catalog-shelf { margin: 30px 0 42px; min-width: 0; }
+    .shelf-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    .shelf-heading h3 { margin: 0; font: 650 22px/1.3 system-ui, sans-serif; text-align: left; }
+    .shelf-controls { display: flex; gap: 4px; }
+    .shelf-controls button { font-size: 28px; }
+    .catalog-row { display: grid; grid-auto-flow: column; grid-auto-columns: 260px; gap: 20px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x proximity; scrollbar-width: thin; padding: 4px 2px 16px; }
+    .catalog-row > article { scroll-snap-align: start; }
+    .catalog-row:focus-visible { outline: 2px solid #d9b7f1; outline-offset: 3px; }
+    .shelf-status { text-align: left; color: #cbbbd5; }
+    @media (max-width: 700px) { #main-content #search-form { grid-template-columns: 1fr auto; }#main-content #search-form .search-field { grid-column: 1/-1; }#main-content #search-form button { grid-column: auto; }.catalog-row { grid-auto-columns: min(260px, 78vw); gap: 14px; }.shelf-heading h3 { font-size: 19px; } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -609,7 +622,6 @@
             <option value="movie">Movie</option>
             <option value="tv">TV</option>
           </select></label>
-        <label>Genre <select id="genre"><option value="">All genres</option></select></label>
         <button>Search</button>
       </form>
       <div id="genre-sections" class="genre-chips" role="group" aria-label="Browse by genre"></div>
@@ -617,7 +629,7 @@
       <button id="retry-catalog" type="button" hidden>Try loading titles again</button>
       <div id="catalog"></div>
       <p id="catalog-status" role="status" aria-live="polite">Search or browse popular titles.</p>
-      <nav aria-label="Catalog pages">
+      <nav id="catalog-pagination" aria-label="Catalog pages">
         <button id="catalog-previous" type="button" disabled>Previous</button>
         <span id="catalog-page">No page loaded</span>
         <button id="catalog-next" type="button" disabled>Next</button>
@@ -862,7 +874,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       },
       onError(message) { $('player-diagnostics').textContent = message; $('sync-status').textContent = 'We couldn’t update playback. Check your connection, then use Retry in Connection details.'; }
     });
-    let catalogState = null, catalogLoading = false, catalogVersion = 0;
+    let catalogState = null, catalogLoading = false, catalogVersion = 0, selectedGenre = '', discoveryLoadedAt = 0;
     const genreCache = new Map(), posterRequests = new Map();
     let catalogGenres = [], featureItems = [], featureIndex = 0, featureTimer = null, featureFade = null;
     let featurePaused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1577,27 +1589,69 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function renderGenreControls(selected) {
       const genres = [...catalogGenres].sort((a, b) => a.name.localeCompare(b.name));
-      $('genre').replaceChildren(new Option('All genres', ''), ...genres.map(genre => new Option(genre.name, genre.id)));
-      $('genre').value = selected;
+      selectedGenre = selected;
       $('genre-sections').replaceChildren(...[{ id: '', name: 'All genres' }, ...genres].map(genre => {
-        const control = button('', () => { $('genre').value = String(genre.id); $('query').value = ''; closeSuggestions(); return catalog(); });
+        const control = button('', () => { selectedGenre = String(genre.id); $('query').value = ''; closeSuggestions(); return catalog(); });
         control.className = 'genre-tab'; control.textContent = genre.name;
         control.setAttribute('aria-pressed', String(String(genre.id) === String(selected))); return control;
       }));
     }
     function renderCatalog(items, selected) {
-      const groups = new Map();
-      for (const title of items) {
-        const genre = catalogGenres.find(genre => selected ? String(genre.id) === String(selected) : title.genreIds?.includes(genre.id));
-        const name = genre?.name || (title.mediaType === 'tv' ? 'TV series' : 'Movies');
-        if (!groups.has(name)) groups.set(name, []);
-        groups.get(name).push(title);
+      const name = catalogGenres.find(genre=>String(genre.id)===String(selected))?.name || 'Search results';
+      const shelf = catalogShelf(name); shelf.track.append(...items.map(title=>card(title)));
+      shelf.status.hidden = items.length>0; shelf.status.textContent = 'No titles found. Try another search.';
+      $('catalog').replaceChildren(shelf.section);
+    }
+    function catalogShelf(name) {
+      const section = node('section',''); section.className = 'catalog-shelf';
+      const heading = node('div',''); heading.className = 'shelf-heading';
+      const controls = node('div',''); controls.className = 'shelf-controls';
+      const track = node('div',''); track.className = 'catalog-row'; track.tabIndex = 0; track.setAttribute('role','region'); track.setAttribute('aria-label',name);
+      for (const [direction,label,symbol] of [[-1,'left','‹'],[1,'right','›']]) {
+        const control = button(symbol,()=>track.scrollBy({left:direction*track.clientWidth*.8,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}));
+        control.className = 'icon-button'; control.setAttribute('aria-label','Scroll '+name+' '+label); controls.append(control);
       }
-      $('catalog').replaceChildren(...[...groups].sort(([a], [b]) => a.localeCompare(b)).map(([name, titles]) => {
-        const section = node('section', ''); section.className = 'genre-section';
-        const heading = node('h3', ''); heading.append(icon('movie'), document.createTextNode(name));
-        const grid = node('div', ''); grid.className = 'genre-grid'; grid.append(...titles.map(title => card(title))); section.append(heading, grid); return section;
-      }));
+      heading.append(node('h3',name),controls);
+      const status = node('p','Loading titles…'); status.className = 'shelf-status'; status.setAttribute('role','status');
+      section.append(heading,track,status); return {section,track,status};
+    }
+    async function discoveryShelves(version,type) {
+      const genres = await getGenres(type);
+      if (version !== catalogVersion) return;
+      catalogGenres = genres; renderGenreControls('');
+      const jobs = [
+        {name:'Trending This Week',path:'/api/catalog?type=all&feed=trending-week'},
+        {name:'Trending Today',path:'/api/catalog?type=all&feed=trending-day'},
+        {name:'Popular Movies',path:'/api/catalog?type=movie'},
+        {name:'Popular TV Shows',path:'/api/catalog?type=tv'},
+        ...[...genres].sort((a,b)=>a.name.localeCompare(b.name)).map(genre=>({name:genre.name+' · '+(type==='tv'?'TV Shows':'Movies'),path:`/api/catalog?type=${type}&genre=${genre.id}`}))
+      ].map(job=>({...job,...catalogShelf(job.name)}));
+      $('catalog').replaceChildren(...jobs.map(job=>job.section));
+      catalogState = {type,q:'',genre:'',page:1,hasMore:false};
+      const load = async job => {
+        if (version !== catalogVersion) return;
+        job.status.hidden = false; job.status.textContent = 'Loading titles…';
+        try {
+          const data = await request(job.path);
+          if (version !== catalogVersion) return;
+          job.track.replaceChildren(...data.items.map(title=>card(title))); job.status.hidden = data.items.length>0; job.status.textContent = 'No titles available yet.';
+          if (job.name==='Popular Movies' && !featureItems.length) { featureItems=data.items.slice(0,8); featureIndex=0; paintFeature(); scheduleFeature(); }
+        } catch {
+          if (version !== catalogVersion) return;
+          job.status.replaceChildren(document.createTextNode('Could not load this list. '),button('Retry',()=>load(job)));
+        }
+      };
+      let cursor = 0;
+      await Promise.all(Array.from({length:3},async()=>{while(cursor<jobs.length && version===catalogVersion)await load(jobs[cursor++]);}));
+      if (version !== catalogVersion) return;
+      discoveryLoadedAt = Date.now(); $('catalog-status').textContent = 'Scroll each row to explore. Lists refresh automatically.';
+    }
+    function refreshDiscoveryIfDue() {
+      if (document.hidden || currentView!=='browse' || !me || catalogLoading || $('query').value.trim() || selectedGenre || !discoveryLoadedAt) return;
+      const now = Date.now();
+      if (now-discoveryLoadedAt>=3600000 || new Date(now).toISOString().slice(0,10)!==new Date(discoveryLoadedAt).toISOString().slice(0,10)) {
+        genreCache.clear(); void catalog();
+      }
     }
     function paintFeature() {
       const title = featureItems[featureIndex]; $('discover-feature').hidden = !title;
@@ -1649,7 +1703,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function chooseSuggestion(index) {
       const title = suggestions[index]; if (!title) return;
-      closeSuggestions(); $('query').value = title.title; $('media-type').value = title.mediaType; $('genre').value = '';
+      closeSuggestions(); $('query').value = title.title; $('media-type').value = title.mediaType; selectedGenre = '';
       void act(async () => { await catalog(); await showDetails(title); });
     }
     async function suggestTitles() {
@@ -1679,7 +1733,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       closeDetails();
       closeSuggestions(); clearTimeout(featureTimer); clearTimeout(featureFade); featureItems = []; $('discover-feature').hidden = true;
       $('genre-sections').replaceChildren();
-      catalogVersion++; catalogState = null; catalogLoading = false;
+      catalogVersion++; catalogState = null; catalogLoading = false; selectedGenre = ''; discoveryLoadedAt = 0;
       $('catalog').replaceChildren();
       $('catalog-page').textContent = 'No page loaded';
       $('catalog-status').textContent = 'Search or browse popular titles.';
@@ -1688,13 +1742,15 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     async function catalog(page = 1, selection = null) {
       const type = selection?.type || $('media-type').value;
       const q = selection?.q ?? $('query').value.trim();
-      const genre = selection?.genre ?? $('genre').value;
+      const genre = selection?.genre ?? selectedGenre;
       const version = ++catalogVersion;
       catalogLoading = true; controls();
       $('catalog').setAttribute('aria-busy', 'true');
       $('catalog-status').textContent = 'Loading titles…';
       $('retry-catalog').hidden = true;
+      $('catalog-pagination').hidden = !q && !genre;
       try {
+        if (!q && !genre) { await discoveryShelves(version,type); return; }
         const [data, genres] = await Promise.all([
           request(`/api/${q ? 'search' : 'catalog'}?type=${type}&page=${page}${q ? '&q=' + encodeURIComponent(q) : ''}${genre ? '&genre=' + encodeURIComponent(genre) : ''}`),
           getGenres(type).catch(() => [])
@@ -2067,8 +2123,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     });
     document.addEventListener('pointerdown', event => { if (!event.target.closest('.search-field')) closeSuggestions(); });
     $('query').addEventListener('blur', () => { setTimeout(closeSuggestions, 150); });
-    $('media-type').addEventListener('change', () => { closeSuggestions(); $('genre').value = ''; void act(() => catalog()); });
-    $('genre').addEventListener('change', () => { closeSuggestions(); void act(() => catalog()); });
+    $('media-type').addEventListener('change', () => { closeSuggestions(); selectedGenre = ''; void act(() => catalog()); });
     bind('discover-previous', () => advanceFeature(-1)); bind('discover-next', () => advanceFeature(1));
     $('discover-feature').addEventListener('mouseenter', () => clearTimeout(featureTimer));
     $('discover-feature').addEventListener('mouseleave', scheduleFeature);
@@ -2208,7 +2263,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (path === '/api/me') return { userId: demo.profile.userId, profile: { ...demo.profile }, groupId: 'demo-group', roomId: 'demo-room' };
       if (path === '/api/me/profile') { Object.assign(demo.profile, body); return { profile: { ...demo.profile } }; }
       if (path.startsWith('/api/genres?')) { const type = new URL(path, 'http://demo').searchParams.get('type'); return {items: type === 'movie' ? [{id:28,name:'Action'},{id:80,name:'Crime'},{id:878,name:'Science Fiction'}] : [{id:18,name:'Drama'},{id:80,name:'Crime'}]}; }
-      if (path.startsWith('/api/catalog?') || path.startsWith('/api/search?')) { const q = new URL(path, 'http://demo').searchParams; return { items: samples.filter(t => t.mediaType === q.get('type') && (!q.get('genre') || t.genreIds?.includes(Number(q.get('genre')))) && t.title.toLowerCase().includes((q.get('q') || '').toLowerCase())), page: 1, hasMore: false }; }
+      if (path.startsWith('/api/catalog?') || path.startsWith('/api/search?')) { const q = new URL(path, 'http://demo').searchParams; return { items: samples.filter(t => (q.get('type')==='all' || t.mediaType === q.get('type')) && (!q.get('genre') || t.genreIds?.includes(Number(q.get('genre')))) && t.title.toLowerCase().includes((q.get('q') || '').toLowerCase())), page: 1, hasMore: false }; }
       const titlePath = /^\/api\/titles\/(movie|tv)\/(\d+)(?:\/seasons\/(\d+))?$/.exec(path);
       if (titlePath) {
         const title = samples.find(item => item.mediaType === titlePath[1] && item.tmdbId === Number(titlePath[2]));
@@ -2351,6 +2406,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (removed) renderChatNotifications();
     }, 1000);
     uiReady = true;
+    setInterval(refreshDiscoveryIfDue,60000);
+    document.addEventListener('visibilitychange',refreshDiscoveryIfDue);
     route();
     act(initialize);
   </script>

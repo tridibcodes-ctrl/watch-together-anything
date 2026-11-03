@@ -41,7 +41,7 @@ function normalizeDetails(item, mediaType) {
   };
 }
 
-function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch, getToken = () => process.env.TMDB_READ_ACCESS_TOKEN } = {}) {
+function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch, getToken = () => process.env.TMDB_READ_ACCESS_TOKEN, now = Date.now } = {}) {
   // Only public metadata is cached. Authentication still runs on every request.
   const cache = new Map();
 
@@ -63,11 +63,16 @@ function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch,
     const isSearch = url.pathname === "/api/search";
     const query = (url.searchParams.get("q") || "").trim();
     const genre = url.searchParams.get("genre") || "";
+    const feed = url.searchParams.get('feed') || 'popular';
+    const trending = !details && !isGenres && !isSearch && feed.startsWith('trending-');
+    if (!['popular','trending-week','trending-day'].includes(feed) || (trending && genre)) {
+      sendJson(response,400,{error:'Choose a supported feed; trending cannot be filtered by genre'}); return true;
+    }
     if (genre && !/^[1-9]\d{0,5}$/.test(genre)) {
       sendJson(response, 400, { error: "Genre must be a positive integer" });
       return true;
     }
-    if (!["movie", "tv"].includes(mediaType)) {
+    if (!["movie", "tv"].includes(mediaType) && !(trending && mediaType === 'all')) {
       sendJson(response, 400, { error: "Type must be movie or tv" });
       return true;
     }
@@ -105,18 +110,19 @@ function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch,
       return true;
     }
 
-    const upstreamPath = details ? `${mediaType}/${details[2]}${isSeason ? '/season/' + details[3] : ''}` : isGenres ? `genre/${mediaType}/list` : isSearch ? `search/${mediaType}` : genre ? `discover/${mediaType}` : `${mediaType}/popular`;
+    const upstreamPath = details ? `${mediaType}/${details[2]}${isSeason ? '/season/' + details[3] : ''}` : isGenres ? `genre/${mediaType}/list` : isSearch ? `search/${mediaType}` : trending ? `trending/${mediaType}/${feed==='trending-week'?'week':'day'}` : genre ? `discover/${mediaType}` : `${mediaType}/popular`;
     const upstreamUrl = new URL(upstreamPath, TMDB_BASE);
     upstreamUrl.searchParams.set("language", "en-US");
     if (!details && !isGenres) upstreamUrl.searchParams.set("page", String(page));
     if (genre && !isSearch) upstreamUrl.searchParams.set("with_genres", genre);
+    if (genre && !isSearch) upstreamUrl.searchParams.set('sort_by','popularity.desc');
     if (isSearch) {
       upstreamUrl.searchParams.set("query", query);
       upstreamUrl.searchParams.set("include_adult", "false");
     }
     const key = upstreamUrl.href;
     const cached = cache.get(key);
-    if (cached && cached.expiresAt > Date.now()) {
+    if (cached && cached.expiresAt > now()) {
       sendJson(response, 200, cached.body);
       return true;
     }
@@ -160,13 +166,13 @@ function createTmdbHandler({ authenticateUser = authenticate, fetchImpl = fetch,
           throw new Error("Invalid TMDB response");
         }
         body = {
-          items: payload.results.filter(item => !genre || !isSearch || item.genre_ids?.includes(Number(genre))).map(item => normalizeTitle(item, mediaType)),
+          items: payload.results.filter(item => (mediaType !== 'all' || ['movie','tv'].includes(item.media_type)) && (!genre || !isSearch || item.genre_ids?.includes(Number(genre)))).map(item => normalizeTitle(item, mediaType==='all'?item.media_type:mediaType)),
           page,
           hasMore: page < Math.min(payload.total_pages, MAX_PAGE),
         };
       }
       if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value);
-      cache.set(key, { body, expiresAt: Date.now() + CACHE_TTL_MS });
+      cache.set(key, { body, expiresAt: now() + CACHE_TTL_MS });
       sendJson(response, 200, body);
     } catch (error) {
       const timedOut = error.name === "TimeoutError" || error.name === "AbortError";
