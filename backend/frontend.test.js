@@ -19,6 +19,7 @@ function login({ signIn, verify = async () => {}, connect = async () => {} }) {
     connect: async () => { calls.push('connect'); await connect(); },
     preference(key, value) { calls.push([key, value]); }
   });
+  vm.runInContext(source.slice(source.indexOf('    function friendlyError('), source.indexOf('    function say(')), context);
   vm.runInContext(source.slice(source.indexOf("    form('sign-in-form'"), source.indexOf("    bind('sign-out'")), context);
   return { submit, nodes, context, calls };
 }
@@ -40,7 +41,7 @@ test('successful sign-in leaves demo mode and connects the authenticated app', a
 test('authentication network failures replace the pending sign-in message', async () => {
   const app = login({ signIn: async () => { throw new Error('Network unavailable'); } });
   await assert.rejects(app.submit(), /Network unavailable/);
-  assert.match(app.nodes['auth-status'].textContent, /Sign-in failed: Network unavailable/);
+  assert.match(app.nodes['auth-status'].textContent, /Sign-in failed: We couldn’t connect/);
   assert.equal(app.context.mode, 'demo');
   assert.equal(app.calls.length, 0);
 });

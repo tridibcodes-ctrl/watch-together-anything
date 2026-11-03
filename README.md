@@ -6,6 +6,16 @@ This is a working development backend with a plain HTML starter. Authentication,
 
 Read first: [Why TMDB?](#why-tmdb-is-part-of-this-project) · [Complete target design](#complete-target-design--planned-features) · [Local setup](#setup-from-a-fresh-clone) · [Implemented APIs](#implemented-http-api) · [Remaining work](#remaining-work-and-suggested-order)
 
+## Frontend redesign — Phase 1
+
+The frontend now has Home, Discover, Our List, Watch Room and Profile views. Normal visits use the same-origin backend and show a simplified sign-in screen. Existing Supabase session restoration is retained. Home shows the room's current title and up to four saved titles; it does not claim to implement per-title Continue Watching history. Room seats use server-reported names/readiness where available, without presenting membership or readiness as proof of online presence.
+
+The watch view brings the video forward once a title is loaded. Chat docks beside the video on laptops, stacks beneath it on narrow screens, and stays available in expanded/fullscreen viewing. Opening chat or changing views does not recreate the player. Native controls, the both-ready buffering hold, retries, and shared commands retain their existing behavior. Source choices and backup shared controls are inside playback options; technical playback information is inside Connection details. Unimplemented completion buttons are hidden.
+
+Developer settings and the API contract live at `http://127.0.0.1:3000/#developer`. Select Local Demo and Connect there to preview without an account. With Node off, serve `frontend/` with a static server and open `index.html#developer`, or open that local file directly. The browser SDK/fonts/styles still need internet access as before. Explicit demo selection persists across refresh; its sample lists/chat reset on reload. Back to sign-in exits preview and restores same-origin API mode. Development settings do not appear in the normal sign-in flow.
+
+Phase 1 changes require a hard refresh, not a database migration. Shared title/episode history, mutual choices, invitation links, watched confirmation, permanent room departure, signup/recovery and optional couple features remain future phases. Each next phase needs the owner's approval and an opportunity to omit changes. Verify two-account playback on separate devices before treating the redesign as live acceptance-tested.
+
 ## Requirements and implementation status
 
 VidRift is the default player. Reload and fullscreen are icon controls inside the player toolbar, with keyboard focus, accessible labels, and tooltips. Chat updates live, checks for missed messages every eight seconds, and retries failed loads automatically. The retired VidLink provider and fallback button are removed. Reapply `backend/playback.sql` to update the default and move any old VidLink sessions to VidRift, paused at their saved position. Other existing provider selections are preserved.

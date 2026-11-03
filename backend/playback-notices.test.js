@@ -24,9 +24,13 @@ test('the chat panel shows named waiting status and clears it when readiness rec
 
 test('saved playback notices render once without a repeated sender prefix',async()=>{
   let children;
-  const context=vm.createContext({me:{roomId:'room',userId:'me'},chatRequestVersion:0,updateChatNotifications(){},node:(tag,text)=>text,
+  function element(tag, text = '') { return { tag, textContent: text, children: [], append(...items) { this.children.push(...items); }, setAttribute() {} }; }
+  const textOf = item => typeof item === 'string' ? item : item.textContent + item.children.map(textOf).join('');
+  const context=vm.createContext({me:{roomId:'room',userId:'me'},chatRequestVersion:0,updateChatNotifications(){},node:element,document:{createTextNode:text=>text},
     $:()=>({scrollHeight:0,scrollTop:0,clientHeight:100,replaceChildren(...items){children=items;}}),
     request:async()=>({items:[{kind:'playback',senderName:'Tridib',body:'Tridib has paused.'},{senderName:'Partner',body:'Ready!'}]})});
   vm.runInContext(source.slice(source.indexOf('    async function chat()'),source.indexOf('    async function loadRooms(')),context);
-  await context.chat();assert.deepEqual(children,['Tridib has paused.','Partner: Ready!']);
+  await context.chat();assert.deepEqual(children.map(textOf),['Tridib has paused.','☾Partner: Ready!']);
+  assert.equal(children[0].className, 'chat-notice');
+  assert.equal(children[1].className, 'chat-message');
 });
