@@ -581,6 +581,38 @@
     #picker-invite-close { float: right; }
     @media (max-width: 800px) { .picker-layout { grid-template-columns: minmax(0, 1fr); }.picker-sidebar { width: min(100%, 480px); margin-inline: auto; } }
     @media (max-width: 700px) { #main-content #search-form { width: 100%; } }
+    .side-nav #nav-sign-in { margin-top: auto; }
+    .side-nav:has(#nav-sign-in:not([hidden])) .nav-profile { margin-top: 0; }
+    .site-footer { width: 100%; max-width: 1360px; margin: 64px auto 0; padding: 32px 16px 12px; border-top: 1px solid #624053; text-align: center; }
+    .footer-brand { display: inline-block; font-family: 'Henny Penny', cursive; font-size: 24px; color: #e0829d; text-decoration: none; }
+    .site-footer p { margin: 12px 0; }
+    .footer-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px 24px; margin: 20px 0; }
+    .footer-links a { color: #dac4d0; text-decoration: none; }
+    .site-footer a:hover { color: #e0829d; text-decoration: underline; }
+    .site-footer a:focus-visible { outline: 2px solid #e0829d; outline-offset: 5px; }
+    .site-footer .footer-copyright { color: #dac4d0; font-size: 13px; }
+    @media (max-width: 700px) { .side-nav #nav-sign-in { margin-top: 0; }.site-footer { margin-top: 40px; padding-inline: 0; }.footer-links { gap: 12px 20px; } }
+    .discover-preview { position: fixed; z-index: 30; width: min(380px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; overscroll-behavior: contain; border: 1px solid #8f577466; border-radius: 14px; background: #211b26; color: #f3e6ee; box-shadow: 0 18px 55px #0009; animation: preview-enter 160ms ease-out; }
+    .discover-preview .card-art { border-radius: 0; aspect-ratio: 16/9; }
+    .preview-artwork { position: relative; }
+    .preview-artwork::after { content: ''; position: absolute; inset: 50% 0 0; background: linear-gradient(transparent, #211b26); pointer-events: none; }
+    .preview-content { padding: 4px 20px 20px; }
+    .preview-actions { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; }
+    body .discover-preview button.icon-button { display: grid; place-items: center; width: 40px; min-width: 40px; height: 40px; padding: 8px; margin: 0; border: 1px solid #dac4d080 !important; border-radius: 50% !important; color: #dac4d0 !important; }
+    body .discover-preview button.icon-button:hover { border-color: #e0829d !important; color: #e0829d !important; }
+    body .discover-preview button.preview-play, body .discover-preview button.preview-play:hover { background: #dac4d0 !important; color: #211b26 !important; }
+    body .discover-preview button[aria-pressed="true"] { border-color: #e0829d !important; color: #e0829d !important; }
+    .preview-play svg { fill: currentColor; }
+    .preview-actions .preview-details { margin-left: auto !important; }
+    body .discover-preview .preview-close { position: absolute; top: 10px; right: 10px; z-index: 1; background: #211b26b3 !important; }
+    .discover-preview h3 { margin: 0 0 12px; text-align: left; font-size: 21px; line-height: 1.45; }
+    .discover-preview .title-meta { margin: 0; }
+    .preview-genres { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 14px 0 0; padding: 0; list-style: none; font-size: 13px; }
+    .preview-genres li + li::before { content: '\2022'; color: #e0829d; margin-right: 10px; }
+    .preview-overview { margin: 12px 0 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; font-size: 14px; line-height: 1.6; }
+    #catalog .movie-card:focus-visible { outline: 2px solid #e0829d; outline-offset: 5px; border-radius: 12px; }
+    @keyframes preview-enter { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .discover-preview { animation: none; } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -602,7 +634,8 @@
     <a href="#browse" aria-label="Discover" title="Discover"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg></a>
     <a href="#list" aria-label="Watchlist" title="Watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-7-4-7 4z"/></svg></a>
     <a href="#picker" aria-label="Picker" title="Picker wheel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/><circle cx="12" cy="12" r="2"/></svg></a>
-    <a class="nav-profile" href="#profile" aria-label="Profile" title="Profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3-7 8-7s8 3 8 7"/></svg></a>
+    <a id="nav-sign-in" href="#signin" aria-label="Sign in" title="Sign in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v16h-6M3 12h12m-4-4 4 4-4 4"/></svg></a>
+    <a id="nav-profile" class="nav-profile" href="#profile" aria-label="Profile" title="Profile" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3-7 8-7s8 3 8 7"/></svg></a>
     <div id="couple-presence" aria-label="Your profiles">
       <div id="account-presence" class="account-presence" data-state="connecting" role="status" aria-live="polite"><span class="presence-avatar" aria-hidden="true"><span id="presence-initial">M</span><span class="presence-dot"></span></span><span class="presence-copy"><span id="presence-name">Your account</span><span id="presence-label">Connecting</span></span></div>
       <div id="partner-presence" class="account-presence" data-state="connecting" role="status" aria-live="polite" hidden><span class="presence-avatar" aria-hidden="true"><span id="partner-presence-avatar"></span><span class="presence-dot"></span></span><span class="presence-copy"><span id="partner-presence-name"></span><span id="partner-presence-label">Checking</span></span></div>
@@ -882,6 +915,28 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     </details>
   </main>
 
+  <footer class="site-footer" aria-label="Site footer">
+    <a class="footer-brand" href="#home" aria-label="Multiplay home">Multiplay</a>
+    <nav class="footer-links" aria-label="Footer navigation">
+      <a href="#home">Home</a>
+      <a href="#browse">Discover</a>
+      <a href="#list">Watchlist</a>
+      <a href="#picker">Picker</a>
+    </nav>
+    <p class="footer-copyright">&copy; <span id="footer-year"></span> Multiplay. Made for nights together.</p>
+  </footer>
+
+  <aside id="discover-preview" class="discover-preview" role="dialog" aria-modal="false" aria-labelledby="discover-preview-title" hidden>
+    <div class="preview-artwork"><div id="preview-art"></div><button id="preview-close" class="icon-button preview-close" type="button" aria-label="Close title preview"></button></div>
+    <div class="preview-content">
+      <div id="preview-actions" class="preview-actions"></div>
+      <h3 id="discover-preview-title"></h3>
+      <div id="preview-meta"></div>
+      <ul id="preview-genres" class="preview-genres" aria-label="Genres" hidden></ul>
+      <p id="preview-overview" class="preview-overview" hidden></p>
+    </div>
+  </aside>
+
   <dialog id="picker-invite-dialog" aria-labelledby="picker-invite-heading">
     <button id="picker-invite-close" class="icon-button" type="button" aria-label="Close picker invitation">×</button>
     <h3 id="picker-invite-heading">Invite your partner to Picker</h3>
@@ -920,7 +975,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     if (incomingInvite) { preference('multiplay.pendingInvite', incomingInvite); preference('multiplay.pendingInviteTarget', pendingInviteTarget); preference('multiplay.preview', false); }
     const developerEntry = !incomingInvite && (location.hash === '#developer' || location.protocol === 'file:' || preference('multiplay.preview') === true);
     let mode = developerEntry ? (savedConnection?.mode || 'demo') : 'api', base = developerEntry ? (savedConnection?.base || '') : '', me, room, joined = false;
-    let uiReady = false, currentView = '', savedList = [], detailsOrigin = null, detailsRequested = null, pendingNavigationFocus = null, watchActionIntent = 0;
+    let uiReady = false, currentView = '', savedList = [], detailsOrigin = null, detailsRequested = null, pendingNavigationFocus = null, watchActionIntent = 0, discoverPreview = null;
     if (developerEntry && mode === 'demo') preference('multiplay.preview', true);
     const viewScroll = new Map();
     let progressItems = [], progressVersion = 0, progressLoaded = false, roomInfo = null, roomInfoAt = 0, roomInfoVersion = 0, listFilter = 'all';
@@ -1317,6 +1372,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function icon(name) {
       const paths = {
         details: ['M12 11v6', 'M12 7h.01'], save: ['M5 4h14v16l-7-4-7 4z'], play: ['m9 5 10 7-10 7z'],
+        plus: ['M12 5v14M5 12h14'], check: ['m5 12 4 4L19 6'], expand: ['m6 9 6 6 6-6'],
         remove: ['M6 6l12 12M18 6 6 18'], movie: ['M3 7h18v14H3z', 'M3 7V3h18v4M7 3l-2 4M13 3l-2 4M19 3l-2 4'],
         moon: ['M20 14a8 8 0 0 1-10-10 8 8 0 1 0 10 10z'], sun: ['M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5'],
         star: ['m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z'],
@@ -1428,8 +1484,10 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function route(focus = false) {
       const requested = inviteFromHash(location.hash) ? 'home' : location.hash.slice(1) || 'home';
       if (requested === 'signup') showAuthForm(true);
+      if (requested === 'signin' && focus) showAuthForm(false);
       const next = requested === 'signup' ? 'profile' : requested === 'room' && !joined ? 'home' : ['home', 'browse', 'list', 'room', 'picker', 'profile', 'developer'].includes(requested) ? requested : 'home';
       if (currentView !== next) {
+        discoverPreview?.close();
         if (typeof pickerController !== 'undefined') pickerController?.close();
         if ($('picker-invite-dialog').open) $('picker-invite-dialog').close();
         if ($('title-details').open) closeDetails();
@@ -1442,15 +1500,17 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       }
       for (const view of document.querySelectorAll('[data-view]')) view.hidden = view.id !== next || (mode === 'api' && !me && next !== 'developer');
       $('auth').hidden = !!me || next === 'developer';
+      $('nav-sign-in').hidden = mode === 'api' && !!me;
+      $('nav-profile').hidden = !me;
       $('demo-banner').hidden = mode !== 'demo';
       $('retry-connection').hidden = !authSession;
       for (const link of document.querySelectorAll('.side-nav a')) {
-        if (link.getAttribute('href') === '#' + next) link.setAttribute('aria-current', 'page');
+        if (link.getAttribute('href') === (!$('auth').hidden ? '#signin' : '#' + next)) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
       }
       if (next !== 'room' && !$('chat-panel').hidden && !isPlaybackExpanded()) setChatOpen(false);
       if (focus) {
-        const target = pendingNavigationFocus || (next === 'browse' && !$('title-details').hidden ? $('details-heading') : document.querySelector('#' + next + ' h2'));
+        const target = requested === 'signin' && !$('auth').hidden ? $('auth-email') : pendingNavigationFocus || (next === 'browse' && !$('title-details').hidden ? $('details-heading') : document.querySelector('#' + next + ' h2'));
         target?.focus({ preventScroll: true }); pendingNavigationFocus = null;
       }
     }
@@ -1539,6 +1599,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function progressFor(media) { return progressItems.find(item => mediaKey(item.media) === mediaKey(media)); }
     function displayTime(ms) { const seconds = Math.floor(ms/1000); return Math.floor(seconds/60) + ':' + String(seconds%60).padStart(2,'0'); }
     function resetCoupleView() {
+      discoverPreview?.close();
       if ($('picker-invite-dialog').open) $('picker-invite-dialog').close();
       $('picker-invite-link').value = ''; $('picker-invite-status').textContent = '';
       progressVersion++; roomInfoVersion++; progressItems = []; progressLoaded = false; roomInfo = null; roomInfoAt = 0;
@@ -1841,6 +1902,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       } catch { if (version === suggestionVersion) { closeSuggestions(); $('suggestion-status').textContent = 'Suggestions unavailable. You can still submit a search.'; } }
     }
     function resetCatalog() {
+      discoverPreview?.close();
       closeDetails();
       closeSuggestions(); clearTimeout(featureTimer); clearTimeout(featureFade); featureItems = []; $('discover-feature').hidden = true;
       $('genre-sections').replaceChildren();
@@ -1851,6 +1913,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('catalog').setAttribute('aria-busy', 'false');
     }
     async function catalog(page = 1, selection = null) {
+      discoverPreview?.close();
       const type = 'all';
       const q = selection?.q ?? $('query').value.trim();
       const genre = selection?.genre ?? selectedGenre;
@@ -1936,6 +1999,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (typeof scheduleFeature === 'function') scheduleFeature();
     }
     async function showDetails(title) {
+      discoverPreview?.close(true);
       closeDetails();
       detailsRequested = title;
       detailsOrigin = { view: currentView, scroll: window.scrollY, element: document.activeElement };
@@ -2039,6 +2103,115 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         row.querySelector('.episode-selected').hidden = !selected;
       }
     }
+    function createDiscoverPreview() {
+      const panel = $('discover-preview');
+      let host = null, openTimer, closeTimer, version = 0, restoringFocus = false;
+      const close = (restore = false) => {
+        clearTimeout(openTimer); clearTimeout(closeTimer); version++;
+        const previous = host;
+        panel.hidden = true; host?.setAttribute('aria-expanded', 'false'); host = null;
+        if (restore && previous?.isConnected) {
+          restoringFocus = true; previous.focus({ preventScroll: true }); restoringFocus = false;
+        }
+      };
+      const position = () => {
+        if (panel.hidden || !host?.isConnected) return;
+        const rect = host.getBoundingClientRect(), gap = 12;
+        panel.style.width = Math.min(420, Math.max(320, rect.width * 1.18), window.innerWidth - gap * 2) + 'px';
+        panel.style.left = Math.max(gap, Math.min(rect.left + rect.width / 2 - panel.offsetWidth / 2, window.innerWidth - panel.offsetWidth - gap)) + 'px';
+        panel.style.top = Math.max(gap, Math.min(rect.top - 20, window.innerHeight - panel.offsetHeight - gap)) + 'px';
+      };
+      const paint = title => {
+        $('preview-art').replaceChildren(landscapeArtwork(title));
+        $('discover-preview-title').textContent = title.title;
+        const meta = titleMetadata(title);
+        if (title.runtimeMinutes) meta.append(node('span', title.runtimeMinutes + ' min'));
+        else if (title.mediaType === 'tv' && title.seasons?.length) meta.append(node('span', title.seasons.length + ' season' + (title.seasons.length === 1 ? '' : 's')));
+        $('preview-meta').replaceChildren(meta);
+        const genres = (title.genres || []).map(genre => typeof genre === 'string' ? genre : genre.name).filter(Boolean).slice(0, 3);
+        $('preview-genres').replaceChildren(...genres.map(genre => node('li', genre)));
+        $('preview-genres').hidden = !genres.length;
+        $('preview-overview').textContent = title.overview || '';
+        $('preview-overview').hidden = !title.overview;
+        position();
+      };
+      const show = (article, title) => {
+        clearTimeout(openTimer); clearTimeout(closeTimer);
+        if (currentView !== 'browse' || !article.isConnected || !article.closest('#catalog') || $('title-details').open) return;
+        if (host === article && !panel.hidden) return;
+        close(); host = article;
+        const current = ++version, userId = me?.userId, currentMode = mode;
+        host.setAttribute('aria-expanded', 'true');
+        const play = iconButton('Watch together: ' + title.title, 'play', () => { close(true); return watchTitle(title); });
+        play.classList.add('preview-play');
+        const saved = () => savedList.find(item => item.title.mediaType === title.mediaType && item.title.tmdbId === title.tmdbId);
+        const save = iconButton('Save: ' + title.title, 'save', async () => {
+          const item = saved();
+          if (item) await removeListItem(item.id);
+          else await add(title);
+          if (current === version && !panel.hidden) updateSave();
+        });
+        const updateSave = () => {
+          const inList = !!saved(), label = (inList ? 'Remove from watchlist: ' : 'Save to watchlist: ') + title.title;
+          save.setAttribute('aria-pressed', String(inList)); save.setAttribute('aria-label', label); save.title = label;
+          save.replaceChildren(icon(inList ? 'check' : 'plus'));
+        };
+        updateSave();
+        const details = iconButton('More details: ' + title.title, 'expand', () => showDetails(title));
+        details.classList.add('preview-details');
+        $('preview-actions').replaceChildren(play, save, details);
+        panel.hidden = false; paint(title);
+        const key = title.mediaType + ':' + title.tmdbId;
+        if (!posterRequests.has(key)) posterRequests.set(key, request(`/api/titles/${title.mediaType}/${title.tmdbId}`).then(data => data.title).catch(() => { posterRequests.delete(key); return null; }));
+        void posterRequests.get(key).then(result => {
+          if (result && current === version && !panel.hidden && article.isConnected && userId === me?.userId && mode === currentMode) paint({ ...title, ...result });
+        });
+      };
+      const leave = () => {
+        clearTimeout(openTimer); clearTimeout(closeTimer);
+        closeTimer = setTimeout(() => {
+          if (!panel.matches(':hover') && !host?.matches(':hover') && !panel.contains(document.activeElement) && !host?.contains(document.activeElement)) close();
+        }, 180);
+      };
+      const attach = (article, title) => {
+        article.tabIndex = 0; article.setAttribute('aria-label', 'Preview ' + title.title);
+        article.setAttribute('aria-haspopup', 'dialog'); article.setAttribute('aria-controls', panel.id); article.setAttribute('aria-expanded', 'false');
+        article.addEventListener('pointerenter', event => {
+          if (event.pointerType !== 'mouse' || !window.matchMedia('(hover: hover)').matches) return;
+          clearTimeout(openTimer); clearTimeout(closeTimer); openTimer = setTimeout(() => show(article, title), 260);
+        });
+        article.addEventListener('pointerleave', leave);
+        article.addEventListener('focusin', event => { if (event.target === article && !restoringFocus) show(article, title); });
+        article.addEventListener('focusout', leave);
+        article.addEventListener('keydown', event => {
+          if (event.target !== article || !['Enter', ' ', 'ArrowDown', 'Tab'].includes(event.key) || event.shiftKey) return;
+          if (event.key === 'Tab' && (host !== article || panel.hidden)) return;
+          event.preventDefault(); show(article, title); panel.querySelector('#preview-actions button')?.focus();
+        });
+        article.addEventListener('click', event => {
+          if (event.target.closest('button, a') || !event.target.closest('.card-image')) return;
+          show(article, title); panel.querySelector('#preview-actions button')?.focus();
+        });
+      };
+      $('preview-close').append(icon('remove'));
+      $('preview-close').onclick = () => close(true);
+      panel.addEventListener('pointerenter', () => { clearTimeout(closeTimer); clearTimeout(openTimer); });
+      panel.addEventListener('pointerleave', leave);
+      panel.addEventListener('focusout', leave);
+      panel.addEventListener('keydown', event => {
+        if (event.key !== 'Tab') return;
+        const controls = [...panel.querySelectorAll('button:not(:disabled)')], index = controls.indexOf(document.activeElement);
+        if (event.shiftKey && index === 0) { event.preventDefault(); close(true); }
+        else if (!event.shiftKey && index === controls.length - 1) {
+          event.preventDefault(); const next = host?.querySelector('button'); close(); next?.focus({ preventScroll: true });
+        }
+      });
+      document.addEventListener('keydown', event => { if (event.key === 'Escape' && !panel.hidden) { event.preventDefault(); close(panel.contains(document.activeElement) || host === document.activeElement); } });
+      document.addEventListener('pointerdown', event => { if (!panel.hidden && !panel.contains(event.target) && !host?.contains(event.target)) close(); });
+      window.addEventListener('resize', position);
+      window.addEventListener('scroll', event => { if (!panel.contains(event.target)) close(); }, true);
+      return { attach, close };
+    }
     function card(title, item, resume = null) {
       const article = node('article',''); article.className = 'movie-card'+(resume ? ' is-resume' : '');
       const image = node('div',''); image.className = 'card-image'; image.append(landscapeArtwork(title));
@@ -2051,6 +2224,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const note = resume ? (resume.media.mediaType === 'tv' ? `S${resume.media.season} E${resume.media.episode} · ` : '')+'Saved at '+displayTime(resume.positionMs) : item ? item.status+(item.watchedEpisodes ? ' · '+item.watchedEpisodes+' episodes watched together' : '') : '';
       if (note) { const text = node('p',note); text.className = 'card-note'; article.append(text); }
       hydrateLandscapeCard(article,title);
+      if (!item && !resume) discoverPreview?.attach(article, title);
       return article;
     }
     async function watchTitle(title, resumeMedia = null) {
@@ -2304,6 +2478,22 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     bind('retry-details', () => showDetails(detailsRequested));
     bind('retry-catalog', () => catalog(catalogState?.page || 1, catalogState));
     bind('retry-connection', initialize);
+    $('nav-sign-in').onclick = event => {
+      event.preventDefault();
+      void act(async () => {
+        const leavingDemo = mode === 'demo';
+        if (leavingDemo) {
+          mode = 'api'; base = ''; me = null; room = null; joined = false;
+          stopLiveChat(); unload();
+          $('mode').value = 'api'; $('backend').value = '';
+          preference('multiplay.preview', false);
+          preference('multiplay.connection', { mode, base });
+        }
+        location.hash = 'signin';
+        route(true);
+        if (leavingDemo) await initialize();
+      });
+    };
     bind('exit-demo', async () => {
       mode = 'api'; base = ''; me = null; room = null; joined = false;
       stopLiveChat(); unload();
@@ -2573,6 +2763,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       onGenre:name=>{ selectedGenre=name; $('query').value=''; location.hash='browse'; void act(()=>catalog()); }
     });
     else $('picker-error').textContent='Restart the backend and refresh to load the picker.';
+    discoverPreview = createDiscoverPreview();
+    $('footer-year').textContent = new Date().getFullYear();
     uiReady = true;
     setInterval(refreshDiscoveryIfDue,60000);
     document.addEventListener('visibilitychange',refreshDiscoveryIfDue);
