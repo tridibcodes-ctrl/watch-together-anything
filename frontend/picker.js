@@ -13,7 +13,9 @@
     let state=null,generation=0,timer=null,busy=false,editing=null,draft=[],searchVersion=0,searchTimer=null,offset=0;
     let animation=null,animationKey=null,resultTimer=null,poolKey='',demo=null,origin=null;
     let preview=[],idleAnimation=null,reading=null;
+    let readyResult=null,presentedResult=null,resultVersion=0,resultOrigin=null;
     const contextKey=()=>{const c=getContext();return [c.mode,c.roomId,c.userId].join(':');};
+    const resultKey=()=>state?.result?contextKey()+':'+state.roundId+':'+state.resultIndex:null;
     function stopIdle(){idleAnimation?.cancel();idleAnimation=null;}
     function syncIdle(){
       const c=getContext(),pool=state?.roundId?state.pool||[]:preview;
@@ -58,7 +60,7 @@
       if(state && result.revision<state.revision)return null;
       offset=Date.parse(result.serverTime||new Date().toISOString())-(started+Date.now())/2;
       if(state?.roundId!==result.roundId || result.result&&!state?.result){close();}
-      if(state?.roundId!==result.roundId){stopIdle();animation?.cancel();animationKey=null;poolKey='';$('picker-rotor').style.transform='';}
+      if(state?.roundId!==result.roundId){stopIdle();clearTimeout(resultTimer);if(animation)animation.onfinish=null;animation?.cancel();animationKey=null;readyResult=null;presentedResult=null;poolKey='';$('picker-rotor').style.transform='';}
       state=result;render();return result;
     }
     async function run(fn){
@@ -83,11 +85,62 @@
         text.textContent=pool.length>16?String(i+1):item.title.length>18?item.title.slice(0,16)+'…':item.title;svg.append(text);
       });
     }
+    function closeResult(restore=false){
+      resultVersion++;
+      const dialog=$('picker-result-dialog'),previous=resultOrigin;resultOrigin=null;
+      if(dialog.open)dialog.close();
+      if(restore&&getContext().view==='picker'){
+        const target=previous?.isConnected&&!previous.disabled?previous:$('picker-result-action');
+        target.focus({preventScroll:true});
+      }
+    }
+    function paintResult(title){
+      $('picker-result-heading').textContent=title.title;
+      const genre=state.mode==='genre',meta=[];
+      if(!genre){
+        meta.push(title.mediaType==='tv'?'TV SERIES':'MOVIE');
+        if(title.year)meta.push(title.year);
+        if(title.runtimeMinutes)meta.push(title.runtimeMinutes+' min');
+        if(title.genres?.length)meta.push(title.genres.join(' · '));
+      }
+      $('picker-result-meta').replaceChildren(...meta.map(text=>el('span',text)));
+      $('picker-result-description').textContent=genre?'Your shared pick is '+title.title+'. Browse this genre to find something for tonight.':title.overview||'No description is available for this title yet. Open the full details to explore this pick.';
+      const valid=path=>typeof path==='string'&&/^\/[a-zA-Z0-9._-]+$/.test(path);
+      const path=valid(title.backdropPath)?title.backdropPath:valid(title.posterPath)?title.posterPath:null,art=$('picker-result-art');
+      art.replaceChildren();art.hidden=genre||!path;
+      if(!art.hidden){
+        const image=el('img');image.alt='Artwork for '+title.title;image.width=780;image.height=439;image.decoding='async';image.src='https://image.tmdb.org/t/p/w780'+path;
+        image.onerror=()=>{if(image.parentNode===art)art.hidden=true;};art.append(image);
+      }
+    }
+    function openResult(force=false){
+      const signature=resultKey(),dialog=$('picker-result-dialog'),c=getContext();
+      if(!signature||readyResult!==signature||c.view!=='picker'||document.hidden||dialog.open||(!force&&presentedResult===signature))return;
+      // Keep an invitation or title-details dialog in front until it is dismissed.
+      if(document.querySelector('dialog[open]'))return;
+      presentedResult=signature;resultOrigin=document.activeElement;
+      const version=++resultVersion,identity=contextKey(),winner={...state.result};
+      paintResult(winner);
+      $('picker-result-details').textContent=state.mode==='genre'?'Browse '+winner.title:'View title details';
+      $('picker-result-detail-status').hidden=true;
+      dialog.showModal();$('picker-result-heading').focus({preventScroll:true});
+      if(state.mode==='genre')return;
+      $('picker-result-detail-status').textContent='Loading title description…';$('picker-result-detail-status').hidden=false;
+      void request('/api/titles/'+winner.mediaType+'/'+winner.tmdbId).then(data=>{
+        if(version!==resultVersion||identity!==contextKey()||signature!==resultKey()||!dialog.open)return;
+        paintResult({...winner,...data.title});$('picker-result-detail-status').hidden=true;
+      }).catch(()=>{
+        if(version!==resultVersion||identity!==contextKey()||signature!==resultKey()||!dialog.open)return;
+        $('picker-result-detail-status').textContent='Could not load more information. You can still open the full details.';
+      });
+    }
     function showResult(){
       $('picker-result').hidden=!state?.result;
       if(!state?.result)return;
+      readyResult=resultKey();
       $('picker-winner').textContent=state.result.title;
-      $('picker-result-action').textContent=state.mode==='genre'?'Browse '+state.result.title:'View title details';
+      $('picker-result-action').textContent='View result';
+      openResult();
     }
     function animate(){
       if(!state?.result)return;
@@ -99,7 +152,9 @@
       rotor.style.transform='rotate(0deg)';
       animation=rotor.animate([{transform:'rotate(0deg)'},{transform:`rotate(${target}deg)`}],{duration,delay:Math.max(0,-elapsed),easing:'cubic-bezier(.12,.75,.2,1)',fill:'forwards'});
       if(elapsed>0)animation.currentTime=elapsed;
-      animation.onfinish=showResult;resultTimer=setTimeout(showResult,Math.max(0,duration-elapsed)+50);
+      const identity=resultKey(),version=generation;
+      const finish=()=>{if(version===generation&&identity===resultKey())showResult();};
+      animation.onfinish=finish;resultTimer=setTimeout(finish,Math.max(0,duration-elapsed)+50);
     }
     function render(){
       const c=getContext(),own=state?.members?.find(m=>m.userId===c.userId),members=state?.members||[];
@@ -122,10 +177,11 @@
         const label=el(excluded.length?'s':'span',item.title);
         li.append(label);if(excluded.length)li.append(el('small','Excluded by '+excluded.map(m=>m.displayName).join(' and ')));return li;
       }));
-      if(!state?.result)$('picker-result').hidden=true;else animate();
+      if(!state?.result)$('picker-result').hidden=true;else{animate();openResult();}
       syncIdle();
     }
     function close(){
+      closeResult();
       searchVersion++;clearTimeout(searchTimer);const dialog=$('picker-dialog');if(dialog.open)dialog.close();editing=null;
       if(origin?.isConnected)origin.focus({preventScroll:true});origin=null;
       syncIdle();
@@ -171,7 +227,7 @@
         }));
       }catch{if(version===searchVersion)$('picker-dialog-error').textContent='Search failed. Type again to retry.';}
     }
-    function stop(){generation++;clearInterval(timer);timer=null;clearTimeout(resultTimer);close();state=null;preview=[];stopIdle();reading=null;animation?.cancel();animationKey=null;poolKey='';$('picker-rotor').style.transform='';render();}
+    function stop(){generation++;clearInterval(timer);timer=null;clearTimeout(resultTimer);close();state=null;preview=[];stopIdle();reading=null;if(animation)animation.onfinish=null;animation?.cancel();animationKey=null;readyResult=null;presentedResult=null;poolKey='';$('picker-rotor').style.transform='';render();}
     function start(){stop();const c=getContext();if(!c.userId)return;void loadPreview();if(!c.roomId)return;void refresh();timer=setInterval(refresh,3000);}
     async function refresh(){if(reading===generation||busy)return;const version=generation;reading=version;try{await transport();}catch(error){if(version===generation)$('picker-error').textContent=error.message;}finally{if(reading===version)reading=null;}}
     $('picker-genre').onclick=()=>run(()=>begin('genre'));$('picker-title').onclick=()=>run(()=>begin('title'));$('picker-trending').onclick=()=>run(()=>begin('trending'));
@@ -180,10 +236,19 @@
     $('picker-submit').onclick=()=>run(async()=>{const body={action:'submit',roundId:state.roundId,choices:state.mode==='trending'?[]:draft};const next=await transport(body);if(next)close();});
     $('picker-spin').onclick=()=>run(()=>transport({action:'spin',roundId:state.roundId}));
     $('picker-title-query').oninput=()=>{clearTimeout(searchTimer);searchVersion++;searchTimer=setTimeout(search,300);};
-    $('picker-result-action').onclick=()=>{if(state?.result){if(state.mode==='genre')onGenre(state.result.title);else onTitle(state.result);}};
-    document.addEventListener('visibilitychange',syncIdle);
+    $('picker-result-action').onclick=()=>openResult(true);
+    $('picker-result-close').onclick=()=>closeResult(true);
+    $('picker-result-dialog').addEventListener('cancel',event=>{event.preventDefault();closeResult(true);});
+    $('picker-result-dialog').addEventListener('close',()=>{resultVersion++;});
+    $('picker-result-dialog').addEventListener('click',event=>{
+      const dialog=$('picker-result-dialog');if(event.target!==dialog)return;
+      const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeResult(true);
+    });
+    $('picker-result-details').onclick=()=>{if(!state?.result)return;const winner=state.result,genre=state.mode==='genre';closeResult(true);if(genre)onGenre(winner.title);else onTitle(winner);};
+    function viewChanged(){syncIdle();if(getContext().view!=='picker')closeResult();else openResult();}
+    document.addEventListener('visibilitychange',viewChanged);
     window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change',syncIdle);
-    render();return {start,stop,refresh,close,viewChanged:syncIdle};
+    render();return {start,stop,refresh,close,viewChanged};
   }
   const api={create,eligible,angle,duration};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.MultiplayPicker=api;
 })(typeof window!=='undefined'?window:globalThis);
