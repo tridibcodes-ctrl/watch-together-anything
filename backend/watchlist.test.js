@@ -96,13 +96,13 @@ function frontend() {
 }
 test('frontend ignores a delayed list from the previous room', async () => {
   const source = frontend(); let resolve, renders = 0; const nodes = {};
-  const ctx = vm.createContext({ mode: 'api', me: { roomId: ROOM, userId: USER }, listVersion: 0, $: id => nodes[id] ??= { replaceChildren() { renders++; } }, request: () => new Promise(done => resolve = done), card() {} });
+  const ctx = vm.createContext({ mode: 'api', me: { roomId: ROOM, userId: USER }, listVersion: 0, $: id => nodes[id] ??= { children:[], replaceChildren() { renders++; } }, request: () => new Promise(done => resolve = done), card() {} });
   vm.runInContext(source.slice(source.indexOf('    function listPath()'), source.indexOf('    function closeDetails(')), ctx);
   const promise = ctx.list(); ctx.me.roomId = USER; resolve({ items: [] }); await promise; assert.equal(renders, 0);
 });
 test('demo add/remove keeps mock paths and does not use real room API', async () => {
   const source = frontend(), paths = [], nodes = {};
-  const ctx = vm.createContext({ mode: 'demo', me: { roomId: 'demo-room', groupId: 'demo-group' }, listVersion: 0, $: id => nodes[id] ??= { replaceChildren() {} }, request: async (url, method) => { paths.push([url, method]); return { items: [] }; }, card() {}, say() {} });
+  const ctx = vm.createContext({ mode: 'demo', me: { roomId: 'demo-room', groupId: 'demo-group' }, listVersion: 0, $: id => nodes[id] ??= { children:[], replaceChildren() {} }, request: async (url, method) => { paths.push([url, method]); return { items: [] }; }, card() {}, say() {} });
   vm.runInContext(source.slice(source.indexOf('    function listPath()'), source.indexOf('    function closeDetails(')), ctx);
   await ctx.add({ mediaType: 'movie', tmdbId: 155 }); await ctx.removeListItem('demo-item'); assert.ok(paths.every(([url]) => url.startsWith('/api/groups/demo-group/list')));
 });

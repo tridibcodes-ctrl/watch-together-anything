@@ -23,12 +23,14 @@ function createPickerHandler({authenticateUser=authenticate,fetchImpl=fetch}={})
         Object.assign(args,{p_action:body.action,p_round_id:body.roundId});
         if(body.action==='start'){
           if(!['genre','title','trending'].includes(body.mode))return fail(400,'Choose genre or title mode');
+          if(body.mode==='trending'&&!['day','week'].includes(body.trendingWindow||'week'))return fail(400,'Choose trending today or this week');
           args.p_mode=body.mode;args.p_expected_round_id=body.expectedRoundId||null;args.p_options=[];
           if(body.mode==='genre'){
             const lists=await Promise.all(['movie','tv'].map(type=>tmdb('genre/'+type+'/list?language=en-US')));
             const names=[...new Set(lists.flatMap(list=>list.genres.map(g=>g.name)))].sort();args.p_options=names.map(name=>({key:'genre:'+name,title:name}));
           }else if(body.mode==='trending'){
-            const list=await tmdb('trending/all/week?language=en-US');args.p_options=list.results.filter(item=>['movie','tv'].includes(item.media_type)).map(item=>title(item,item.media_type));
+            const trendingWindow=body.trendingWindow||'week';
+            const list=await tmdb('trending/all/'+trendingWindow+'?language=en-US');args.p_options=list.results.filter(item=>['movie','tv'].includes(item.media_type)).map(item=>({...title(item,item.media_type),trendingWindow}));
           }
         }else if(body.action==='submit'){
           if(!Array.isArray(body.choices)||body.choices.length>80)return fail(400,'Invalid choices');
@@ -40,7 +42,10 @@ function createPickerHandler({authenticateUser=authenticate,fetchImpl=fetch}={})
       }
       const result=await fetchImpl(base+'/rpc/watch_picker',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(args),signal:AbortSignal.timeout(10000)});
       const payload=await result.json().catch(()=>({}));if(!result.ok){if(['PGRST202','42P01'].includes(payload.code))return fail(503,'Picker setup required: apply backend/picker.sql in Supabase SQL Editor.');return fail(payload.code==='42501'?403:payload.code==='22023'?400:502,payload.message||'Could not update picker');}
-      if(payload.conflict)return fail(409,'The picker round changed. Reopen your choices.');send(res,200,payload);return true;
+      if(payload.conflict)return fail(409,'The picker round changed. Reopen your choices.');
+      // Persist the window with the canonical shared options, using the existing picker schema.
+      if(payload.mode==='trending')payload.trendingWindow=payload.options?.[0]?.trendingWindow==='day'?'day':'week';
+      send(res,200,payload);return true;
     }catch(error){return fail(502,error.message||'Picker unavailable');}
   };
 }

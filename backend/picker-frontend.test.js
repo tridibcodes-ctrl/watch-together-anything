@@ -11,12 +11,13 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 function picker({ roomId = 'room', delayedPreview = false } = {}) {
   const nodes = {}, animations = [], calls = [], intervals = new Set(); let reduced = false, resolvePreview;
   const context = { mode: 'api', roomId, userId: 'me', name: 'Me', view: 'picker' };
-  const element = () => ({ children: [], style: {}, hidden: false, open: false, textContent: '',
-    replaceChildren(...children) { this.children = children; }, append(...children) { this.children.push(...children); },
+  const element = () => ({ children: [], style: {}, hidden: false, open: false, textContent: '', replacements:0,
+    replaceChildren(...children) { this.children = children; this.replacements++; }, append(...children) { this.children.push(...children); },
     setAttribute(name, value) { this[name] = value; }, addEventListener() {}, focus() {}, close() { this.open = false; }, showModal() { this.open = true; },
     animate(frames, timing) { const item = { frames, timing, cancelled: false, cancel() { this.cancelled = true; } }; animations.push(item); return item; } });
   const forbidden = new Set(['picker-notice', 'picker-notice-text', 'picker-nav-badge', 'picker-open-notice']);
   const document = { hidden: false, activeElement: null, createElement: element, createElementNS: element, createTextNode: text => text, addEventListener() {},
+    querySelector: () => Object.values(nodes).find(node=>node.open)||null,
     getElementById(id) { assert.equal(forbidden.has(id), false, 'Picker must not access notification UI'); return nodes[id] ??= element(); } };
   const module = { exports: {} };
   vm.runInNewContext(pickerSource, { module, document, window: { matchMedia: () => ({ matches: reduced, addEventListener() {} }) },
@@ -24,9 +25,11 @@ function picker({ roomId = 'room', delayedPreview = false } = {}) {
     setInterval(fn) { intervals.add(fn); return fn; }, clearInterval(fn) { intervals.delete(fn); } });
   const titles = [{ mediaType: 'movie', tmdbId: 1, title: 'Trending movie' }, { mediaType: 'tv', tmdbId: 2, title: 'Trending series' }];
   let state = { roomId, roundId: null, revision: 0, members: [] };
-  const controller = module.exports.create({ getContext: () => context, onTitle() {}, onGenre() {}, request: async (url, method) => {
-    calls.push({ url, method });
+  const controller = module.exports.create({ getContext: () => context, onTitle() {}, onGenre() {}, request: async (url, method, body) => {
+    calls.push({ url, method, body });
     if (url.includes('/api/catalog')) return delayedPreview ? new Promise(resolve => { resolvePreview = resolve; }) : { items: titles };
+    if (url.includes('/api/titles/')) return {title:{...titles[0],overview:'A shared movie night.'}};
+    if(body?.action==='start')state={roundId:body.roundId,revision:(state.revision||0)+1,mode:body.mode,trendingWindow:body.trendingWindow,options:titles,pool:titles,members:[]};
     return structuredClone({ ...state, serverTime: new Date().toISOString() });
   } });
   return { controller, nodes, context, calls, animations, intervals,
@@ -64,6 +67,34 @@ test('trending preview works without a room and ignores a response after sign-ou
   assert.equal(app.calls.length, 1); assert.match(app.calls[0].url, /trending-week/);
   app.context.userId = null; app.controller.stop(); app.resolvePreview(); await flush();
   assert.equal(app.nodes['picker-options'].children.length, 0); assert.equal(app.animations.length, 0);
+});
+
+test('daily and weekly buttons create distinct shared rounds and unchanged polling preserves options', async () => {
+  const app=picker();app.controller.start();await flush();
+  await app.nodes['picker-trending-day'].onclick();
+  assert.equal(app.calls.find(call=>call.body?.action==='start').body.trendingWindow,'day');
+  assert.equal(app.nodes['picker-pool-heading'].textContent,'Trending Today');
+  assert.match(app.nodes['picker-trending-help'].textContent,/today/);
+  const changes=app.nodes['picker-options'].replacements;
+  await app.controller.refresh();assert.equal(app.nodes['picker-options'].replacements,changes);
+  app.controller.close();
+  // A completed daily round can be followed by the weekly round without a reset prompt.
+  app.setState({roundId:'finished',revision:3,mode:'trending',trendingWindow:'day',members:[],options:[],pool:[{mediaType:'movie',tmdbId:1,title:'Pick'}],result:{mediaType:'movie',tmdbId:1,title:'Pick'},resultIndex:0,spinAt:new Date().toISOString()});
+  await app.controller.refresh();await app.nodes['picker-trending'].onclick();
+  assert.equal(app.calls.filter(call=>call.body?.action==='start').at(-1).body.trendingWindow,'week');
+  assert.equal(app.nodes['picker-pool-heading'].textContent,'Trending This Week');app.controller.stop();
+});
+
+test('a completed spin opens its result once; polling does not reopen it and View result still works', async () => {
+  const app=picker();app.controller.start();await flush();
+  app.setState({roundId:'finished',revision:1,mode:'trending',members:[],options:[],pool:[{mediaType:'movie',tmdbId:1,title:'Pick'}],result:{mediaType:'movie',tmdbId:1,title:'Pick'},resultIndex:0,spinAt:new Date().toISOString()});
+  await app.controller.refresh();assert.equal(app.nodes['picker-result-dialog'].open,false);
+  app.animations.at(-1).onfinish();await flush();
+  assert.equal(app.nodes['picker-result-dialog'].open,true);assert.match(app.nodes['picker-result-description'].textContent,/shared movie night/);
+  app.nodes['picker-result-close'].onclick();await app.controller.refresh();
+  assert.equal(app.nodes['picker-result-dialog'].open,false);
+  app.nodes['picker-result-action'].onclick();assert.equal(app.nodes['picker-result-dialog'].open,true);
+  app.context.view='home';app.controller.viewChanged();assert.equal(app.nodes['picker-result-dialog'].open,false);app.controller.stop();
 });
 
 test('picker invite links keep a validated destination and successful room joining opens Picker', async () => {

@@ -12,7 +12,7 @@ test('combining results preserves relevance order and treats a movie and TV show
 });
 test('a search queries both media types on the same page and keeps combined pagination',async()=>{
   const calls=[],nodes={};let rendered;
-  const context=vm.createContext({catalogVersion:0,catalogState:null,catalogLoading:false,selectedGenre:'',controls(){},$:id=>nodes[id]??={value:'shared title',setAttribute(){}},getGenres:async()=>[],
+  const context=vm.createContext({discoverPreview:null,catalogVersion:0,catalogState:null,catalogLoading:false,selectedGenre:'',controls(){},$:id=>nodes[id]??={value:'shared title',setAttribute(){}},getGenres:async()=>[],
     request:async url=>{calls.push(new URL(url,'http://test'));const type=calls.at(-1).searchParams.get('type');return {items:[{mediaType:type,tmdbId:1}],hasMore:type==='tv'};},renderGenreControls(){},renderCatalog(items){rendered=items;}});
   vm.runInContext(source.slice(source.indexOf('    function combineTitles('),source.indexOf('    async function discoveryShelves(')),context);
   vm.runInContext(source.slice(source.indexOf('    async function catalog('),source.indexOf('    function listPath(')),context);

@@ -15,11 +15,11 @@ function navigation({ signedIn = true, mode = 'api' } = {}) {
   const links = views.map(view => ({ ...element('link-' + view.id), getAttribute: () => '#' + view.id }));
   const scrolls = [];
   const context = vm.createContext({
-    $: element, mode, me: signedIn ? { userId: 'me' } : null, authSession: signedIn ? {} : null, joined: true,
+    $: element, mode, discoverPreview:null, me: signedIn ? { userId: 'me' } : null, authSession: signedIn ? {} : null, joined: true,
     location: { hash: '#room' }, currentView: '', viewScroll: new Map(), pendingNavigationFocus: null,
-    window: { scrollY: 0, scrollTo(x, y) { scrolls.push(y); this.scrollY = y; } },
+    window: { scrollY: 0, scrollTo(x, y) { if(y>0)assert.equal(element(context.currentView).hidden,false,'show destination before restoring scroll'); scrolls.push(y); this.scrollY = y; } },
     document: { querySelectorAll: selector => selector === '[data-view]' ? views : links,
-      querySelector: selector => element(selector) },
+      querySelector: selector => selector==='dialog[open]' ? null : element(selector) },
     isPlaybackExpanded: () => false, setChatOpen(open) { element('chat-panel').hidden = !open; }
   });
   vm.runInContext(source.slice(source.indexOf('    function inviteFromHash('), source.indexOf('    function inviteCodeFromInput(')), context);

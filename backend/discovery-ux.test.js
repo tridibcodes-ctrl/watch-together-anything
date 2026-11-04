@@ -7,7 +7,7 @@ test('details open over the current view; closing returns focus and rejects a de
   const opener={isConnected:true,focus(){focusReturned=true;}};
   const element=id=>nodes[id]??={hidden:true,open:false,textContent:'',classList:{remove(){}},
     append(){},replaceChildren(){},setAttribute(){},focus(){},showModal(){this.open=true;},close(){this.open=false;}};
-  const context=vm.createContext({$:element,currentView:'list',detailsVersion:0,seasonVersion:0,selectedTitle:null,selectedEpisodes:[],detailsOrigin:null,
+  const context=vm.createContext({$:element,discoverPreview:null,currentView:'list',detailsVersion:0,seasonVersion:0,selectedTitle:null,selectedEpisodes:[],detailsOrigin:null,
     window:{scrollY:480,scrollTo(x,y){scrolls.push(y);}},document:{activeElement:opener,body:{classList:{add:v=>classes.add(v),remove:v=>classes.delete(v)}}},
     featureTimer:null,featureFade:null,clearTimeout(){},scheduleFeature(){},placeMovieInvitations(){},request:()=>new Promise(done=>resolve=done),controls(){},node(){throw new Error('Stale content must not render');}});
   vm.runInContext(source.slice(source.indexOf('    function closeDetails('),source.indexOf('    async function loadSeason(')),context);
@@ -30,7 +30,7 @@ test('carousel rotation waits four seconds and stops for dialogs, other views an
   const active=new Map();let sequence=0;
   const dialog={open:false}, feature={matches:()=>false,contains:()=>false};
   const context=vm.createContext({featureTimer:null,featurePaused:false,featureItems:[{},{}],currentView:'home',
-    document:{hidden:false,activeElement:null},$:id=>id==='title-details'?dialog:feature,
+    document:{hidden:false,activeElement:null},window:{matchMedia:()=>({matches:false})},$:id=>id==='title-details'?dialog:feature,
     clearTimeout:id=>active.delete(id),setTimeout(fn,delay){active.set(++sequence,{fn,delay});return sequence;},advanceFeature(){}});
   vm.runInContext(source.slice(source.indexOf('    function scheduleFeature('),source.indexOf('    function advanceFeature(')),context);
   context.scheduleFeature();assert.equal([...active.values()][0].delay,4000);

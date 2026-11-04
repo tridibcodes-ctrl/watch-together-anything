@@ -57,3 +57,22 @@ test('wheel geometry lands on the chosen slice; either veto excludes a genre and
   const options=[{key:'a'},{key:'b'},{key:'c'}];assert.deepEqual(eligible('genre',options,[{choices:['a']},{choices:['b']}]),[{key:'c'}]);
   assert.equal(eligible('title',[],[{choices:[{key:'movie:1'}]},{choices:[{key:'movie:1'},{key:'tv:1'}]}]).length,2);
 });
+
+test('trending windows use the requested TMDB feed and survive the shared snapshot without a schema change',async()=>{
+  process.env.SUPABASE_URL='https://db.test';process.env.SUPABASE_PUBLISHABLE_KEY='public';process.env.TMDB_READ_ACCESS_TOKEN='tmdb-test';
+  const room=randomUUID(),user=randomUUID(),calls=[];let stored;
+  const handler=createPickerHandler({authenticateUser:async()=>({data:{userClaims:{id:user}}}),fetchImpl:async(url,options)=>{
+    calls.push(url);
+    if(url.includes('watch_room_members'))return {ok:true,json:async()=>[{user_id:user}]};
+    if(url.includes('api.themoviedb'))return {ok:true,json:async()=>({results:[{id:1,media_type:'movie',title:'Daily movie'},{id:2,media_type:'person',name:'Not a title'}]})};
+    const args=JSON.parse(options.body);if(args.p_action==='start')stored={mode:args.p_mode,options:args.p_options};
+    return {ok:true,json:async()=>structuredClone(stored)};
+  }});
+  const call=async body=>{const req=Readable.from(body?[JSON.stringify(body)]:[]);Object.assign(req,{url:`/api/rooms/${room}/picker`,method:body?'POST':'GET',headers:{authorization:'Bearer user'}});let out;await handler(req,{},(_r,status,data)=>out={status,data});return out;};
+  assert.equal((await call({action:'start',roundId:randomUUID(),mode:'trending',trendingWindow:'day'})).data.trendingWindow,'day');
+  assert.ok(calls.some(url=>url.includes('/trending/all/day?')));assert.equal(stored.options.length,1);
+  assert.equal((await call()).data.trendingWindow,'day');
+  assert.equal((await call({action:'start',roundId:randomUUID(),mode:'trending'})).data.trendingWindow,'week');
+  assert.ok(calls.some(url=>url.includes('/trending/all/week?')));
+  assert.equal((await call({action:'start',roundId:randomUUID(),mode:'trending',trendingWindow:'year'})).status,400);
+});

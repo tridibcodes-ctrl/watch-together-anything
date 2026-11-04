@@ -567,7 +567,7 @@
     #home #home-session { cursor: pointer; }
     #home-session:has(#home-watch:focus-visible) { outline: 2px solid #e0829d; outline-offset: 4px; }
     .picker-layout { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: clamp(24px, 4vw, 64px); align-items: start; max-width: none; }
-    .picker-wheel { max-width: 480px; }
+    .picker-wheel { max-width: 480px; overflow: hidden; }
     .picker-sidebar { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
     .picker-mode-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
     .picker-mode-actions button, #picker-invite { width: 100%; margin: 0; min-height: 48px; text-align: center; }
@@ -625,6 +625,19 @@
     #picker-result-description { line-height: 1.8; white-space: pre-line; }
     #picker-result-meta { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 16px; color: #dac4d0; font-size: 13px; margin-bottom: 18px; }
     #picker-result-detail-status { font-size: 13px; color: #dac4d0; }
+    html { scrollbar-gutter: stable; }
+    html:has(dialog[open]) { overflow: hidden; }
+    #picker > #picker-result { max-width: 760px; margin: 20px auto; padding: 18px 24px; text-align: center; background: #8f577419; border-color: #e0829d88; }
+    #picker-result h3 { margin: 0 0 8px; }
+    #picker-status { min-height: 1.8em; }
+    #picker-members { min-height: 28px; }
+    #picker-options { overscroll-behavior: contain; }
+    .catalog-row, .kanban-cards { overscroll-behavior-x: contain; }
+    #status { position: fixed; inset: auto 24px 24px auto; display: flex; align-items: center; gap: 12px; max-width: min(420px, calc(100vw - 140px)); margin: 0; box-shadow: 0 10px 30px #0005; }
+    #status-dismiss { flex: 0 0 32px; margin: 0; padding: 0; min-width: 32px; font-size: 24px; }
+    h2[tabindex="-1"]:focus { outline: none; }
+    @media (max-width: 700px) { #status { inset: auto 16px 92px; max-width: none; }.side-nav .nav-label { font-size: 10px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; }.discover-slide, .card-art img { transition: none !important; } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -670,7 +683,7 @@
     <div id="developer-contract"></div>
   </section>
 
-  <div id="status" class="app-notice" role="status" aria-live="polite" hidden></div>
+  <div id="status" class="app-notice" hidden><span id="status-text" role="status" aria-live="polite"></span><button id="status-dismiss" class="icon-button" type="button" aria-label="Dismiss message">×</button></div>
   <aside id="watch-notifications" aria-label="Movie invitations" aria-live="polite" aria-relevant="additions text"></aside>
   <div id="demo-banner" class="demo-banner" hidden>Local Demo · sample data, this browser only. <button id="exit-demo" type="button">Back to sign-in</button></div>
   <div id="phase2-status" class="app-notice" role="status" hidden></div>
@@ -849,15 +862,16 @@
 
     <section id="picker" data-view aria-labelledby="picker-heading" hidden>
       <h2 id="picker-heading" tabindex="-1">Picker wheel</h2>
+      <div id="picker-result" role="status" aria-live="polite" hidden><h3 id="picker-winner"></h3><button id="picker-result-action" type="button">View result</button></div>
       <p id="picker-status" role="status" aria-live="polite"></p><p id="picker-error" role="status"></p>
       <div id="picker-members"></div>
       <div class="picker-layout"><div>
         <div class="picker-wheel"><div class="wheel-pointer" aria-hidden="true"></div><div id="picker-rotor"><svg id="picker-svg" viewBox="0 0 440 440" aria-hidden="true"></svg></div><div class="wheel-hub" aria-hidden="true">✦</div></div>
         <div class="picker-controls"><button id="picker-choose" type="button" disabled>Add my choices</button><button id="picker-spin" type="button" disabled>Spin</button><button id="picker-demo-partner" type="button" hidden>Demo: enter partner’s choices</button></div>
       </div><aside class="picker-sidebar" aria-label="Picker controls">
-        <div class="picker-mode-actions"><button id="picker-genre" type="button">Genre wheel</button><button id="picker-title" type="button">Title wheel</button><button id="picker-trending" type="button">Can’t decide? Use Trending This Week</button></div>
+        <div class="picker-mode-actions"><button id="picker-genre" type="button">Genre wheel</button><button id="picker-title" type="button">Title wheel</button><button id="picker-trending" type="button">Trending this week</button><button id="picker-trending-day" type="button">Trending today</button></div>
         <button id="picker-invite" type="button" disabled>Invite to picker</button>
-        <h3 id="picker-pool-heading">Trending This Week</h3><ol id="picker-options"></ol><div id="picker-result" role="status" aria-live="polite" hidden><h3 id="picker-winner"></h3><button id="picker-result-action" type="button">View result</button></div>
+        <h3 id="picker-pool-heading">Trending This Week</h3><ol id="picker-options"></ol>
       </aside></div>
     </section>
     <section id="profile" data-view aria-labelledby="profile-heading" hidden>
@@ -1002,6 +1016,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     let uiReady = false, currentView = '', savedList = [], detailsOrigin = null, detailsRequested = null, pendingNavigationFocus = null, watchActionIntent = 0, discoverPreview = null;
     if (developerEntry && mode === 'demo') preference('multiplay.preview', true);
     const viewScroll = new Map();
+    let noticeTimer = null;
     let progressItems = [], progressVersion = 0, progressLoaded = false, roomInfo = null, roomInfoAt = 0, roomInfoVersion = 0, listFilter = 'all';
     let localPlayback = null;
     let sharedView = { state: null, joined: false, busy: false, canControl: false, online: false };
@@ -1390,8 +1405,27 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (/sign.in required|token invalid|HTTP 401/i.test(text)) return 'Please sign in again to continue.';
       return text;
     }
-    function say(text) { $('status').textContent = friendlyError(text); $('status').hidden = !text; }
+    function say(text, persistent = false) {
+      clearTimeout(noticeTimer);
+      $('status-text').textContent = friendlyError(text); $('status').hidden = !text;
+      $('status').dataset.transient = String(!persistent);
+      if (text && !persistent) noticeTimer = setTimeout(() => { $('status').hidden = true; }, 6000);
+    }
     function node(tag, text) { const item = document.createElement(tag); item.textContent = text; return item; }
+    function reconcileChildren(host, items, keyFor, build) {
+      const previous = new Map([...host.children].map(child => [child.dataset.renderKey, child]));
+      const retained = new Set();
+      items.forEach((item, index) => {
+        const key = String(keyFor(item)), signature = JSON.stringify(item);
+        let child = previous.get(key);
+        if (!child || child.dataset.renderSignature !== signature) {
+          child = build(item); child.dataset.renderKey = key; child.dataset.renderSignature = signature;
+        }
+        retained.add(child);
+        if (host.children[index] !== child) host.insertBefore(child, host.children[index] || null);
+      });
+      for (const child of [...host.children]) if (!retained.has(child)) child.remove();
+    }
     function button(text, fn) { const b = node('button', text); b.className = 'button-55'; b.type = 'button'; b.onclick = () => act(fn, b); return b; }
     function icon(name) {
       const paths = {
@@ -1485,7 +1519,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         article.querySelector('.title-meta')?.replaceWith(titleMetadata(result));
       });
     }
-    async function act(fn, b) { if (b) b.disabled = true; try { await fn(); } catch (e) { say(e.message); } finally { if (b) b.disabled = false; controls(); } }
+    async function act(fn, b) { if (b) b.disabled = true; try { await fn(); } catch (e) { say(e.message, true); } finally { if (b) b.disabled = false; controls(); } }
     function controls() {
       $('fullscreen-player').disabled = !localPlayback && !isPlaybackExpanded();
       $('catalog-previous').disabled = catalogLoading || !catalogState || catalogState.page <= 1;
@@ -1510,17 +1544,17 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (requested === 'signup') showAuthForm(true);
       if (requested === 'signin' && focus) showAuthForm(false);
       const next = requested === 'signup' ? 'profile' : requested === 'room' && !joined ? 'home' : ['home', 'browse', 'list', 'room', 'picker', 'profile', 'developer'].includes(requested) ? requested : 'home';
-      if (currentView !== next) {
+      const changedView = currentView !== next;
+      if (changedView) {
+        if ($('status').dataset?.transient === 'true') say('');
         discoverPreview?.close();
         if (typeof pickerController !== 'undefined') pickerController?.close();
         if ($('picker-invite-dialog').open) $('picker-invite-dialog').close();
         if ($('title-details').open) closeDetails();
         if (currentView) viewScroll.set(currentView, window.scrollY);
         currentView = next;
-        if (typeof pickerController !== 'undefined') pickerController?.viewChanged();
         if (typeof closeSuggestions === 'function') closeSuggestions();
         if (typeof scheduleFeature === 'function') scheduleFeature();
-        window.scrollTo(0, viewScroll.get(next) || 0);
       }
       for (const view of document.querySelectorAll('[data-view]')) view.hidden = view.id !== next || (mode === 'api' && !me && next !== 'developer');
       $('auth').hidden = !!me || next === 'developer';
@@ -1528,13 +1562,19 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       $('nav-profile').hidden = !me;
       $('demo-banner').hidden = mode !== 'demo';
       $('retry-connection').hidden = !authSession;
+      if (changedView) {
+        // Restore after the destination is visible, so its height can accommodate the saved position.
+        window.scrollTo(0, viewScroll.get(next) || 0);
+        if (typeof pickerController !== 'undefined') pickerController?.viewChanged();
+      }
       for (const link of document.querySelectorAll('.side-nav a')) {
         if (link.getAttribute('href') === (!$('auth').hidden ? '#signin' : '#' + next)) link.setAttribute('aria-current', 'page');
         else link.removeAttribute('aria-current');
       }
-      if (next !== 'room' && !$('chat-panel').hidden && !isPlaybackExpanded()) setChatOpen(false);
+      if (next !== 'room' && !$('chat-panel').hidden && !isPlaybackExpanded()) setChatOpen(false, false);
       if (focus) {
-        const target = requested === 'signin' && !$('auth').hidden ? $('auth-email') : pendingNavigationFocus || (next === 'browse' && !$('title-details').hidden ? $('details-heading') : document.querySelector('#' + next + ' h2'));
+        const target = !$('auth').hidden ? $('auth-email') : pendingNavigationFocus || (next === 'browse' && !$('title-details').hidden ? $('details-heading') : document.querySelector('#' + next + ' h2'));
+        if (document.querySelector('dialog[open]')) return;
         target?.focus({ preventScroll: true }); pendingNavigationFocus = null;
       }
     }
@@ -1554,7 +1594,6 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const media = mode === 'demo' ? localPlayback?.media || room?.media : room?.media;
       $('home-title').textContent = media ? media.title + (media.mediaType === 'tv' ? ` · S${media.season} E${media.episode}` : '') : 'What shall we watch tonight?';
       $('home-session-status').textContent = media ? (mode === 'demo' ? 'Preview this title in your demo room.' : sharedView.online ? (joined ? 'Your shared movie is open in the Watch Room.' : 'Your room has a title selected. Join the movie when you’re ready.') : 'Reconnecting to your shared screen…') : 'Discover something new, or choose a favourite from your list.';
-      $('home-watch').textContent = media ? (joined ? 'Return to your movie' : 'Watch together') : 'Find a movie';
       $('home-watch').href = media ? '#room' : '#browse';
       const seats = members.slice(0, 2).map(member => ({ name: member.displayName || 'Partner', avatarKey: member.userId === (me?.userId || me?.profile?.userId) ? me?.profile?.avatarKey : roomInfo?.members?.find(profile => profile.userId === member.userId)?.avatarKey || member.avatarKey || 'moon', state: mode === 'demo' ? 'Demo preview' : !sharedView.online ? 'Connection unavailable' : member.ready ? 'Video ready' : 'Not ready yet', own: member.userId === (me?.userId || me?.profile?.userId) }));
       if (!seats.some(seat => seat.own)) seats.unshift({ name, avatarKey: me?.profile?.avatarKey || 'moon', state: !hasRoom ? 'Choose a room' : !media ? 'Choose a movie' : joined ? 'Preparing your video' : 'Join the movie', own: true });
@@ -1668,6 +1707,9 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const items = savedList.map(listProgress);
       const shown = items.filter(item => listFilter === 'all' || item.status === listFilter);
       const board = $('list-items'); board.classList.toggle('is-filtered', listFilter !== 'all');
+      const signature = JSON.stringify([items, listFilter]);
+      if (board.dataset.signature !== signature || !board.children.length) {
+      board.dataset.signature = signature;
       board.replaceChildren(...[['planned', 'Planned'], ['watching', 'Watching'], ['watched', 'Watched']].map(([status, label]) => {
         const column = node('section', ''); column.className = 'kanban-column'; column.dataset.status = status;
         column.hidden = listFilter !== 'all' && listFilter !== status;
@@ -1676,6 +1718,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         if (!entries.length) { const empty = node('p', status === 'planned' ? 'Save a title from Discover.' : status === 'watching' ? 'Start a movie or an episode together.' : 'Confirm a completed movie together.'); empty.className = 'kanban-empty'; cards.append(empty); }
         column.append(heading, cards); return column;
       }));
+      }
       if (items.length && !shown.length) $('list-status').textContent = 'No titles in this section yet.';
       else if (items.length) $('list-status').textContent = shown.length + ' titles · shared by both of you.';
       for (const control of document.querySelectorAll('[data-filter]')) control.setAttribute('aria-pressed', String(control.dataset.filter === listFilter));
@@ -1683,15 +1726,26 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function renderProgressHistory() {
       const unfinished = progressItems.filter(item => !item.completedAt);
       $('progress-empty').hidden = unfinished.length > 0;
-      $('continue-list').replaceChildren(...unfinished.slice(0,6).map(item => {
+      const continuing = unfinished.slice(0,6).map(item => {
         const title = savedList.find(saved => saved.title.mediaType === item.media.mediaType && saved.title.tmdbId === item.media.tmdbId)?.title || item.media;
-        return card(title, null, { media:item.media, positionMs:item.positionMs });
-      }));
-      $('episode-history').replaceChildren(...progressItems.filter(item => item.media.mediaType === 'tv').map(item => {
+        return { title, media: item.media };
+      });
+      reconcileChildren($('continue-list'), continuing, item => mediaKey(item.media), item => card(item.title, null, { media:item.media, positionMs:0 }));
+      for (const [index, article] of [...$('continue-list').children].entries()) {
+        const item = unfinished[index], prefix = item.media.mediaType === 'tv' ? `S${item.media.season} E${item.media.episode} · ` : '';
+        const note = prefix + 'Saved at ' + displayTime(item.positionMs);
+        if (article.querySelector('.card-note').textContent !== note) article.querySelector('.card-note').textContent = note;
+      }
+      const episodes = progressItems.filter(item => item.media.mediaType === 'tv');
+      reconcileChildren($('episode-history'), episodes.map(item => ({media:item.media,completed:!!item.completedAt})), item => mediaKey(item.media), item => {
         const row = node('div'); row.className = 'episode-row';
-        row.append(node('p',`${item.media.title} · S${item.media.season} E${item.media.episode} · ${item.completedAt ? 'Watched together' : 'Watching · '+displayTime(item.positionMs)}`),button(item.completedAt ? 'Open episode' : 'Continue episode',()=>watchTitle(item.media,item.media)));
+        row.append(node('p',''),button(item.completed ? 'Open episode' : 'Continue episode',()=>watchTitle(item.media,item.media)));
         return row;
-      }));
+      });
+      for (const [index, row] of [...$('episode-history').children].entries()) {
+        const item = episodes[index], text = `${item.media.title} · S${item.media.season} E${item.media.episode} · ${item.completedAt ? 'Watched together' : 'Watching · '+displayTime(item.positionMs)}`;
+        if (row.firstChild.textContent !== text) row.firstChild.textContent = text;
+      }
     }
     function renderCoupleExperience() {
       $('invitation-banner').hidden = !pendingInvite;
@@ -1710,10 +1764,10 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (homeMedia) {
         $('home-title').textContent = homeMedia.title + (homeMedia.mediaType === 'tv' ? ` · S${homeMedia.season} E${homeMedia.episode}` : '');
         if (latest) $('home-session-status').textContent = latest.completedAt ? 'The last title you watched together.' : 'Your shared place is saved at '+displayTime(latest.positionMs)+'. Playback waits for both of you.';
-        $('home-watch').replaceChildren(icon('play'));
+        if (!$('home-watch').querySelector('svg')) $('home-watch').replaceChildren(icon('play'));
         const label = (joined ? 'Return to ' : 'Watch together: ') + homeMedia.title;
         $('home-watch').setAttribute('aria-label', label); $('home-watch').title = label; $('home-watch').href = '#room';
-      } else { $('home-watch').removeAttribute('aria-label'); $('home-watch').removeAttribute('title'); }
+      } else { $('home-watch').textContent = 'Find a movie'; $('home-watch').removeAttribute('aria-label'); $('home-watch').removeAttribute('title'); }
       const item = progressFor(room?.media);
       $('completion-panel').hidden = !room?.media;
       $('demo-partner-confirm').hidden = mode !== 'demo' || !room?.media;
@@ -1883,7 +1937,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     function scheduleFeature() {
       clearTimeout(featureTimer);
-      if (featurePaused || featureItems.length < 2 || currentView !== 'home' || document.hidden || $('title-details').open || $('discover-feature').matches(':hover') || $('discover-feature').contains(document.activeElement)) return;
+      if (featurePaused || window.matchMedia('(prefers-reduced-motion: reduce)').matches || featureItems.length < 2 || currentView !== 'home' || document.hidden || $('title-details').open || $('discover-feature').matches(':hover') || $('discover-feature').contains(document.activeElement)) return;
       featureTimer = setTimeout(() => advanceFeature(1), 4000);
     }
     function advanceFeature(direction) {
@@ -1982,11 +2036,10 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         return;
       }
       const current = () => version === listVersion && me?.roomId === roomId && me?.userId === userId && mode === currentMode;
-      $('list-status').textContent = 'Loading shared list…';
+      if (!$('list-items').children.length) $('list-status').textContent = 'Loading shared list…';
       try {
         const data = await request(listPath());
         if (!current()) return;
-        $('list-items').replaceChildren(...data.items.map(i => card(i.title, i)));
         savedList = data.items;
         $('list-status').textContent = data.items.length ? data.items.length + ' title(s) in your shared list.' : 'Your list is empty. Add a movie or show from Browse.';
         if (typeof renderSavedLists === 'function') { renderSavedLists(); renderProgressHistory(); }
@@ -2146,7 +2199,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
         panel.style.top = Math.max(gap, Math.min(rect.top - 20, window.innerHeight - panel.offsetHeight - gap)) + 'px';
       };
       const paint = title => {
-        $('preview-art').replaceChildren(landscapeArtwork(title));
+        const artKey = JSON.stringify([title.backdropPath, title.posterPath, title.title]);
+        if ($('preview-art').dataset.artKey !== artKey) { $('preview-art').dataset.artKey = artKey; $('preview-art').replaceChildren(landscapeArtwork(title)); }
         $('discover-preview-title').textContent = title.title;
         const meta = titleMetadata(title);
         if (title.runtimeMinutes) meta.append(node('span', title.runtimeMinutes + ' min'));
@@ -2315,7 +2369,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       updateChatNotifications(visibleItems, selectedRoomId, selectedUserId || me.profile?.userId);
       const messages = $('messages');
       const wasAtBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
-      messages.replaceChildren(...visibleItems.map(m => {
+      reconcileChildren(messages, visibleItems.map(m => ({...m,viewerAvatar:me.profile?.avatarKey})), m => m.id, m => {
         const notice = m.kind && m.kind !== 'message';
         const item = node('li');
         if (m.sentAt || m.createdAt) item.setAttribute('data-expires-at', Date.parse(m.sentAt || m.createdAt) + 24 * 60 * 60 * 1000);
@@ -2338,7 +2392,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
           item.append(avatar, content);
         }
         return item;
-      }));
+      });
       if (wasAtBottom) messages.scrollTop = messages.scrollHeight;
     }
     async function loadRooms(preferredRoomId) {
@@ -2386,6 +2440,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       say('');
     }
     function bind(id, fn) { $(id).onclick = e => act(fn, e.currentTarget); }
+    $('status-dismiss').onclick = () => say('');
     function form(id, fn) { $(id).onsubmit = e => { e.preventDefault(); act(fn, e.submitter); }; }
     form('connection-form', async () => {
       const nextBase = $('backend').value.trim().replace(/\/$/, '');
@@ -2482,9 +2537,10 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     document.addEventListener('pointerdown', event => { if (!event.target.closest('.search-field')) closeSuggestions(); });
     $('query').addEventListener('blur', () => { setTimeout(closeSuggestions, 150); });
     bind('discover-previous', () => advanceFeature(-1)); bind('discover-next', () => advanceFeature(1));
-    $('discover-feature').addEventListener('mouseenter', () => clearTimeout(featureTimer));
+    function pauseFeature() { clearTimeout(featureTimer); clearTimeout(featureFade); $('discover-slide').classList.remove('is-fading'); }
+    $('discover-feature').addEventListener('mouseenter', pauseFeature);
     $('discover-feature').addEventListener('mouseleave', scheduleFeature);
-    $('discover-feature').addEventListener('focusin', () => clearTimeout(featureTimer));
+    $('discover-feature').addEventListener('focusin', pauseFeature);
     $('discover-feature').addEventListener('focusout', () => { setTimeout(scheduleFeature, 0); });
     document.addEventListener('visibilitychange', scheduleFeature);
     bind('catalog-previous', () => catalog(catalogState.page - 1, catalogState));
@@ -2581,7 +2637,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     }
     bind('fullscreen-player', togglePlaybackFullscreen);
     document.addEventListener('fullscreenchange', () => { updateFullscreenControls(); placeMovieInvitations(); });
-    function setChatOpen(open) {
+    function setChatOpen(open, restoreFocus = true) {
       $('chat-panel').hidden = !open;
       $('chat-toggle').setAttribute('aria-expanded', String(open));
       if (open) chatNotifications.unread.clear();
@@ -2589,13 +2645,13 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (open) {
         $('messages').scrollTop = $('messages').scrollHeight;
         $('close-chat').focus({ preventScroll: true });
-      } else $('chat-toggle').focus({ preventScroll: true });
+      } else if (restoreFocus) $('chat-toggle').focus({ preventScroll: true });
     }
     $('chat-toggle').addEventListener('click', () => setChatOpen($('chat-panel').hidden));
     $('close-chat').addEventListener('click', () => setChatOpen(false));
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
-      if ($('title-details').open) return;
+      if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
       if (!$('chat-panel').hidden) setChatOpen(false);
       else if ($('playback-stage').classList.contains('is-expanded')) act(togglePlaybackFullscreen);
     });

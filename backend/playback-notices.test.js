@@ -23,14 +23,20 @@ test('the chat panel shows named waiting status and clears it when readiness rec
 });
 
 test('saved playback notices render once without a repeated sender prefix',async()=>{
-  let children;
-  function element(tag, text = '') { return { tag, textContent: text, children: [], append(...items) { this.children.push(...items); }, setAttribute() {} }; }
+  function element(tag, text = '') { return { tag, textContent: text, dataset:{}, children: [], append(...items) { this.children.push(...items); }, setAttribute() {},
+    insertBefore(child,before){if(child.parent)child.remove();const index=before?this.children.indexOf(before):this.children.length;this.children.splice(index,0,child);child.parent=this;},
+    remove(){if(this.parent){this.parent.children.splice(this.parent.children.indexOf(this),1);this.parent=null;}} }; }
+  const messages=element('ul');Object.assign(messages,{scrollHeight:0,scrollTop:0,clientHeight:100});
+  const items=[{id:'1',kind:'playback',senderName:'Tridib',body:'Tridib has paused.'},{id:'2',senderName:'Partner',body:'Ready!'}];
   const textOf = item => typeof item === 'string' ? item : item.textContent + item.children.map(textOf).join('');
   const context=vm.createContext({me:{roomId:'room',userId:'me'},chatRequestVersion:0,updateChatNotifications(){},node:element,document:{createTextNode:text=>text},
-    $:()=>({scrollHeight:0,scrollTop:0,clientHeight:100,replaceChildren(...items){children=items;}}),
-    request:async()=>({items:[{kind:'playback',senderName:'Tridib',body:'Tridib has paused.'},{senderName:'Partner',body:'Ready!'}]})});
+    $:id=>id==='messages'?messages:{},request:async()=>({items})});
+  vm.runInContext(source.slice(source.indexOf('    function reconcileChildren('),source.indexOf('    function button(')),context);
   vm.runInContext(source.slice(source.indexOf('    async function chat()'),source.indexOf('    async function loadRooms(')),context);
-  await context.chat();assert.deepEqual(children.map(textOf),['Tridib has paused.','☾Partner: Ready!']);
-  assert.equal(children[0].className, 'chat-notice');
-  assert.equal(children[1].className, 'chat-message');
+  await context.chat();assert.deepEqual(messages.children.map(textOf),['Tridib has paused.','☾Partner: Ready!']);
+  assert.equal(messages.children[0].className, 'chat-notice');
+  assert.equal(messages.children[1].className, 'chat-message');
+  const previous=[...messages.children];await context.chat();assert.deepEqual(messages.children,previous);
+  items.push({id:'3',senderName:'Partner',body:'Next'});await context.chat();assert.equal(messages.children[1],previous[1]);
+  items.shift();await context.chat();assert.equal(messages.children[0],previous[1]);assert.equal(messages.children.length,2);
 });
