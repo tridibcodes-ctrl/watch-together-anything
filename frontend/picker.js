@@ -9,10 +9,26 @@
   function angle(index,count){return 1800+((360-(index+.5)*360/count)%360+360)%360;}
   function create({request,getContext,onTitle,onGenre}){
     const $=id=>document.getElementById(id),el=(tag,text='')=>{const e=document.createElement(tag);e.textContent=text;return e;};
-    const button=(text,fn)=>{const b=el('button',text);b.type='button';b.onclick=()=>run(fn);return b;};
+    const button=(text,fn)=>{const b=el('button',text);b.className='button-55';b.type='button';b.onclick=()=>run(fn);return b;};
     let state=null,generation=0,timer=null,busy=false,editing=null,draft=[],searchVersion=0,searchTimer=null,offset=0;
     let animation=null,animationKey=null,resultTimer=null,poolKey='',demo=null,origin=null;
+    let preview=[],idleAnimation=null,reading=null;
     const contextKey=()=>{const c=getContext();return [c.mode,c.roomId,c.userId].join(':');};
+    function stopIdle(){idleAnimation?.cancel();idleAnimation=null;}
+    function syncIdle(){
+      const c=getContext(),pool=state?.roundId?state.pool||[]:preview;
+      const idle=c.userId&&c.view==='picker'&&!document.hidden&&!$('picker-dialog').open&&!state?.result&&(!state?.roundId||state.mode==='trending')&&pool.length>0&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if(!idle){stopIdle();return;}
+      if(!idleAnimation)idleAnimation=$('picker-rotor').animate([{transform:'rotate(0deg)'},{transform:'rotate(360deg)'}],{duration:90000,iterations:Infinity,easing:'linear'});
+    }
+    async function loadPreview(){
+      const version=generation,identity=contextKey();
+      try{
+        const data=await request('/api/catalog?type=all&feed=trending-week');
+        if(version!==generation||identity!==contextKey())return;
+        preview=(data.items||[]).filter(t=>['movie','tv'].includes(t.mediaType)).map(t=>({...t,key:key(t)}));render();
+      }catch{if(version===generation&&identity===contextKey()&&!state?.roundId)$('picker-error').textContent='Could not load the trending preview. Choose a wheel to try again.';}
+    }
     async function demoRequest(body){
       const c=getContext();if(!body)return demo ? structuredClone({...demo,serverTime:new Date().toISOString()}) : {roomId:c.roomId,roundId:null,revision:0,members:[]};
       if(body.action==='start'){
@@ -42,7 +58,7 @@
       if(state && result.revision<state.revision)return null;
       offset=Date.parse(result.serverTime||new Date().toISOString())-(started+Date.now())/2;
       if(state?.roundId!==result.roundId || result.result&&!state?.result){close();}
-      if(state?.roundId!==result.roundId){animation?.cancel();animationKey=null;poolKey='';$('picker-rotor').style.transform='';}
+      if(state?.roundId!==result.roundId){stopIdle();animation?.cancel();animationKey=null;poolKey='';$('picker-rotor').style.transform='';}
       state=result;render();return result;
     }
     async function run(fn){
@@ -75,6 +91,7 @@
     }
     function animate(){
       if(!state?.result)return;
+      stopIdle();
       const signature=state.roundId+':'+state.resultIndex;if(animationKey===signature)return;animationKey=signature;
       animation?.cancel();clearTimeout(resultTimer);$('picker-result').hidden=true;
       const rotor=$('picker-rotor'),target=angle(state.resultIndex,state.pool.length),elapsed=Date.now()+offset-Date.parse(state.spinAt);
@@ -87,30 +104,31 @@
     function render(){
       const c=getContext(),own=state?.members?.find(m=>m.userId===c.userId),members=state?.members||[];
       const active=!!state?.roundId;
-      $('picker-status').textContent=!c.roomId?'Create or join a room on Home to use the shared picker.':!active?'Choose a wheel to start a shared round.':state.result?'A shared result has been chosen.':state.ready?(state.pool.length?'Both ready. Either of you can spin.':'Every genre was excluded. Edit choices or use Trending This Week.'):members.length<2?'Invite your partner to this room before spinning.':'Waiting for '+members.filter(m=>!m.submitted).map(m=>m.displayName).join(' and ')+' to submit.';
-      for(const id of ['picker-genre','picker-title','picker-trending'])$(id).disabled=busy||!c.roomId;
+      $('picker-status').textContent=!c.roomId?'Preview this week’s trending titles. Create or join a room on Home to pick together.':!active?'Previewing Trending This Week. Choose a wheel to start a shared round.':state.result?'A shared result has been chosen.':state.ready?(state.pool.length?'Both ready. Either of you can spin.':'Every genre was excluded. Edit choices or use Trending This Week.'):members.length<2?'Invite your partner to this room before spinning.':'Waiting for '+members.filter(m=>!m.submitted).map(m=>m.displayName).join(' and ')+' to submit.';
+      for(const [id,mode] of [['picker-genre','genre'],['picker-title','title'],['picker-trending','trending']]){
+        $(id).disabled=busy||!c.roomId;$(id).setAttribute('aria-pressed',String((active?state.mode:'trending')===mode));
+      }
       $('picker-choose').disabled=busy||!active||!!state?.result;
       $('picker-choose').textContent=own?.submitted?'Edit my choices':'Add my choices';
       $('picker-spin').disabled=busy||!state?.ready||!state.pool?.length||!!state.result;
       $('picker-demo-partner').hidden=c.mode!=='demo'||!active||!!state?.result;
       $('picker-demo-partner').disabled=busy;
       $('picker-members').replaceChildren(...members.map(m=>el('p',m.displayName+' · '+(m.submitted?'Ready':'Choosing'))));
-      const needsChoice=active&&!own?.submitted&&!state.result;
-      $('picker-nav-badge').hidden=!needsChoice;
-      $('picker-notice').hidden=!needsChoice||c.view==='picker';
-      $('picker-notice-text').textContent='Your partner is choosing '+(state?.mode==='genre'?'genres':state?.mode==='title'?'titles':'from Trending This Week')+'. Add your choices.';
-      const pool=state?.pool||[];draw(pool);
+      const pool=active?state.pool||[]:preview;draw(pool);
+      $('picker-pool-heading').textContent=!active||state.mode==='trending'?'Trending This Week':state.mode==='genre'?'On the genre wheel':'On the title wheel';
       const options=state?.mode==='genre'?state.options:pool;
       $('picker-options').replaceChildren(...options.map((item,i)=>{
-        const li=el('li');const excluded=state.mode==='genre'?members.filter(m=>(m.choices||[]).includes(item.key)):[];
+        const li=el('li');const excluded=active&&state.mode==='genre'?members.filter(m=>(m.choices||[]).includes(item.key)):[];
         const label=el(excluded.length?'s':'span',item.title);
         li.append(label);if(excluded.length)li.append(el('small','Excluded by '+excluded.map(m=>m.displayName).join(' and ')));return li;
       }));
       if(!state?.result)$('picker-result').hidden=true;else animate();
+      syncIdle();
     }
     function close(){
       searchVersion++;clearTimeout(searchTimer);const dialog=$('picker-dialog');if(dialog.open)dialog.close();editing=null;
       if(origin?.isConnected)origin.focus({preventScroll:true});origin=null;
+      syncIdle();
     }
     function prepare(actor){
       if(!state?.roundId||state.result)return;
@@ -123,7 +141,7 @@
         const label=el('label'),input=el('input');input.type='checkbox';input.value=item.key;input.checked=draft.includes(item.key);
         input.onchange=()=>{draft=input.checked?[...draft,item.key]:draft.filter(k=>k!==item.key);};label.append(input,document.createTextNode(item.title));return label;
       }));
-      updateDraft();$('picker-dialog').showModal();$('picker-dialog-heading').focus({preventScroll:true});
+      updateDraft();$('picker-dialog').showModal();$('picker-dialog-heading').focus({preventScroll:true});syncIdle();
     }
     function updateDraft(){
       $('picker-submit').disabled=busy||!state||state.mode==='title'&&(draft.length<2||draft.length>10);
@@ -153,10 +171,9 @@
         }));
       }catch{if(version===searchVersion)$('picker-dialog-error').textContent='Search failed. Type again to retry.';}
     }
-    function stop(){generation++;clearInterval(timer);timer=null;clearTimeout(resultTimer);close();state=null;animation?.cancel();animationKey=null;poolKey='';$('picker-rotor').style.transform='';$('picker-notice').hidden=true;$('picker-nav-badge').hidden=true;render();}
-    function start(){stop();const c=getContext();if(!c.userId||!c.roomId)return;void refresh();timer=setInterval(refresh,3000);}
-    let reading=false;
-    async function refresh(){if(reading||busy)return;reading=true;try{await transport();}catch(error){$('picker-error').textContent=error.message;}finally{reading=false;}}
+    function stop(){generation++;clearInterval(timer);timer=null;clearTimeout(resultTimer);close();state=null;preview=[];stopIdle();reading=null;animation?.cancel();animationKey=null;poolKey='';$('picker-rotor').style.transform='';render();}
+    function start(){stop();const c=getContext();if(!c.userId)return;void loadPreview();if(!c.roomId)return;void refresh();timer=setInterval(refresh,3000);}
+    async function refresh(){if(reading===generation||busy)return;const version=generation;reading=version;try{await transport();}catch(error){if(version===generation)$('picker-error').textContent=error.message;}finally{if(reading===version)reading=null;}}
     $('picker-genre').onclick=()=>run(()=>begin('genre'));$('picker-title').onclick=()=>run(()=>begin('title'));$('picker-trending').onclick=()=>run(()=>begin('trending'));
     $('picker-choose').onclick=()=>prepare();$('picker-demo-partner').onclick=()=>prepare('demo-partner');
     $('picker-close').onclick=close;$('picker-dialog').addEventListener('cancel',event=>{event.preventDefault();close();});
@@ -164,8 +181,9 @@
     $('picker-spin').onclick=()=>run(()=>transport({action:'spin',roundId:state.roundId}));
     $('picker-title-query').oninput=()=>{clearTimeout(searchTimer);searchVersion++;searchTimer=setTimeout(search,300);};
     $('picker-result-action').onclick=()=>{if(state?.result){if(state.mode==='genre')onGenre(state.result.title);else onTitle(state.result);}};
-    $('picker-open-notice').onclick=()=>{location.hash='picker';prepare();};
-    render();return {start,stop,refresh,close};
+    document.addEventListener('visibilitychange',syncIdle);
+    window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change',syncIdle);
+    render();return {start,stop,refresh,close,viewChanged:syncIdle};
   }
   const api={create,eligible,angle,duration};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.MultiplayPicker=api;
 })(typeof window!=='undefined'?window:globalThis);

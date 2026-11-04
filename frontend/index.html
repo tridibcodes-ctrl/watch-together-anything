@@ -559,9 +559,28 @@
     #picker-genre-choices label:has(input:checked) { text-decoration:line-through; color:#b39bbd; }
     #picker-title-query { width:100%; min-width:0; }#picker-search-results { display:grid; gap:6px; text-align:left; margin:12px 0; }#picker-search-results button { text-align:left; min-height:44px; }
     #picker-selected { text-align:left; padding-left:20px; }#picker-selected button { margin-left:10px; }
-    #picker-notice { position:fixed; z-index:30; right:20px; bottom:24px; max-width:350px; padding:18px; border:1px solid #926f9e; border-radius:16px; background:#2d2335; box-shadow:0 10px 40px #0006; }
-    #picker-nav-badge { position:absolute; top:5px; right:7px; width:8px; height:8px; border-radius:50%; background:#edb7d1; }
-    @media(max-width:700px){.picker-layout {grid-template-columns:minmax(0,1fr);gap:16px;}.picker-wheel {max-width:400px;}#picker-notice {bottom:92px;right:16px;left:16px;max-width:none;}#picker-genre-choices {grid-template-columns:1fr;}#picker-dialog {padding:20px;}.side-nav a {font-size:10px;} }
+    @media(max-width:700px){.picker-layout {grid-template-columns:minmax(0,1fr);gap:16px;}.picker-wheel {max-width:400px;}#picker-genre-choices {grid-template-columns:1fr;}#picker-dialog {padding:20px;}.side-nav a {font-size:10px;} }
+    body:has(:is(#browse, #list, #picker):not([hidden])) .app-header { display: none; }
+    #main-content #search-form { width: 50%; min-width: min(420px, 100%); max-width: 720px; margin: 24px auto; }
+    #episode-history .episode-row { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+    #episode-history .episode-row p { width: 100%; margin: 0; text-align: center; }
+    #home #home-session { cursor: pointer; }
+    #home-session:has(#home-watch:focus-visible) { outline: 2px solid #e0829d; outline-offset: 4px; }
+    .picker-layout { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: clamp(24px, 4vw, 64px); align-items: start; max-width: none; }
+    .picker-wheel { max-width: 480px; }
+    .picker-sidebar { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+    .picker-mode-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .picker-mode-actions button, #picker-invite { width: 100%; margin: 0; min-height: 48px; text-align: center; }
+    .picker-mode-actions button[aria-pressed="true"] { border-color: #e0829d; text-decoration: underline; text-underline-offset: 5px; }
+    .picker-sidebar h3 { margin: 0; }
+    #picker-options { margin: 0; }
+    #picker-invite-dialog { width: min(540px, calc(100vw - 32px)); margin: auto; padding: 28px; border: 1px solid #9f79a8; border-radius: 20px; background: #251e2c; color: #f2e6f6; }
+    #picker-invite-dialog::backdrop { background: #0d0913c9; backdrop-filter: blur(5px); }
+    #picker-invite-dialog label { display: block; margin: 20px 0; }
+    #picker-invite-link { width: 100%; min-width: 0; margin-top: 8px; font-size: 13px; }
+    #picker-invite-close { float: right; }
+    @media (max-width: 800px) { .picker-layout { grid-template-columns: minmax(0, 1fr); }.picker-sidebar { width: min(100%, 480px); margin-inline: auto; } }
+    @media (max-width: 700px) { #main-content #search-form { width: 100%; } }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
@@ -582,7 +601,7 @@
     <a class="nav-brand" href="#home" aria-label="Multiplay home" title="Home">M<span class="nav-label">Home</span></a>
     <a href="#browse" aria-label="Discover" title="Discover"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg></a>
     <a href="#list" aria-label="Watchlist" title="Watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-7-4-7 4z"/></svg></a>
-    <a href="#picker" aria-label="Picker" title="Picker wheel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/><circle cx="12" cy="12" r="2"/></svg><span id="picker-nav-badge" hidden></span></a>
+    <a href="#picker" aria-label="Picker" title="Picker wheel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/><circle cx="12" cy="12" r="2"/></svg></a>
     <a class="nav-profile" href="#profile" aria-label="Profile" title="Profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3-7 8-7s8 3 8 7"/></svg></a>
     <div id="couple-presence" aria-label="Your profiles">
       <div id="account-presence" class="account-presence" data-state="connecting" role="status" aria-live="polite"><span class="presence-avatar" aria-hidden="true"><span id="presence-initial">M</span><span class="presence-dot"></span></span><span class="presence-copy"><span id="presence-name">Your account</span><span id="presence-label">Connecting</span></span></div>
@@ -785,13 +804,16 @@
 
     <section id="picker" data-view aria-labelledby="picker-heading" hidden>
       <h2 id="picker-heading" tabindex="-1">Picker wheel</h2>
-      <div class="picker-mode-actions"><button id="picker-genre" type="button">Genre wheel</button><button id="picker-title" type="button">Title wheel</button><button id="picker-trending" type="button">Can’t decide? Use Trending This Week</button></div>
       <p id="picker-status" role="status" aria-live="polite"></p><p id="picker-error" role="status"></p>
       <div id="picker-members"></div>
       <div class="picker-layout"><div>
         <div class="picker-wheel"><div class="wheel-pointer" aria-hidden="true"></div><div id="picker-rotor"><svg id="picker-svg" viewBox="0 0 440 440" aria-hidden="true"></svg></div><div class="wheel-hub" aria-hidden="true">✦</div></div>
         <div class="picker-controls"><button id="picker-choose" type="button" disabled>Add my choices</button><button id="picker-spin" type="button" disabled>Spin</button><button id="picker-demo-partner" type="button" hidden>Demo: enter partner’s choices</button></div>
-      </div><div><h3>On the wheel</h3><ol id="picker-options"></ol><div id="picker-result" role="status" aria-live="polite" hidden><h3 id="picker-winner"></h3><button id="picker-result-action" type="button">View title details</button></div></div></div>
+      </div><aside class="picker-sidebar" aria-label="Picker controls">
+        <div class="picker-mode-actions"><button id="picker-genre" type="button">Genre wheel</button><button id="picker-title" type="button">Title wheel</button><button id="picker-trending" type="button">Can’t decide? Use Trending This Week</button></div>
+        <button id="picker-invite" type="button" disabled>Invite to picker</button>
+        <h3 id="picker-pool-heading">Trending This Week</h3><ol id="picker-options"></ol><div id="picker-result" role="status" aria-live="polite" hidden><h3 id="picker-winner"></h3><button id="picker-result-action" type="button">View title details</button></div>
+      </aside></div>
     </section>
     <section id="profile" data-view aria-labelledby="profile-heading" hidden>
       <p class="eyebrow">Make yourself at home</p>
@@ -860,7 +882,14 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     </details>
   </main>
 
-  <aside id="picker-notice" hidden><p id="picker-notice-text"></p><button id="picker-open-notice" type="button">Open picker</button></aside>
+  <dialog id="picker-invite-dialog" aria-labelledby="picker-invite-heading">
+    <button id="picker-invite-close" class="icon-button" type="button" aria-label="Close picker invitation">×</button>
+    <h3 id="picker-invite-heading">Invite your partner to Picker</h3>
+    <p>Share this private link with your partner. It opens your shared room directly in Picker after sign-in.</p>
+    <label>Picker invitation link <input id="picker-invite-link" type="url" readonly></label>
+    <button id="picker-invite-copy" type="button">Copy invitation link</button>
+    <p id="picker-invite-status" role="status"></p>
+  </dialog>
   <dialog id="picker-dialog" aria-labelledby="picker-dialog-heading">
     <button id="picker-close" type="button" aria-label="Close picker choices">×</button><h3 id="picker-dialog-heading" tabindex="-1">Your choices</h3>
     <p id="picker-dialog-error" role="status"></p>
@@ -887,7 +916,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     const savedConnection = preference('multiplay.connection');
     const incomingInvite = inviteFromHash(location.hash);
     let pendingInvite = incomingInvite || preference('multiplay.pendingInvite'), inviteBusy = false;
-    if (incomingInvite) { preference('multiplay.pendingInvite', incomingInvite); preference('multiplay.preview', false); }
+    let pendingInviteTarget = incomingInvite ? inviteTargetFromHash(location.hash) : pendingInvite && preference('multiplay.pendingInviteTarget') === 'picker' ? 'picker' : 'home';
+    if (incomingInvite) { preference('multiplay.pendingInvite', incomingInvite); preference('multiplay.pendingInviteTarget', pendingInviteTarget); preference('multiplay.preview', false); }
     const developerEntry = !incomingInvite && (location.hash === '#developer' || location.protocol === 'file:' || preference('multiplay.preview') === true);
     let mode = developerEntry ? (savedConnection?.mode || 'demo') : 'api', base = developerEntry ? (savedConnection?.base || '') : '', me, room, joined = false;
     let uiReady = false, currentView = '', savedList = [], detailsOrigin = null, detailsRequested = null, pendingNavigationFocus = null, watchActionIntent = 0;
@@ -1401,9 +1431,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const next = requested === 'signup' ? 'profile' : requested === 'room' && !joined ? 'home' : ['home', 'browse', 'list', 'room', 'picker', 'profile', 'developer'].includes(requested) ? requested : 'home';
       if (currentView !== next) {
         if (typeof pickerController !== 'undefined') pickerController?.close();
+        if ($('picker-invite-dialog').open) $('picker-invite-dialog').close();
         if ($('title-details').open) closeDetails();
         if (currentView) viewScroll.set(currentView, window.scrollY);
         currentView = next;
+        if (typeof pickerController !== 'undefined') pickerController?.viewChanged();
         if (typeof closeSuggestions === 'function') closeSuggestions();
         if (typeof scheduleFeature === 'function') scheduleFeature();
         window.scrollTo(0, viewScroll.get(next) || 0);
@@ -1494,9 +1526,10 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       finally { healthChecking = false; renderConnection(); }
     }
     function inviteFromHash(hash) {
-      const match = /^#invite=([a-zA-Z0-9-]{1,32})$/.exec(hash || '');
+      const match = /^#invite=([a-zA-Z0-9-]{1,32})(?:&to=picker)?$/.exec(hash || '');
       return match ? match[1].toLowerCase() : null;
     }
+    function inviteTargetFromHash(hash) { return inviteFromHash(hash) && hash.endsWith('&to=picker') ? 'picker' : 'home'; }
     function inviteCodeFromInput(value) {
       const trimmed = value.trim();
       if (/^[a-zA-Z0-9-]{1,32}$/.test(trimmed)) return trimmed.toLowerCase();
@@ -1506,6 +1539,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function progressFor(media) { return progressItems.find(item => mediaKey(item.media) === mediaKey(media)); }
     function displayTime(ms) { const seconds = Math.floor(ms/1000); return Math.floor(seconds/60) + ':' + String(seconds%60).padStart(2,'0'); }
     function resetCoupleView() {
+      if ($('picker-invite-dialog').open) $('picker-invite-dialog').close();
+      $('picker-invite-link').value = ''; $('picker-invite-status').textContent = '';
       progressVersion++; roomInfoVersion++; progressItems = []; progressLoaded = false; roomInfo = null; roomInfoAt = 0;
       for (const id of ['continue-list','episode-history']) $(id).replaceChildren();
       $('phase2-status').hidden = true;
@@ -1580,6 +1615,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       const selected = me?.rooms?.find(item => item.roomId === me.roomId);
       $('room-invite').textContent = selected?.inviteCode ? 'Invite code: '+selected.inviteCode : 'No invite code available.';
       $('copy-invite').disabled = !selected?.inviteCode || mode !== 'api';
+      $('picker-invite').disabled = !selected?.inviteCode || mode !== 'api';
       $('rename-room-form').querySelector('button').disabled = !selected || mode !== 'api';
       if (document.activeElement !== $('rename-room-name')) $('rename-room-name').value = selected?.name || '';
       const latest = room?.media ? progressFor(room.media) : progressItems[0];
@@ -1605,10 +1641,11 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (!code || inviteBusy) return;
       if (mode !== 'api' || !me) throw new Error('Sign in to accept this invitation.');
       inviteBusy = true; controls();
+      const destination = pendingInviteTarget;
       try {
         const result = await request('/api/rooms/join','POST',{inviteCode:code});
-        pendingInvite = null; preference('multiplay.pendingInvite',null);
-        await loadRooms(result.roomId); location.hash = 'home';
+        pendingInvite = null; pendingInviteTarget = 'home'; preference('multiplay.pendingInvite',null); preference('multiplay.pendingInviteTarget',null);
+        await loadRooms(result.roomId); location.hash = destination;
         say(result.reused ? 'Welcome back to your existing shared room.' : 'You joined your partner’s room.');
       } finally { inviteBusy = false; controls(); }
     }
@@ -1762,7 +1799,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     function scheduleFeature() {
       clearTimeout(featureTimer);
       if (featurePaused || featureItems.length < 2 || currentView !== 'home' || document.hidden || $('title-details').open || $('discover-feature').matches(':hover') || $('discover-feature').contains(document.activeElement)) return;
-      featureTimer = setTimeout(() => advanceFeature(1), 7000);
+      featureTimer = setTimeout(() => advanceFeature(1), 4000);
     }
     function advanceFeature(direction) {
       clearTimeout(featureTimer); clearTimeout(featureFade);
@@ -2188,6 +2225,8 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (mode !== 'api') throw new Error('Switch to Backend API mode to join a room.');
       const inviteCode = inviteCodeFromInput($('invite-code').value);
       if (!inviteCode) throw new Error('Enter an invitation code or a valid invitation link.');
+      try { pendingInviteTarget = inviteTargetFromHash(new URL($('invite-code').value.trim()).hash); }
+      catch { pendingInviteTarget = 'home'; }
       await acceptInvitation(inviteCode);
     });
     form('rename-room-form', async () => {
@@ -2203,7 +2242,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       catch { window.prompt('Copy invite code:',code); }
     });
     bind('accept-invitation', () => acceptInvitation());
-    bind('dismiss-invitation', () => { pendingInvite = null; preference('multiplay.pendingInvite',null); if (inviteFromHash(location.hash)) location.hash = 'home'; controls(); });
+    bind('dismiss-invitation', () => { pendingInvite = null; pendingInviteTarget = 'home'; preference('multiplay.pendingInvite',null); preference('multiplay.pendingInviteTarget',null); if (inviteFromHash(location.hash)) location.hash = 'home'; controls(); });
     $('home-watch').onclick = event => {
       const media = room?.media || progressItems[0]?.media;
       if (!media) return;
@@ -2211,6 +2250,25 @@ TV completion applies to an episode, not automatically the entire series.</pre>
       if (joined) { location.hash = 'room'; return; }
       act(() => watchTitle(media,media));
     };
+    $('home-session').onclick = event => {
+      if (event.target.closest('a, button, input, select, textarea, summary')) return;
+      $('home-watch').click();
+    };
+    function pickerInviteLink() {
+      const code = me?.rooms?.find(item => item.roomId === me.roomId)?.inviteCode;
+      if (mode !== 'api' || !code) throw new Error('Create or join a shared room on Home first.');
+      const link = new URL(location.href); link.hash = 'invite=' + encodeURIComponent(code) + '&to=picker'; return link.href;
+    }
+    bind('picker-invite', () => {
+      $('picker-invite-link').value = pickerInviteLink(); $('picker-invite-status').textContent = '';
+      $('picker-invite-dialog').showModal(); $('picker-invite-link').focus(); $('picker-invite-link').select();
+    });
+    bind('picker-invite-close', () => $('picker-invite-dialog').close());
+    bind('picker-invite-copy', async () => {
+      const link = pickerInviteLink();
+      try { await navigator.clipboard.writeText(link); $('picker-invite-status').textContent = 'Link copied. Share it with your partner.'; }
+      catch { $('picker-invite-link').value = link; $('picker-invite-link').focus(); $('picker-invite-link').select(); $('picker-invite-status').textContent = 'Copy the selected link and share it with your partner.'; }
+    });
     for (const control of document.querySelectorAll('[data-filter]')) control.onclick = () => { listFilter = control.dataset.filter; renderSavedLists(); };
     form('search-form', () => { closeSuggestions(); return catalog(); }); bind('refresh-list', list);
     $('query').addEventListener('input', () => { closeSuggestions(); suggestionTimer = setTimeout(suggestTitles, 250); });
@@ -2490,7 +2548,7 @@ TV completion applies to an episode, not automatically the entire series.</pre>
     setInterval(() => { if (!document.hidden) void checkConnection(); }, 30000);
     window.addEventListener('hashchange', () => {
       const code = inviteFromHash(location.hash);
-      if (code && code !== pendingInvite) { pendingInvite = code; preference('multiplay.pendingInvite',code); }
+      if (code) { pendingInvite = code; pendingInviteTarget = inviteTargetFromHash(location.hash); preference('multiplay.pendingInvite',code); preference('multiplay.pendingInviteTarget',pendingInviteTarget); }
       if (code && mode === 'demo') {
         mode = 'api'; base = ''; me = null; room = null; joined = false; stopLiveChat(); unload();
         preference('multiplay.preview',false); preference('multiplay.connection',{mode,base});

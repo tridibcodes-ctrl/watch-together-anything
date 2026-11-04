@@ -26,14 +26,14 @@ test('sidebar status distinguishes a verified connection, network loss, signed o
   context.mode='demo';context.renderConnection();assert.equal(nodes['presence-label'].textContent,'Local Demo');assert.notEqual(nodes['account-presence'].dataset.state,'online');
 });
 
-test('carousel rotation waits seven seconds and stops for dialogs, other views and a pause preference',()=>{
+test('carousel rotation waits four seconds and stops for dialogs, other views and a pause preference',()=>{
   const active=new Map();let sequence=0;
   const dialog={open:false}, feature={matches:()=>false,contains:()=>false};
   const context=vm.createContext({featureTimer:null,featurePaused:false,featureItems:[{},{}],currentView:'home',
     document:{hidden:false,activeElement:null},$:id=>id==='title-details'?dialog:feature,
     clearTimeout:id=>active.delete(id),setTimeout(fn,delay){active.set(++sequence,{fn,delay});return sequence;},advanceFeature(){}});
   vm.runInContext(source.slice(source.indexOf('    function scheduleFeature('),source.indexOf('    function advanceFeature(')),context);
-  context.scheduleFeature();assert.equal([...active.values()][0].delay,7000);
+  context.scheduleFeature();assert.equal([...active.values()][0].delay,4000);
   dialog.open=true;context.scheduleFeature();assert.equal(active.size,0);
   dialog.open=false;context.currentView='browse';context.scheduleFeature();assert.equal(active.size,0);
   context.currentView='home';context.featurePaused=true;context.scheduleFeature();assert.equal(active.size,0);
